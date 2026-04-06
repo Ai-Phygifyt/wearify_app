@@ -128,8 +128,8 @@ export function Card({
       )}
     >
       {(title || action) && (
-        <div className="px-5 py-2.5 border-b border-wf-border flex justify-between items-center">
-          <span className="text-sm font-bold text-wf-text">{title}</span>
+        <div className="px-5 py-3 border-b border-wf-border flex justify-between items-center">
+          <span className="text-base font-bold text-wf-text">{title}</span>
           {action}
         </div>
       )}
@@ -226,7 +226,7 @@ export function Metric({
         <span className="text-wf-subtext">{label}</span>
         <span className="font-semibold font-mono">{value}</span>
       </div>
-      <div className="h-1 rounded bg-wf-border">
+      <div className="h-1.5 rounded bg-wf-border">
         <div
           className="h-full rounded transition-all duration-500"
           style={{

@@ -90,6 +90,8 @@ export const update = mutation({
     onboardingStep: v.optional(v.number()),
     agreementStatus: v.optional(v.string()),
     discountCode: v.optional(v.string()),
+    essentialMode: v.optional(v.boolean()),
+    subscriptionPlan: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...fields } = args;
@@ -100,5 +102,73 @@ export const update = mutation({
       }
     }
     await ctx.db.patch(id, updates);
+  },
+});
+
+// ============================
+// STAFF MANAGEMENT
+// ============================
+export const listStaffByStore = query({
+  args: { storeId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("staff")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .take(100);
+  },
+});
+
+export const createStaff = mutation({
+  args: {
+    name: v.string(),
+    phone: v.string(),
+    pin: v.string(),
+    role: v.string(),
+    storeId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const id = await ctx.db.insert("staff", {
+      name: args.name,
+      phone: args.phone,
+      pin: args.pin,
+      role: args.role,
+      storeId: args.storeId,
+      status: "active",
+      totalSales: 0,
+      conversion: 0,
+      sessionCount: 0,
+      revenue: 0,
+    });
+    return id;
+  },
+});
+
+export const updateStaff = mutation({
+  args: {
+    id: v.id("staff"),
+    name: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    pin: v.optional(v.string()),
+    role: v.optional(v.string()),
+    status: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...fields } = args;
+    const updates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) {
+        updates[key] = value;
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(id, updates);
+    }
+  },
+});
+
+export const removeStaff = mutation({
+  args: { id: v.id("staff") },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.id);
   },
 });

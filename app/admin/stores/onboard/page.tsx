@@ -168,7 +168,7 @@ export default function OnboardPage() {
       status, plan,
       mrr: plan === "Smart" ? 15000 : plan === "Digital" ? 10000 : 0,
       ownerName: d.ownerName || undefined,
-      ownerPhone: d.ownerPhone ? `+91 ${d.ownerPhone}` : undefined,
+      ownerPhone: d.ownerPhone ? `+91${d.ownerPhone}` : undefined,
       ownerEmail: d.ownerEmail || undefined,
       gstin: d.gstin || undefined,
     });

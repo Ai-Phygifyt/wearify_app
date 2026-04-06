@@ -9,20 +9,148 @@ export const seedAll = internalMutation({
 
     // ===================== STORES =====================
     const stores = [
-      { storeId: "ST-001", name: "MAUVE Sarees", city: "Mumbai", status: "active", plan: "Smart", mrr: 15000, healthScore: 94, conversionRate: 42, sessions: 23, churnRisk: 12, featureScore: 78, catalogUtilization: 92, agreementStatus: "signed", discountCode: "Early Adopter 40%", onboardingStep: 5, ownerName: "Smita Kabra", ownerPhone: "+91 98XXXXXXXX" },
-      { storeId: "ST-002", name: "Silk Heritage", city: "Delhi", status: "active", plan: "Smart", mrr: 15000, healthScore: 88, conversionRate: 38, sessions: 18, churnRisk: 22, featureScore: 65, catalogUtilization: 85, agreementStatus: "signed", discountCode: "Annual 25%", onboardingStep: 5, ownerName: "Raj Kumar", ownerPhone: "+91 97XXXXXXXX" },
-      { storeId: "ST-003", name: "Kanchi Collections", city: "Chennai", status: "active", plan: "Digital", mrr: 10000, healthScore: 96, conversionRate: 45, sessions: 31, churnRisk: 5, featureScore: 88, catalogUtilization: 95, agreementStatus: "signed", onboardingStep: 5, ownerName: "Priya Rajan", ownerPhone: "+91 96XXXXXXXX" },
-      { storeId: "ST-004", name: "Banarasi House", city: "Varanasi", status: "trial", plan: "Trial", mrr: 0, healthScore: 72, conversionRate: 22, sessions: 8, churnRisk: 45, featureScore: 42, catalogUtilization: 60, agreementStatus: "pending", discountCode: "Trial", onboardingStep: 3, ownerName: "Vikram Singh", ownerPhone: "+91 95XXXXXXXX" },
-      { storeId: "ST-005", name: "Patola Palace", city: "Surat", status: "active", plan: "Smart", mrr: 15000, healthScore: 91, conversionRate: 40, sessions: 26, churnRisk: 15, featureScore: 72, catalogUtilization: 88, agreementStatus: "signed", onboardingStep: 5, ownerName: "Meena Patel", ownerPhone: "+91 94XXXXXXXX" },
-      { storeId: "ST-006", name: "Tant Bangla", city: "Kolkata", status: "active", plan: "Digital", mrr: 10000, healthScore: 85, conversionRate: 35, sessions: 14, churnRisk: 18, featureScore: 58, catalogUtilization: 78, agreementStatus: "signed", discountCode: "Association 30%", onboardingStep: 4, ownerName: "Anita Das", ownerPhone: "+91 93XXXXXXXX" },
-      { storeId: "ST-007", name: "Mysore Silks", city: "Bangalore", status: "churned", plan: "---", mrr: 0, healthScore: 0, conversionRate: 0, sessions: 0, churnRisk: 100, featureScore: 0, catalogUtilization: 0, agreementStatus: "terminated", onboardingStep: 0 },
-      { storeId: "ST-008", name: "Royal Weaves", city: "Jaipur", status: "trial", plan: "Trial", mrr: 0, healthScore: 68, conversionRate: 18, sessions: 5, churnRisk: 55, featureScore: 35, catalogUtilization: 45, agreementStatus: "pending", discountCode: "Trial", onboardingStep: 2, ownerName: "Deepak Sharma", ownerPhone: "+91 92XXXXXXXX" },
+      { storeId: "ST-001", name: "MAUVE Sarees", city: "Mumbai", state: "Maharashtra", address: "123 Fashion Street, Dadar", pin: "400028", area: "Dadar", hours: "10:00 AM - 9:00 PM", status: "active", plan: "Smart", mrr: 15000, healthScore: 94, conversionRate: 42, sessions: 23, churnRisk: 12, featureScore: 78, catalogUtilization: 92, agreementStatus: "signed", discountCode: "Early Adopter 40%", onboardingStep: 5, ownerName: "Smita Kabra", ownerPhone: "+919800000001", ownerEmail: "smita@mauvesarees.com", gstin: "27AABCT1234A1Z5", subscriptionPlan: "Professional", catalogueCount: 45, digitisedPercent: 85 },
+      { storeId: "ST-002", name: "Silk Heritage", city: "Delhi", state: "Delhi", address: "45 Chandni Chowk", pin: "110006", area: "Chandni Chowk", hours: "10:30 AM - 8:30 PM", status: "active", plan: "Smart", mrr: 15000, healthScore: 88, conversionRate: 38, sessions: 18, churnRisk: 22, featureScore: 65, catalogUtilization: 85, agreementStatus: "signed", discountCode: "Annual 25%", onboardingStep: 5, ownerName: "Raj Kumar", ownerPhone: "+919700000002", ownerEmail: "raj@silkheritage.com", gstin: "07BBACT5678B2Z3", subscriptionPlan: "Professional", catalogueCount: 38, digitisedPercent: 72 },
+      { storeId: "ST-003", name: "Kanchi Collections", city: "Chennai", state: "Tamil Nadu", address: "78 T Nagar", pin: "600017", area: "T Nagar", hours: "9:30 AM - 9:00 PM", status: "active", plan: "Digital", mrr: 10000, healthScore: 96, conversionRate: 45, sessions: 31, churnRisk: 5, featureScore: 88, catalogUtilization: 95, agreementStatus: "signed", onboardingStep: 5, ownerName: "Priya Rajan", ownerPhone: "+919600000003", ownerEmail: "priya@kanchi.com", gstin: "33CCCCT9012C3Z1", subscriptionPlan: "Enterprise", catalogueCount: 62, digitisedPercent: 95 },
+      { storeId: "ST-004", name: "Banarasi House", city: "Varanasi", state: "Uttar Pradesh", address: "12 Vishwanath Gali", pin: "221001", area: "Vishwanath", hours: "10:00 AM - 8:00 PM", status: "trial", plan: "Trial", mrr: 0, healthScore: 72, conversionRate: 22, sessions: 8, churnRisk: 45, featureScore: 42, catalogUtilization: 60, agreementStatus: "pending", discountCode: "Trial", onboardingStep: 3, ownerName: "Vikram Singh", ownerPhone: "+919500000004", ownerEmail: "vikram@banarasihouse.com" },
+      { storeId: "ST-005", name: "Patola Palace", city: "Surat", state: "Gujarat", address: "89 Ring Road", pin: "395001", area: "Ring Road", hours: "10:00 AM - 9:30 PM", status: "active", plan: "Smart", mrr: 15000, healthScore: 91, conversionRate: 40, sessions: 26, churnRisk: 15, featureScore: 72, catalogUtilization: 88, agreementStatus: "signed", onboardingStep: 5, ownerName: "Meena Patel", ownerPhone: "+919400000005", ownerEmail: "meena@patolapalace.com", gstin: "24DDDDT3456D4Z9", subscriptionPlan: "Professional", catalogueCount: 55, digitisedPercent: 80 },
+      { storeId: "ST-006", name: "Tant Bangla", city: "Kolkata", state: "West Bengal", address: "34 Gariahat Road", pin: "700029", area: "Gariahat", hours: "11:00 AM - 8:00 PM", status: "active", plan: "Digital", mrr: 10000, healthScore: 85, conversionRate: 35, sessions: 14, churnRisk: 18, featureScore: 58, catalogUtilization: 78, agreementStatus: "signed", discountCode: "Association 30%", onboardingStep: 4, ownerName: "Anita Das", ownerPhone: "+919300000006", ownerEmail: "anita@tantbangla.com", gstin: "19EEEBT7890E5Z7", subscriptionPlan: "Starter", catalogueCount: 28, digitisedPercent: 65 },
+      { storeId: "ST-007", name: "Mysore Silks", city: "Bangalore", state: "Karnataka", status: "churned", plan: "---", mrr: 0, healthScore: 0, conversionRate: 0, sessions: 0, churnRisk: 100, featureScore: 0, catalogUtilization: 0, agreementStatus: "terminated", onboardingStep: 0 },
+      { storeId: "ST-008", name: "Royal Weaves", city: "Jaipur", state: "Rajasthan", address: "56 Johari Bazaar", pin: "302003", area: "Johari Bazaar", hours: "10:00 AM - 8:30 PM", status: "trial", plan: "Trial", mrr: 0, healthScore: 68, conversionRate: 18, sessions: 5, churnRisk: 55, featureScore: 35, catalogUtilization: 45, agreementStatus: "pending", discountCode: "Trial", onboardingStep: 2, ownerName: "Deepak Sharma", ownerPhone: "+919200000008", ownerEmail: "deepak@royalweaves.com" },
     ];
 
-    const storeIds: Record<string, string> = {};
     for (const store of stores) {
-      const id = await ctx.db.insert("stores", store);
-      storeIds[store.storeId] = id;
+      await ctx.db.insert("stores", store);
+    }
+
+    // ===================== USER ACCOUNTS (for store owners) =====================
+    // Password hash for "Store@123" (SHA-256 of "Store@123wearify-salt-2024")
+    const storeOwnerHash = "f0e4c2f76c58916ec258f246851bea091d14d4247a2fc3e18694461b1816e13b";
+    for (const store of stores) {
+      if (store.ownerPhone) {
+        await ctx.db.insert("users", {
+          phone: store.ownerPhone,
+          passwordHash: storeOwnerHash,
+          name: store.ownerName || "Store Owner",
+          role: "store_owner",
+          storeId: store.storeId,
+        });
+      }
+    }
+
+    // ===================== STAFF =====================
+    const staffList = [
+      { name: "Ravi Patil", phone: "+919811111001", pin: "1234", role: "R04", storeId: "ST-001", status: "active", totalSales: 42, conversion: 38, sessionCount: 85, revenue: 125000 },
+      { name: "Priya Sharma", phone: "+919811111002", pin: "2345", role: "R05", storeId: "ST-001", status: "active", totalSales: 35, conversion: 42, sessionCount: 72, revenue: 98000 },
+      { name: "Amit Verma", phone: "+919811111003", pin: "3456", role: "R05", storeId: "ST-001", status: "active", totalSales: 28, conversion: 35, sessionCount: 65, revenue: 82000 },
+      { name: "Sunita Reddy", phone: "+919811111004", pin: "1234", role: "R04", storeId: "ST-002", status: "active", totalSales: 38, conversion: 40, sessionCount: 78, revenue: 115000 },
+      { name: "Karthik Iyer", phone: "+919811111005", pin: "2345", role: "R05", storeId: "ST-002", status: "active", totalSales: 30, conversion: 36, sessionCount: 68, revenue: 88000 },
+      { name: "Lakshmi Devi", phone: "+919811111006", pin: "1234", role: "R04", storeId: "ST-003", status: "active", totalSales: 55, conversion: 48, sessionCount: 95, revenue: 180000 },
+      { name: "Arjun Nair", phone: "+919811111007", pin: "2345", role: "R05", storeId: "ST-003", status: "active", totalSales: 40, conversion: 44, sessionCount: 80, revenue: 135000 },
+      { name: "Deepa Gupta", phone: "+919811111008", pin: "1234", role: "R04", storeId: "ST-005", status: "active", totalSales: 36, conversion: 39, sessionCount: 74, revenue: 108000 },
+    ];
+
+    for (const s of staffList) {
+      await ctx.db.insert("staff", s);
+    }
+
+    // ===================== SAREES (catalog for ST-001 MAUVE Sarees) =====================
+    const sarees = [
+      { storeId: "ST-001", name: "Royal Banarasi Silk", type: "Banarasi", fabric: "Silk", occasion: "Wedding", price: 28500, mrp: 32000, stock: 5, status: "active", colors: ["Red", "Gold"], emoji: "👑", grad: ["#8B0000", "#FFD700"], tag: "Premium", region: "Varanasi", weave: "Jacquard", weight: "Heavy", description: "Handwoven pure silk Banarasi with intricate zari work", drapingStyles: ["Nivi", "Bengali"], tryOns: 45, views: 120, conversions: 8, daysOld: 15, approvalStatus: "approved", addedBy: "Ravi Patil" },
+      { storeId: "ST-001", name: "Kanjeevaram Temple Border", type: "Kanjeevaram", fabric: "Silk", occasion: "Wedding", price: 35000, mrp: 40000, stock: 3, status: "active", colors: ["Maroon", "Gold"], emoji: "🏛️", grad: ["#800000", "#C5A900"], tag: "Premium", region: "Kanchipuram", weave: "Temple", weight: "Heavy", description: "Traditional Kanjeevaram with temple border motifs", drapingStyles: ["Nivi", "Seedha Pallu"], tryOns: 38, views: 95, conversions: 6, daysOld: 22, approvalStatus: "approved", addedBy: "Priya Sharma" },
+      { storeId: "ST-001", name: "Chanderi Floral", type: "Chanderi", fabric: "Cotton", occasion: "Festival", price: 8500, mrp: 10000, stock: 12, status: "active", colors: ["Pink", "White"], emoji: "🌸", grad: ["#FFB6C1", "#FFFFFF"], tag: "Trending", region: "Chanderi", weave: "Plain", weight: "Light", description: "Lightweight Chanderi with delicate floral prints", drapingStyles: ["Nivi", "Gujarati"], tryOns: 62, views: 180, conversions: 15, daysOld: 8, approvalStatus: "approved", addedBy: "Amit Verma" },
+      { storeId: "ST-001", name: "Tussar Geometric", type: "Tussar", fabric: "Silk", occasion: "Party", price: 12000, mrp: 14000, stock: 8, status: "active", colors: ["Beige", "Brown"], emoji: "🔶", grad: ["#F5F5DC", "#8B4513"], tag: "Fast Moving", region: "Bihar", weave: "Geometric", weight: "Medium", description: "Natural tussar silk with contemporary geometric patterns", drapingStyles: ["Nivi"], tryOns: 28, views: 75, conversions: 4, daysOld: 30, approvalStatus: "approved", addedBy: "Ravi Patil" },
+      { storeId: "ST-001", name: "Organza Pastel Dream", type: "Organza", fabric: "Organza", occasion: "Party", price: 6500, mrp: 8000, stock: 15, status: "active", colors: ["Lavender", "Mint"], emoji: "✨", grad: ["#E6E6FA", "#98FF98"], tag: "New", region: "Surat", weave: "Plain", weight: "Light", description: "Soft organza with pastel dual-tone effect", drapingStyles: ["Nivi", "Bengali"], tryOns: 55, views: 200, conversions: 12, daysOld: 5, approvalStatus: "approved", addedBy: "Priya Sharma" },
+      { storeId: "ST-001", name: "Cotton Handloom Daily", type: "Handloom", fabric: "Cotton", occasion: "Daily", price: 2200, mrp: 2800, stock: 25, status: "active", colors: ["Blue", "White"], emoji: "🧶", grad: ["#4169E1", "#F0F8FF"], tag: "Fast Moving", region: "West Bengal", weave: "Handloom", weight: "Light", description: "Comfortable daily wear cotton handloom saree", drapingStyles: ["Nivi"], tryOns: 82, views: 250, conversions: 22, daysOld: 45, approvalStatus: "approved", addedBy: "Amit Verma" },
+      { storeId: "ST-001", name: "Linen Summer Fresh", type: "Linen", fabric: "Linen", occasion: "Office", price: 4500, mrp: 5500, stock: 10, status: "active", colors: ["Sage", "Ivory"], emoji: "🌿", grad: ["#9DC183", "#FFFFF0"], tag: "Trending", region: "Bhagalpur", weave: "Plain", weight: "Light", description: "Premium linen saree perfect for office and formal occasions", drapingStyles: ["Nivi"], tryOns: 35, views: 100, conversions: 7, daysOld: 12, approvalStatus: "approved", addedBy: "Ravi Patil" },
+      { storeId: "ST-001", name: "Chiffon Rose Garden", type: "Chiffon", fabric: "Chiffon", occasion: "Party", price: 5800, mrp: 7000, stock: 7, status: "active", colors: ["Rose", "Black"], emoji: "🌹", grad: ["#FF007F", "#000000"], tag: "Premium", region: "Surat", weave: "Printed", weight: "Light", description: "Flowing chiffon with bold rose prints", drapingStyles: ["Nivi", "Bengali"], tryOns: 42, views: 130, conversions: 9, daysOld: 18, approvalStatus: "approved", addedBy: "Priya Sharma" },
+      { storeId: "ST-001", name: "Paithani Heritage", type: "Paithani", fabric: "Silk", occasion: "Wedding", price: 45000, mrp: 52000, stock: 2, status: "active", colors: ["Purple", "Gold"], emoji: "💎", grad: ["#800080", "#FFD700"], tag: "Premium", region: "Paithan", weave: "Peacock", weight: "Heavy", description: "Authentic Paithani with peacock motif border", drapingStyles: ["Nivi", "Seedha Pallu"], tryOns: 22, views: 68, conversions: 3, daysOld: 60, approvalStatus: "approved", addedBy: "Ravi Patil" },
+      { storeId: "ST-001", name: "Georgette Sequin Party", type: "Georgette", fabric: "Georgette", occasion: "Party", price: 7800, mrp: 9500, stock: 6, status: "active", colors: ["Black", "Silver"], emoji: "🪩", grad: ["#1C1C1C", "#C0C0C0"], tag: "Trending", region: "Surat", weave: "Embroidered", weight: "Medium", description: "Glamorous georgette with sequin work for parties", drapingStyles: ["Nivi"], tryOns: 48, views: 155, conversions: 10, daysOld: 10, approvalStatus: "approved", addedBy: "Amit Verma" },
+      // ST-002 Silk Heritage sarees
+      { storeId: "ST-002", name: "Banarasi Brocade Gold", type: "Banarasi", fabric: "Silk", occasion: "Wedding", price: 32000, mrp: 38000, stock: 4, status: "active", colors: ["Red", "Gold"], emoji: "👑", grad: ["#DC143C", "#FFD700"], tag: "Premium", region: "Varanasi", weave: "Brocade", weight: "Heavy", description: "Heavy brocade Banarasi with gold thread work", tryOns: 30, views: 85, conversions: 5, daysOld: 20, approvalStatus: "approved" },
+      { storeId: "ST-002", name: "Tussar Natural", type: "Tussar", fabric: "Silk", occasion: "Festival", price: 9800, mrp: 12000, stock: 9, status: "active", colors: ["Ivory", "Copper"], emoji: "🍂", grad: ["#FFFFF0", "#B87333"], tag: "Trending", region: "Jharkhand", weave: "Block Print", weight: "Medium", description: "Natural tussar with hand block prints", tryOns: 25, views: 70, conversions: 4, daysOld: 25, approvalStatus: "approved" },
+      // ST-003 Kanchi Collections sarees
+      { storeId: "ST-003", name: "Pure Kanchipuram Bridal", type: "Kanjeevaram", fabric: "Silk", occasion: "Wedding", price: 55000, mrp: 65000, stock: 2, status: "active", colors: ["Red", "Green", "Gold"], emoji: "💍", grad: ["#FF0000", "#006400"], tag: "Premium", region: "Kanchipuram", weave: "Korvai", weight: "Heavy", description: "Bridal Kanchipuram with dual-color korvai technique", tryOns: 18, views: 55, conversions: 2, daysOld: 35, approvalStatus: "approved" },
+      { storeId: "ST-003", name: "Soft Silk Temple", type: "Kanjeevaram", fabric: "Silk", occasion: "Festival", price: 15000, mrp: 18000, stock: 8, status: "active", colors: ["Teal", "Gold"], emoji: "🏛️", grad: ["#008080", "#FFD700"], tag: "Fast Moving", region: "Kanchipuram", weave: "Temple Border", weight: "Medium", description: "Soft silk with classic temple border", tryOns: 42, views: 120, conversions: 10, daysOld: 14, approvalStatus: "approved" },
+    ];
+
+    for (const saree of sarees) {
+      await ctx.db.insert("sarees", saree);
+    }
+
+    // ===================== CUSTOMERS =====================
+    const customers = [
+      { phone: "+919900000001", name: "Ananya Mehta", initials: "AM", totalVisits: 8, totalLooks: 24, totalStores: 2, storeCredit: 500, loyaltyPoints: 3200, loyaltyTier: "Silver", preferredOccasions: ["Wedding", "Festival"], preferredFabrics: ["Silk", "Chanderi"], preferredColors: ["Red", "Gold", "Pink"], budgetRange: "₹10K-25K", consentHistory: true, consentMessages: true, consentAiPersonal: true, consentPhotos: true, consentGrantedDate: "2025-06-15", language: "en" },
+      { phone: "+919900000002", name: "Deepika Reddy", initials: "DR", totalVisits: 5, totalLooks: 15, totalStores: 1, storeCredit: 200, loyaltyPoints: 1800, loyaltyTier: "Silver", preferredOccasions: ["Party", "Office"], preferredFabrics: ["Georgette", "Chiffon"], preferredColors: ["Black", "Maroon"], budgetRange: "₹5K-10K", consentHistory: true, consentMessages: true, consentAiPersonal: false, consentPhotos: true, consentGrantedDate: "2025-08-20", language: "en" },
+      { phone: "+919900000003", name: "Lakshmi Iyer", initials: "LI", totalVisits: 12, totalLooks: 36, totalStores: 3, storeCredit: 1200, loyaltyPoints: 8500, loyaltyTier: "Gold", preferredOccasions: ["Wedding", "Festival", "Daily"], preferredFabrics: ["Silk", "Cotton"], preferredColors: ["Red", "Blue", "Green"], budgetRange: "₹25K-50K", consentHistory: true, consentMessages: true, consentAiPersonal: true, consentPhotos: true, consentGrantedDate: "2025-03-10", language: "ta" },
+      { phone: "+919900000004", name: "Fatima Sheikh", initials: "FS", totalVisits: 3, totalLooks: 8, totalStores: 1, storeCredit: 0, loyaltyPoints: 450, loyaltyTier: "Regular", preferredOccasions: ["Festival"], preferredFabrics: ["Organza"], preferredColors: ["Pastel"], budgetRange: "₹5K-10K", consentHistory: true, consentMessages: false, consentAiPersonal: false, consentPhotos: false, consentGrantedDate: "2026-01-05", language: "en" },
+      { phone: "+919900000005", name: "Prerna Joshi", initials: "PJ", totalVisits: 15, totalLooks: 48, totalStores: 2, storeCredit: 2000, loyaltyPoints: 16000, loyaltyTier: "VIP", preferredOccasions: ["Wedding", "Party", "Gift"], preferredFabrics: ["Silk", "Linen", "Organza"], preferredColors: ["Purple", "Gold", "Rose"], budgetRange: "₹50K-1L", consentHistory: true, consentMessages: true, consentAiPersonal: true, consentPhotos: true, consentGrantedDate: "2024-12-01", language: "hi" },
+    ];
+
+    // Password hash for "Customer@123"
+    const customerHash = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+    const customerIds: string[] = [];
+    for (const c of customers) {
+      const id = await ctx.db.insert("customers", { ...c, passwordHash: customerHash });
+      customerIds.push(id);
+      // Create user record
+      await ctx.db.insert("users", {
+        phone: c.phone,
+        passwordHash: customerHash,
+        name: c.name,
+        role: "customer",
+      });
+    }
+
+    // ===================== CUSTOMER-STORE LINKS =====================
+    const csLinks = [
+      { customerId: customerIds[0], storeId: "ST-001", storeName: "MAUVE Sarees", visits: 6, lastVisit: "2026-03-28", clv: 85000, segment: "VIP" },
+      { customerId: customerIds[0], storeId: "ST-003", storeName: "Kanchi Collections", visits: 2, lastVisit: "2026-02-15", clv: 55000, segment: "Regular" },
+      { customerId: customerIds[1], storeId: "ST-001", storeName: "MAUVE Sarees", visits: 5, lastVisit: "2026-03-22", clv: 42000, segment: "Regular" },
+      { customerId: customerIds[2], storeId: "ST-001", storeName: "MAUVE Sarees", visits: 4, lastVisit: "2026-03-30", clv: 120000, segment: "VIP" },
+      { customerId: customerIds[2], storeId: "ST-002", storeName: "Silk Heritage", visits: 5, lastVisit: "2026-03-25", clv: 95000, segment: "VIP" },
+      { customerId: customerIds[2], storeId: "ST-003", storeName: "Kanchi Collections", visits: 3, lastVisit: "2026-03-18", clv: 75000, segment: "Regular" },
+      { customerId: customerIds[3], storeId: "ST-001", storeName: "MAUVE Sarees", visits: 3, lastVisit: "2026-01-10", clv: 18000, segment: "New" },
+      { customerId: customerIds[4], storeId: "ST-001", storeName: "MAUVE Sarees", visits: 8, lastVisit: "2026-04-02", clv: 250000, segment: "VIP" },
+      { customerId: customerIds[4], storeId: "ST-005", storeName: "Patola Palace", visits: 7, lastVisit: "2026-03-28", clv: 180000, segment: "VIP" },
+    ];
+    for (const link of csLinks) {
+      await ctx.db.insert("customerStoreLinks", link as any);
+    }
+
+    // ===================== TAILORS =====================
+    const tailors = [
+      { tailorId: "TL-001", name: "Manoj Darji", phone: "+919800100001", city: "Mumbai", area: "Dadar", specialties: ["silk_blouse", "designer_emb", "bridal"], experience: "15 years", bio: "Master blouse tailor specializing in bridal and designer work", badge: "pro", status: "verified", rating: 4.8, reviewCount: 124, revenue: 285000, referrals: 45, leadsThisMonth: 8, earnedThisMonth: 32000, commissionOwed: 4500, available: true, subscription: "pro", serviceRadius: 10, services: [{ id: "s1", name: "Silk Blouse Stitching", priceMin: 800, priceMax: 2500, days: 5, active: true }, { id: "s2", name: "Designer Embroidery", priceMin: 1500, priceMax: 5000, days: 10, active: true }, { id: "s3", name: "Bridal Blouse", priceMin: 3000, priceMax: 8000, days: 14, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: false }, hoursOpen: "09:00", hoursClose: "19:00", joinDate: "2024-06-15", aadhaarVerified: true, panVerified: true, addressVerified: true },
+      { tailorId: "TL-002", name: "Savita Pawar", phone: "+919800100002", city: "Mumbai", area: "Andheri", specialties: ["cotton_casual", "fall_pico", "alteration"], experience: "8 years", bio: "Quick and reliable alterations and casual wear", badge: "verified", status: "verified", rating: 4.5, reviewCount: 86, revenue: 145000, referrals: 28, leadsThisMonth: 5, earnedThisMonth: 18000, commissionOwed: 2000, available: true, subscription: "free", serviceRadius: 5, services: [{ id: "s1", name: "Fall & Pico", priceMin: 200, priceMax: 500, days: 2, active: true }, { id: "s2", name: "Blouse Alteration", priceMin: 300, priceMax: 800, days: 3, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: false, Sun: false }, hoursOpen: "10:00", hoursClose: "18:00", joinDate: "2025-01-20", aadhaarVerified: true, panVerified: true, addressVerified: false },
+      { tailorId: "TL-003", name: "Rakesh Kumar", phone: "+919800100003", city: "Delhi", area: "Lajpat Nagar", specialties: ["silk_blouse", "heavy_work", "bridal"], experience: "20 years", bio: "Expert in heavy bridal blouse work", badge: "pro", status: "verified", rating: 4.9, reviewCount: 210, revenue: 420000, referrals: 65, leadsThisMonth: 12, earnedThisMonth: 48000, available: true, subscription: "pro", serviceRadius: 15, services: [{ id: "s1", name: "Heavy Work Blouse", priceMin: 2000, priceMax: 10000, days: 12, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: true }, hoursOpen: "08:00", hoursClose: "20:00", joinDate: "2024-03-01", aadhaarVerified: true, panVerified: true, addressVerified: true },
+      { tailorId: "TL-004", name: "Geeta Bai", phone: "+919800100004", city: "Chennai", area: "T Nagar", specialties: ["silk_blouse", "petticoat", "fall_pico"], experience: "12 years", bio: "Traditional South Indian blouse specialist", badge: "verified", status: "verified", rating: 4.6, reviewCount: 95, revenue: 195000, referrals: 32, leadsThisMonth: 6, earnedThisMonth: 22000, available: true, subscription: "free", serviceRadius: 8, services: [{ id: "s1", name: "Silk Blouse", priceMin: 600, priceMax: 2000, days: 4, active: true }, { id: "s2", name: "Petticoat", priceMin: 400, priceMax: 800, days: 3, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: false }, hoursOpen: "09:00", hoursClose: "18:00", joinDate: "2024-08-10", aadhaarVerified: true, panVerified: false, addressVerified: true },
+    ];
+
+    // Password hash for tailors - "Tailor@123"
+    const tailorHash = "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3";
+    for (const t of tailors) {
+      await ctx.db.insert("tailors", { ...t, passwordHash: tailorHash });
+      await ctx.db.insert("users", {
+        phone: t.phone,
+        passwordHash: tailorHash,
+        name: t.name,
+        role: "tailor",
+        tailorId: t.tailorId,
+      });
+    }
+
+    // ===================== TAILOR PORTFOLIO =====================
+    const portfolio = [
+      { tailorId: "TL-001", tag: "Bridal Blouse", occasion: "Wedding", style: "Deep V Back", grad: ["#8B0000", "#FFD700"] },
+      { tailorId: "TL-001", tag: "Designer Work", occasion: "Party", style: "Cold Shoulder", grad: ["#FF007F", "#000000"] },
+      { tailorId: "TL-001", tag: "Silk Special", occasion: "Festival", style: "Princess Cut", grad: ["#800080", "#E6E6FA"] },
+      { tailorId: "TL-002", tag: "Cotton Blouse", occasion: "Daily", style: "Simple Round", grad: ["#4169E1", "#87CEEB"] },
+      { tailorId: "TL-003", tag: "Heavy Zardozi", occasion: "Wedding", style: "Full Sleeves", grad: ["#DAA520", "#8B0000"] },
+      { tailorId: "TL-003", tag: "Kundan Work", occasion: "Wedding", style: "Halter Neck", grad: ["#FFD700", "#FF0000"] },
+      { tailorId: "TL-004", tag: "Temple Blouse", occasion: "Festival", style: "Boat Neck", grad: ["#008080", "#FFD700"] },
+    ];
+    for (const p of portfolio) {
+      await ctx.db.insert("tailorPortfolio", p);
     }
 
     // ===================== DEVICES =====================
@@ -34,314 +162,174 @@ export const seedAll = internalMutation({
       { deviceId: "MR-004", type: "Mirror", storeName: "Banarasi House", storeId: "ST-004", status: "offline", lifecycle: "OFFLINE", uptime: 87.3, gpuLatency: 0, cpuPercent: 0, gpuTemp: 82, memoryGb: 0, fps: 0, lastSeen: "3h", certExpiry: "Dec 2026", offlineQueue: 1842, note: "GPU thermal 82C" },
       { deviceId: "TB-002", type: "Tablet", storeName: "Patola Palace", storeId: "ST-005", status: "online", lifecycle: "ACTIVE", uptime: 99.1, gpuLatency: 0, cpuPercent: 18, gpuTemp: 0, memoryGb: 1.5, fps: 0, lastSeen: "12m", certExpiry: "Jan 2027", offlineQueue: 0, note: "Healthy" },
     ];
-
     for (const device of devices) {
       await ctx.db.insert("devices", device);
     }
 
     // ===================== AI AGENTS =====================
     const agents = [
-      { agentId: "AGT-01", name: "Inventory Optimiser", phase: 1, mode: "supervised", status: "running", actions: 12, accuracy: 94.2, costPerDay: 85, storesUsing: 6, cycleTime: "14m", lastResult: "Detected 12 slow-moving silks at Silk Heritage. Generated 3 discount bundles + 1 reorder draft.", humanComparison: "Agent accuracy: 78% match with owner decisions." },
-      { agentId: "AGT-02", name: "Campaign Orchestrator", phase: 1, mode: "supervised", status: "running", actions: 4, accuracy: 91.5, costPerDay: 120, storesUsing: 6, cycleTime: "2h", lastResult: "Scheduled Diwali early-bird for 3 stores. Audience: 842 opted-in.", humanComparison: "80% alignment with owner preferences." },
-      { agentId: "AGT-03", name: "Store Health Monitor", phase: 1, mode: "autonomous", status: "running", actions: 8, accuracy: 97.1, costPerDay: 45, storesUsing: 8, cycleTime: "58m", lastResult: "Revenue down 18% at Silk Heritage. Root cause: conversion dropped 25%.", humanComparison: "100% detection accuracy." },
-      { agentId: "AGT-04", name: "Customer Intelligence", phase: 2, mode: "shadow", status: "running", actions: 0, accuracy: 88.4, costPerDay: 95, storesUsing: 3, cycleTime: "6h", lastResult: "Shadow mode. 15 VIP churn risk flagged. Confidence: 0.84.", humanComparison: "Shadow: logging only." },
-      { agentId: "AGT-05", name: "Pricing Strategist", phase: 2, mode: "shadow", status: "paused", actions: 0, accuracy: 85.2, costPerDay: 0, storesUsing: 0, cycleTime: "1d", lastResult: "Paused. Last: 15% discount on Chanderi would yield Rs 12K incremental.", humanComparison: "Paused - no comparison data yet." },
-      { agentId: "AGT-06", name: "Staff Coach", phase: 2, mode: "shadow", status: "running", actions: 0, accuracy: 82.6, costPerDay: 60, storesUsing: 3, cycleTime: "12h", lastResult: "Coaching tip for Ravi (MAUVE): upsell rate 12% below avg.", humanComparison: "Shadow: tips generated but not yet delivered." },
-      { agentId: "AGT-07", name: "Network Intelligence", phase: 3, mode: "off", status: "planned", actions: 0, accuracy: 0, costPerDay: 0, storesUsing: 0, cycleTime: "---", lastResult: "Phase 3. Requires 50+ stores.", humanComparison: "Not deployed." },
-      { agentId: "AGT-08", name: "Manufacturer Insights", phase: 3, mode: "off", status: "planned", actions: 0, accuracy: 0, costPerDay: 0, storesUsing: 0, cycleTime: "---", lastResult: "Phase 3. Revenue Stream 3.", humanComparison: "Not deployed." },
+      { agentId: "AGT-01", name: "Inventory Optimiser", phase: 1, mode: "supervised", status: "running", actions: 12, accuracy: 94.2, costPerDay: 85, storesUsing: 6, cycleTime: "14m", lastResult: "Detected 12 slow-moving silks at Silk Heritage.", humanComparison: "Agent accuracy: 78% match" },
+      { agentId: "AGT-02", name: "Campaign Orchestrator", phase: 1, mode: "supervised", status: "running", actions: 4, accuracy: 91.5, costPerDay: 120, storesUsing: 6, cycleTime: "2h", lastResult: "Scheduled festival campaign for 3 stores.", humanComparison: "80% alignment" },
+      { agentId: "AGT-03", name: "Store Health Monitor", phase: 1, mode: "autonomous", status: "running", actions: 8, accuracy: 97.1, costPerDay: 45, storesUsing: 8, cycleTime: "58m", lastResult: "Revenue down 18% at Silk Heritage.", humanComparison: "100% detection" },
+      { agentId: "AGT-04", name: "Customer Intelligence", phase: 2, mode: "shadow", status: "running", actions: 0, accuracy: 88.4, costPerDay: 95, storesUsing: 3, cycleTime: "6h", lastResult: "Shadow mode. 15 VIP churn risk flagged.", humanComparison: "Shadow: logging only" },
+      { agentId: "AGT-05", name: "Pricing Strategist", phase: 2, mode: "shadow", status: "paused", actions: 0, accuracy: 85.2, costPerDay: 0, storesUsing: 0, cycleTime: "1d", lastResult: "Paused.", humanComparison: "Paused" },
+      { agentId: "AGT-06", name: "Staff Coach", phase: 2, mode: "shadow", status: "running", actions: 0, accuracy: 82.6, costPerDay: 60, storesUsing: 3, cycleTime: "12h", lastResult: "Coaching tip for Ravi.", humanComparison: "Shadow" },
+      { agentId: "AGT-07", name: "Network Intelligence", phase: 3, mode: "off", status: "planned", actions: 0, accuracy: 0, costPerDay: 0, storesUsing: 0, cycleTime: "---", lastResult: "Phase 3. Requires 50+ stores.", humanComparison: "Not deployed" },
+      { agentId: "AGT-08", name: "Demand Forecaster", phase: 1, mode: "supervised", status: "running", actions: 6, accuracy: 89.8, costPerDay: 70, storesUsing: 5, cycleTime: "24h", lastResult: "Forecast: 15% demand increase for silks next week.", humanComparison: "72% match" },
     ];
-
-    for (const agent of agents) {
-      await ctx.db.insert("agents", agent);
-    }
-
-    // ===================== AUDIT LOG =====================
-    const auditEntries = [
-      { timestamp: "10:42", action: "Emergency stop MR-004 (Banarasi House)", user: "admin@phygifyt.com" },
-      { timestamp: "09:15", action: "Onboarding approved: Tant Bangla", user: "admin@phygifyt.com" },
-      { timestamp: "08:30", action: "Model v2.3 staged rollout (6 stores)", user: "admin@phygifyt.com" },
-      { timestamp: "Yest", action: "Feature flag: tailor_marketplace ON", user: "admin@phygifyt.com" },
-      { timestamp: "2d", action: "DPDP erasure: customer C-4421", user: "admin@phygifyt.com" },
-      { timestamp: "2d", action: "AGT-01 mode: shadow to supervised", user: "admin@phygifyt.com" },
-      { timestamp: "3d", action: "API key rotated: svc-whatsapp", user: "admin@phygifyt.com" },
-      { timestamp: "3d", action: "Service credit Rs 750 for ST-002", user: "admin@phygifyt.com" },
-      { timestamp: "4d", action: "DR drill: RDS restore passed (28 min)", user: "admin@phygifyt.com" },
-    ];
-
-    for (const entry of auditEntries) {
-      await ctx.db.insert("auditLog", entry);
-    }
-
-    // ===================== FEATURE FLAGS =====================
-    const flags = [
-      { key: "tailor_marketplace", enabled: true, description: "Enable tailor marketplace for blouse referrals" },
-      { key: "ai_stylist_v2", enabled: true, description: "AI Stylist v2 with enhanced recommendations" },
-      { key: "demand_forecast", enabled: false, description: "Demand forecasting using DemandForecaster model" },
-      { key: "voice_search", enabled: true, description: "Hindi/English voice-based catalog search" },
-      { key: "skin_tone", enabled: true, description: "Skin tone analysis for color recommendations" },
-      { key: "model_ab_test", enabled: false, description: "A/B testing for model versions" },
-      { key: "network_trends", enabled: true, description: "Network-wide anonymized trend data" },
-      { key: "promoted_placement", enabled: false, description: "Promoted product placements (Revenue Stream 5)" },
-      { key: "saree_care_sub", enabled: false, description: "Saree care subscription service (Revenue Stream 7)" },
-    ];
-
-    for (const flag of flags) {
-      await ctx.db.insert("featureFlags", flag);
-    }
-
-    // ===================== PLATFORM CONFIG =====================
-    const configs = [
-      { key: "Platform", value: "Wearify" },
-      { key: "Entity", value: "Phygify Technoservices Pvt. Ltd." },
-      { key: "Region", value: "ap-south-1 (Mumbai)" },
-      { key: "DR", value: "ap-south-2 (Hyderabad)" },
-      { key: "OTA Window", value: "2-5 AM IST" },
-      { key: "Session Timeout", value: "1h admin / 7d owner" },
-      { key: "Max Discount", value: "40% MRP" },
-      { key: "LLM", value: "Claude Sonnet 4.5" },
-      { key: "Data Residency", value: "India only" },
-      { key: "DPIIT", value: "Active" },
-    ];
-
-    for (const config of configs) {
-      await ctx.db.insert("platformConfig", config);
-    }
-
-    // ===================== VENDORS =====================
-    const vendorsList = [
-      { name: "AWS", type: "Cloud", dpaStatus: "Signed", riskLevel: "Low", monthlySpend: 52000 },
-      { name: "Gupshup", type: "WhatsApp", dpaStatus: "Signed", riskLevel: "Low", monthlySpend: 8500 },
-      { name: "Razorpay", type: "Payments", dpaStatus: "Signed", riskLevel: "Low", monthlySpend: 3200 },
-      { name: "Anthropic", type: "LLM", dpaStatus: "Signed", riskLevel: "Medium", monthlySpend: 12000 },
-      { name: "MSG91", type: "SMS", dpaStatus: "Signed", riskLevel: "Low", monthlySpend: 1800 },
-      { name: "Pinecone", type: "Vector DB", dpaStatus: "Pending", riskLevel: "Medium", monthlySpend: 4500 },
-    ];
-
-    for (const vendor of vendorsList) {
-      await ctx.db.insert("vendors", vendor);
-    }
-
-    // ===================== TICKETS =====================
-    const ticketsList = [
-      { ticketId: "TK-101", storeName: "Banarasi House", subject: "Mirror not detecting body", priority: "P1", status: "open", sla: "1h 42m", aiDiagnosis: "GPU thermal 82C -> FPS dropped to 8 -> PoseNet failing. Restart + thermal audit. Conf: 0.93." },
-      { ticketId: "TK-098", storeName: "MAUVE Sarees", subject: "WhatsApp share delay >5s", priority: "P2", status: "progress", sla: "---", aiDiagnosis: "Gupshup API spike (p95: 4.2s). External. SMS fallback activated. Conf: 0.96." },
-      { ticketId: "TK-095", storeName: "Silk Heritage", subject: "Catalog .webp upload fails", priority: "P3", status: "resolved", sla: "---", aiDiagnosis: "Added .webp support in v2.3.1. 0 recurrence. Conf: 1.00." },
-    ];
-
-    for (const ticket of ticketsList) {
-      await ctx.db.insert("tickets", ticket);
-    }
+    for (const a of agents) { await ctx.db.insert("agents", a); }
 
     // ===================== AGENT TOOLS =====================
     const tools = [
-      { toolId: "T-01", name: "InventoryUpdate", description: "Update saree status/tags", agents: "AGT-01", approval: "Auto", usedToday: 8, limit: "unlimited" },
-      { toolId: "T-02", name: "DiscountRecommend", description: "Create discount recommendation", agents: "AGT-01, AGT-05", approval: "Owner", usedToday: 2, limit: "10/day" },
-      { toolId: "T-03", name: "BundleCreate", description: "Create product bundle", agents: "AGT-01, AGT-05", approval: "Owner", usedToday: 1, limit: "5/day" },
-      { toolId: "T-04", name: "ReorderGenerate", description: "Generate purchase order draft", agents: "AGT-01", approval: "Owner", usedToday: 1, limit: "3/day" },
-      { toolId: "T-05", name: "CatalogPromote", description: "Feature items in catalog", agents: "AGT-01, AGT-03", approval: "Auto", usedToday: 4, limit: "10/day" },
-      { toolId: "T-06", name: "CampaignDraft", description: "Draft WhatsApp campaign", agents: "AGT-02", approval: "Owner", usedToday: 3, limit: "4/week" },
-      { toolId: "T-07", name: "MessageSend", description: "Send approved campaign", agents: "AGT-02", approval: "System", usedToday: 1, limit: "1/week/store" },
-      { toolId: "T-08", name: "InsightPush", description: "Push insight to dashboard", agents: "ALL", approval: "Auto", usedToday: 6, limit: "unlimited" },
-      { toolId: "T-09", name: "AlertSend", description: "Send alert to owner", agents: "AGT-03", approval: "Auto", usedToday: 2, limit: "5/day" },
-      { toolId: "T-10", name: "HealthScoreUpdate", description: "Update store health score", agents: "AGT-03", approval: "Auto", usedToday: 5, limit: "hourly" },
-      { toolId: "T-11", name: "CoachingTipGen", description: "Generate micro-coaching tip", agents: "AGT-06", approval: "Manager", usedToday: 3, limit: "1/staff/day" },
-      { toolId: "T-12", name: "ForecastQuery", description: "Query demand forecast model", agents: "AGT-01, AGT-05", approval: "Auto", usedToday: 4, limit: "unlimited" },
-      { toolId: "T-13", name: "CustomerScore", description: "Compute customer health score", agents: "AGT-04", approval: "Auto", usedToday: 15, limit: "unlimited" },
-      { toolId: "T-14", name: "SegmentUpdate", description: "Update customer micro-segments", agents: "AGT-04", approval: "Auto", usedToday: 1, limit: "weekly" },
-      { toolId: "T-15", name: "NetworkAggregate", description: "Compute anonymised trends", agents: "AGT-07", approval: "Auto", usedToday: 0, limit: "weekly" },
+      { toolId: "TL-01", name: "Price Markdown", description: "Auto-adjust pricing for slow-moving inventory", agents: "AGT-01,AGT-05", approval: "Owner", usedToday: 3, limit: "10/day" },
+      { toolId: "TL-02", name: "WhatsApp Campaign Send", description: "Trigger WhatsApp campaigns to customer segments", agents: "AGT-02", approval: "Owner", usedToday: 1, limit: "3/day" },
+      { toolId: "TL-03", name: "Health Alert", description: "Send health alerts to admin dashboard", agents: "AGT-03", approval: "Auto", usedToday: 2, limit: "50/day" },
+      { toolId: "TL-04", name: "Customer Tag Update", description: "Update customer segment tags", agents: "AGT-04", approval: "System", usedToday: 0, limit: "100/day" },
+      { toolId: "TL-05", name: "Reorder Draft", description: "Create reorder purchase suggestions", agents: "AGT-01", approval: "Manager", usedToday: 1, limit: "5/day" },
     ];
-
-    for (const tool of tools) {
-      await ctx.db.insert("agentTools", tool);
-    }
+    for (const t of tools) { await ctx.db.insert("agentTools", t); }
 
     // ===================== AI MODELS =====================
     const models = [
-      { modelId: "M-01", name: "PoseNet-Saree", version: "v2.3", type: "Pose", latency: 18, accuracy: 96.8, drift: 0.2, storesUsing: 6, dataPoints: [{ w: 1, v: 96.2 }, { w: 2, v: 96.5 }, { w: 3, v: 96.8 }, { w: 4, v: 96.7 }, { w: 5, v: 96.9 }, { w: 6, v: 96.8 }] },
-      { modelId: "M-02", name: "SareeDrape-VTON", version: "v2.3", type: "VTON", latency: 420, accuracy: 93.4, drift: 0.8, storesUsing: 6, dataPoints: [{ w: 1, v: 94.0 }, { w: 2, v: 93.8 }, { w: 3, v: 93.6 }, { w: 4, v: 93.5 }, { w: 5, v: 93.4 }, { w: 6, v: 93.4 }] },
-      { modelId: "M-03", name: "SkinTone-Analyzer", version: "v1.8", type: "Skin", latency: 140, accuracy: 91.2, drift: 1.1, storesUsing: 6, dataPoints: [{ w: 1, v: 92.1 }, { w: 2, v: 91.9 }, { w: 3, v: 91.5 }, { w: 4, v: 91.3 }, { w: 5, v: 91.2 }, { w: 6, v: 91.2 }] },
-      { modelId: "M-07", name: "VisualSearch-CNN", version: "v1.5", type: "Search", latency: 85, accuracy: 89.7, drift: 1.5, storesUsing: 4, dataPoints: [{ w: 1, v: 91.0 }, { w: 2, v: 90.5 }, { w: 3, v: 90.0 }, { w: 4, v: 89.8 }, { w: 5, v: 89.7 }, { w: 6, v: 89.7 }] },
-      { modelId: "M-08", name: "DemandForecaster", version: "v1.2", type: "Forecast", latency: 2100, accuracy: 87.3, drift: 2.0, storesUsing: 6, dataPoints: [{ w: 1, v: 89.0 }, { w: 2, v: 88.5 }, { w: 3, v: 88.0 }, { w: 4, v: 87.5 }, { w: 5, v: 87.3 }, { w: 6, v: 87.3 }] },
-      { modelId: "LLM", name: "Claude Sonnet 4.5", version: "4.5", type: "LLM", latency: 1200, accuracy: 98.8, drift: 0.1, storesUsing: 6, dataPoints: [{ w: 1, v: 98.7 }, { w: 2, v: 98.8 }, { w: 3, v: 98.8 }, { w: 4, v: 98.9 }, { w: 5, v: 98.8 }, { w: 6, v: 98.8 }] },
+      { modelId: "MDL-01", name: "WearPose v3", version: "3.2.1", type: "Pose", latency: 45, accuracy: 96.2, drift: 0.3, storesUsing: 8, dataPoints: [{ w: 1, v: 95.8 }, { w: 2, v: 96.0 }, { w: 3, v: 96.1 }, { w: 4, v: 96.2 }] },
+      { modelId: "MDL-02", name: "DrapeTry v2", version: "2.4.0", type: "VTON", latency: 120, accuracy: 91.5, drift: 1.2, storesUsing: 8, dataPoints: [{ w: 1, v: 90.5 }, { w: 2, v: 91.0 }, { w: 3, v: 91.2 }, { w: 4, v: 91.5 }] },
+      { modelId: "MDL-03", name: "SkinMatch v1", version: "1.1.0", type: "Skin", latency: 30, accuracy: 93.8, drift: 0.5, storesUsing: 6, dataPoints: [{ w: 1, v: 93.2 }, { w: 2, v: 93.5 }, { w: 3, v: 93.7 }, { w: 4, v: 93.8 }] },
+      { modelId: "MDL-04", name: "SareeSearch v2", version: "2.0.1", type: "Search", latency: 200, accuracy: 88.4, drift: 2.1, storesUsing: 5, dataPoints: [{ w: 1, v: 86.5 }, { w: 2, v: 87.2 }, { w: 3, v: 88.0 }, { w: 4, v: 88.4 }] },
+      { modelId: "MDL-05", name: "DemandNet", version: "1.0.3", type: "Forecast", latency: 500, accuracy: 82.1, drift: 3.5, storesUsing: 3, dataPoints: [{ w: 1, v: 80.0 }, { w: 2, v: 81.0 }, { w: 3, v: 81.5 }, { w: 4, v: 82.1 }] },
     ];
+    for (const m of models) { await ctx.db.insert("models", m); }
 
-    for (const model of models) {
-      await ctx.db.insert("models", model);
-    }
+    // ===================== TICKETS =====================
+    const tickets = [
+      { ticketId: "TK-001", storeName: "Banarasi House", subject: "Mirror offline GPU thermal", priority: "P1", status: "open", sla: "2h", aiDiagnosis: "GPU temp 82C → thermal shutdown" },
+      { ticketId: "TK-002", storeName: "Silk Heritage", subject: "Catalog sync delay", priority: "P2", status: "progress", sla: "8h", aiDiagnosis: "CDN cache issue" },
+      { ticketId: "TK-003", storeName: "MAUVE Sarees", subject: "Staff onboarding help", priority: "P3", status: "resolved", sla: "24h" },
+    ];
+    for (const t of tickets) { await ctx.db.insert("tickets", t); }
 
     // ===================== INVOICES =====================
-    const invoicesList = [
-      { invoiceId: "INV-001", storeName: "MAUVE Sarees", amount: 15000, gst: 2700, total: 17700, date: "Mar 1", status: "paid", dueDate: "Mar 8" },
-      { invoiceId: "INV-002", storeName: "Silk Heritage", amount: 15000, gst: 2700, total: 17700, date: "Mar 1", status: "paid", dueDate: "Mar 8" },
-      { invoiceId: "INV-003", storeName: "Kanchi Collections", amount: 10000, gst: 1800, total: 11800, date: "Mar 1", status: "paid", dueDate: "Mar 8" },
-      { invoiceId: "INV-004", storeName: "Patola Palace", amount: 15000, gst: 2700, total: 17700, date: "Mar 1", status: "paid", dueDate: "Mar 8" },
-      { invoiceId: "INV-005", storeName: "Tant Bangla", amount: 10000, gst: 1800, total: 11800, date: "Mar 1", status: "paid", dueDate: "Mar 8" },
-      { invoiceId: "INV-006", storeName: "Royal Weaves", amount: 0, gst: 0, total: 0, date: "---", status: "trial", dueDate: "---" },
+    const invoices = [
+      { invoiceId: "INV-2026-001", storeName: "MAUVE Sarees", amount: 15000, gst: 2700, total: 17700, date: "2026-04-01", status: "paid", dueDate: "2026-04-15" },
+      { invoiceId: "INV-2026-002", storeName: "Silk Heritage", amount: 15000, gst: 2700, total: 17700, date: "2026-04-01", status: "pending", dueDate: "2026-04-15" },
+      { invoiceId: "INV-2026-003", storeName: "Kanchi Collections", amount: 10000, gst: 1800, total: 11800, date: "2026-04-01", status: "paid", dueDate: "2026-04-15" },
+      { invoiceId: "INV-2026-004", storeName: "Patola Palace", amount: 15000, gst: 2700, total: 17700, date: "2026-03-01", status: "overdue", dueDate: "2026-03-15" },
     ];
+    for (const i of invoices) { await ctx.db.insert("invoices", i); }
 
-    for (const invoice of invoicesList) {
-      await ctx.db.insert("invoices", invoice);
-    }
-
-    // ===================== SESSIONS =====================
-    const sessionsList = [
-      { sessionId: "S-2841", storeName: "MAUVE Sarees", staffName: "Deepa", mirrorId: "MR-001", duration: "12m", sareesTriedOn: 6, status: "active" },
-      { sessionId: "S-2840", storeName: "Kanchi Collections", staffName: "Ravi", mirrorId: "MR-003", duration: "8m", sareesTriedOn: 4, status: "active" },
-      { sessionId: "S-2839", storeName: "Patola Palace", staffName: "Meena", mirrorId: "MR-002", duration: "22m", sareesTriedOn: 9, status: "completed" },
+    // ===================== VENDORS =====================
+    const vendors = [
+      { name: "AWS", type: "Cloud", dpaStatus: "Signed", riskLevel: "Low", monthlySpend: 45000 },
+      { name: "Gupshup", type: "WhatsApp", dpaStatus: "Signed", riskLevel: "Low", monthlySpend: 12000 },
+      { name: "Razorpay", type: "Payments", dpaStatus: "Signed", riskLevel: "Low", monthlySpend: 8000 },
+      { name: "Anthropic", type: "LLM", dpaStatus: "Signed", riskLevel: "Medium", monthlySpend: 25000 },
     ];
+    for (const v of vendors) { await ctx.db.insert("vendors", v); }
 
-    for (const session of sessionsList) {
-      await ctx.db.insert("sessions", session);
-    }
-
-    // ===================== INCIDENTS =====================
-    const incidentsList = [
-      { incidentId: "INC-012", severity: "P2", title: "Gupshup API degradation", startTime: "Mar 14 08:20", endTime: "Mar 14 09:45", duration: "85min", storesAffected: 6, rootCause: "External provider outage", status: "resolved" },
-      { incidentId: "INC-011", severity: "P3", title: "RDS connection pool exhaustion", startTime: "Mar 10 14:00", endTime: "Mar 10 14:28", duration: "28min", storesAffected: 8, rootCause: "Idle connection leak in campaign service", status: "resolved" },
+    // ===================== OFFERS =====================
+    const offers = [
+      { storeId: "ST-001", type: "festival", headline: "Gudi Padwa Special", subline: "Extra 10% off on silk sarees", badge: "Festival", cta: "Shop Now", expiry: "2026-04-15", grad: ["#FF6B35", "#FFD700"], icon: "🎉", active: true },
+      { storeId: "ST-001", type: "loyalty", headline: "Silver Member Perk", subline: "Free blouse stitching on next purchase", badge: "Loyalty", cta: "Claim", grad: ["#C0C0C0", "#E8E8E8"], icon: "⭐", active: true },
+      { storeId: "ST-003", type: "collection", headline: "New Bridal Collection", subline: "50+ new Kanchipuram arrivals", badge: "New", cta: "Explore", expiry: "2026-05-01", grad: ["#8B0000", "#FFD700"], icon: "💍", active: true },
     ];
+    for (const o of offers) { await ctx.db.insert("offers", o); }
 
-    for (const incident of incidentsList) {
-      await ctx.db.insert("incidents", incident);
-    }
-
-    // ===================== KB ARTICLES =====================
-    const kbArticlesList = [
-      { articleId: "KB-01", title: "Mirror not detecting body poses", views: 42, helpful: 89, category: "Troubleshoot" },
-      { articleId: "KB-02", title: "How to upload sarees using photo booth", views: 128, helpful: 95, category: "Guide" },
-      { articleId: "KB-03", title: "WhatsApp campaign best practices", views: 85, helpful: 91, category: "Guide" },
-      { articleId: "KB-04", title: "Understanding your Store Health Score", views: 64, helpful: 87, category: "Analytics" },
+    // ===================== REMAINING ADMIN TABLES =====================
+    // Legal Docs
+    const legalDocs = [
+      { docId: "DOC-001", name: "Master Service Agreement", type: "retailer", version: "2.1", status: "active", uploaded: "2025-01-15", effective: "2025-02-01", fileName: "MSA_v2.1.pdf", acceptedBy: 6, description: "Core service terms between Phygify and retailer" },
+      { docId: "DOC-002", name: "Data Processing Addendum", type: "retailer", version: "1.3", status: "active", uploaded: "2025-01-15", effective: "2025-02-01", fileName: "DPA_v1.3.pdf", acceptedBy: 6, description: "DPDP Act 2023 compliant data processing terms" },
+      { docId: "DOC-003", name: "Customer Privacy Policy", type: "customer", version: "1.2", status: "active", uploaded: "2025-03-01", effective: "2025-03-15", fileName: "Privacy_v1.2.pdf", acceptedBy: 842, description: "Customer-facing privacy policy per DPDP Act" },
     ];
+    for (const d of legalDocs) { await ctx.db.insert("legalDocs", d); }
 
-    for (const article of kbArticlesList) {
-      await ctx.db.insert("kbArticles", article);
-    }
-
-    // ===================== TAILORS =====================
-    const tailorsList = [
-      { tailorId: "TL-001", name: "Stitchwell Tailors", city: "Mumbai", status: "verified", referrals: 42, revenue: 4200, rating: 4.6, specialization: "Blouse + Petticoat" },
-      { tailorId: "TL-002", name: "Rupa Designers", city: "Delhi", status: "verified", referrals: 28, revenue: 2800, rating: 4.3, specialization: "Blouse specialist" },
-      { tailorId: "TL-003", name: "Kamala Tailoring", city: "Chennai", status: "pending", referrals: 0, revenue: 0, rating: 0, specialization: "All ethnic wear" },
-      { tailorId: "TL-004", name: "Sai Stitching", city: "Surat", status: "verified", referrals: 35, revenue: 3500, rating: 4.8, specialization: "Premium blouse" },
-    ];
-
-    for (const tailor of tailorsList) {
-      await ctx.db.insert("tailors", tailor);
-    }
-
-    // ===================== LEGAL DOCS =====================
-    const legalDocsList = [
-      { docId: "LD-01", name: "Master Service Agreement (MSA)", type: "retailer", version: "v2.1", status: "active", uploaded: "Jan 2026", effective: "Jan 15, 2026", fileName: "MSA_v2.1.pdf", acceptedBy: 6, description: "Core SaaS subscription terms for retailers" },
-      { docId: "LD-02", name: "Data Processing Agreement (DPA)", type: "retailer", version: "v1.3", status: "active", uploaded: "Jan 2026", effective: "Jan 15, 2026", fileName: "DPA_v1.3.pdf", acceptedBy: 6, description: "DPDP-compliant data processing terms" },
-      { docId: "LD-03", name: "Acceptable Use Policy (AUP)", type: "retailer", version: "v1.0", status: "active", uploaded: "Jan 2026", effective: "Jan 15, 2026", fileName: "AUP_v1.0.pdf", acceptedBy: 6, description: "Platform acceptable use guidelines" },
-      { docId: "LD-04", name: "Hardware Lease Agreement", type: "retailer", version: "v1.2", status: "active", uploaded: "Feb 2026", effective: "Feb 1, 2026", fileName: "HW_Lease_v1.2.pdf", acceptedBy: 4, description: "Mirror/tablet hardware lease terms" },
-      { docId: "LD-05", name: "Customer Privacy Notice", type: "customer", version: "v1.1", status: "active", uploaded: "Jan 2026", effective: "Jan 15, 2026", fileName: "Privacy_Notice_v1.1.pdf", acceptedBy: 0, description: "End-customer DPDP privacy notice" },
-      { docId: "LD-06", name: "Customer Terms of Service", type: "customer", version: "v1.0", status: "active", uploaded: "Jan 2026", effective: "Jan 15, 2026", fileName: "Customer_ToS_v1.0.pdf", acceptedBy: 0, description: "PWA/customer-facing terms" },
-    ];
-
-    for (const doc of legalDocsList) {
-      await ctx.db.insert("legalDocs", doc);
-    }
-
-    // ===================== NOTIFICATION RULES =====================
+    // Notification Rules
     const notifRules = [
-      { ruleId: "NR-01", name: "Device Offline Alert", trigger: "device.status == offline > 5min", target: "Admin + Store Owner", channel: "WhatsApp + Email", active: true },
-      { ruleId: "NR-02", name: "P1 Ticket Escalation", trigger: "ticket.priority == P1 && !assigned > 15min", target: "On-Call Engineer", channel: "WhatsApp + PagerDuty", active: true },
-      { ruleId: "NR-03", name: "Daily Health Digest", trigger: "cron: 09:00 IST daily", target: "Admin", channel: "Email", active: true },
-      { ruleId: "NR-04", name: "Churn Risk Alert", trigger: "store.churnRisk > 40", target: "Admin + CSM", channel: "WhatsApp", active: true },
-      { ruleId: "NR-05", name: "Revenue Milestone", trigger: "store.mrr crosses threshold", target: "Admin", channel: "Slack", active: false },
+      { ruleId: "NR-001", name: "Mirror Offline Alert", trigger: "device.offline > 5m", target: "admin + store_owner", channel: "WhatsApp + Dashboard", active: true },
+      { ruleId: "NR-002", name: "Health Drop Alert", trigger: "store.health < 70", target: "admin", channel: "Dashboard", active: true },
+      { ruleId: "NR-003", name: "Invoice Overdue", trigger: "invoice.overdue > 5d", target: "store_owner", channel: "WhatsApp + Email", active: true },
+      { ruleId: "NR-004", name: "New Referral", trigger: "tailor_referral.created", target: "tailor", channel: "WhatsApp", active: true },
     ];
+    for (const n of notifRules) { await ctx.db.insert("notificationRules", n); }
 
-    for (const rule of notifRules) {
-      await ctx.db.insert("notificationRules", rule);
-    }
-
-    // ===================== FESTIVALS =====================
-    const festivalsList = [
-      { name: "Navratri", start: "Oct 2", end: "Oct 12", freeze: true, campaign: "AGT-02 scheduled" },
-      { name: "Diwali", start: "Oct 20", end: "Nov 1", freeze: true, campaign: "Peak revenue period" },
-      { name: "Wedding Season", start: "Nov 1", end: "Feb 28", freeze: false, campaign: "High demand sustained" },
-      { name: "Pongal", start: "Jan 14", end: "Jan 17", freeze: true, campaign: "Tamil Nadu focus" },
-      { name: "Ugadi", start: "Mar 30", end: "Apr 1", freeze: true, campaign: "Telugu/Kannada focus" },
+    // Festivals
+    const festivals = [
+      { name: "Gudi Padwa", start: "2026-03-26", end: "2026-03-28", freeze: true, campaign: "Maharashtrian New Year" },
+      { name: "Akshaya Tritiya", start: "2026-04-22", end: "2026-04-24", freeze: false, campaign: "Gold Rush" },
+      { name: "Diwali", start: "2026-10-18", end: "2026-10-25", freeze: true, campaign: "Festival of Lights" },
     ];
+    for (const f of festivals) { await ctx.db.insert("festivals", f); }
 
-    for (const festival of festivalsList) {
-      await ctx.db.insert("festivals", festival);
-    }
-
-    // ===================== CHANGELOG =====================
-    const changelogList = [
-      { version: "v2.3.1", date: "Mar 12", type: "Patch", notes: "Added .webp support, performance fixes" },
-      { version: "v2.3.0", date: "Mar 10", type: "Minor", notes: "Model v2.3 rollout, skin tone improvements" },
-      { version: "v2.2.0", date: "Feb 28", type: "Minor", notes: "SkinTone v1.8, campaign analytics" },
-      { version: "v2.1.0", date: "Feb 14", type: "Minor", notes: "Kanjivaram support, WhatsApp share v2" },
-      { version: "v2.0.0", date: "Jan 15", type: "Major", notes: "Platform launch, 5 pilot stores" },
+    // Changelog
+    const changelogs = [
+      { version: "4.3.0", date: "2026-04-01", type: "Major", notes: "Multi-module launch: Retailer, Tablet, Kiosk, Customer PWA, Tailor" },
+      { version: "4.2.0", date: "2026-03-15", type: "Minor", notes: "DPDP consent management across all modules" },
+      { version: "4.1.0", date: "2026-03-01", type: "Minor", notes: "Tailor marketplace integration" },
     ];
+    for (const c of changelogs) { await ctx.db.insert("changelog", c); }
 
-    for (const entry of changelogList) {
-      await ctx.db.insert("changelog", entry);
-    }
-
-    // ===================== ON-CALL ROTATION =====================
-    const onCallList = [
-      { role: "Primary", name: "Arjun M.", title: "SRE Lead", week: "This week", status: "active", phone: "+91 98XXXXXXX1" },
-      { role: "Secondary", name: "Priya S.", title: "Backend Engineer", week: "This week", status: "active", phone: "+91 98XXXXXXX2" },
-      { role: "Escalation", name: "Vikram R.", title: "CTO", week: "Always", status: "active", phone: "+91 98XXXXXXX3" },
+    // On-Call
+    const oncall = [
+      { role: "Platform Lead", name: "Arjun Rao", title: "CTO", week: "W14 2026", status: "On-Call", phone: "+919999900001" },
+      { role: "DevOps", name: "Sneha Kulkarni", title: "SRE", week: "W14 2026", status: "On-Call", phone: "+919999900002" },
+      { role: "ML Ops", name: "Vikram Desai", title: "ML Engineer", week: "W14 2026", status: "Backup", phone: "+919999900003" },
     ];
+    for (const o of oncall) { await ctx.db.insert("onCallRotation", o); }
 
-    for (const person of onCallList) {
-      await ctx.db.insert("onCallRotation", person);
-    }
-
-    // ===================== WHATSAPP TEMPLATES =====================
-    const waTemplatesList = [
-      { templateId: "WA-01", name: "welcome_store", status: "Approved", agent: "AGT-02", body: "Welcome to Wearify! Your smart mirror is ready. Start your first session today." },
-      { templateId: "WA-02", name: "campaign_festival", status: "Approved", agent: "AGT-02", body: "{{festival}} special! Visit {{store}} to try the latest collection on our AI mirror." },
-      { templateId: "WA-03", name: "session_share", status: "Approved", agent: "System", body: "Here are your looks from {{store}}! View your virtual try-on: {{link}}" },
-      { templateId: "WA-04", name: "churn_reengagement", status: "Pending", agent: "AGT-04", body: "We miss you at {{store}}! New arrivals await. Book a session: {{link}}" },
+    // WhatsApp Templates
+    const waTemplates = [
+      { templateId: "WA-001", name: "Try-On Photo Share", status: "Approved", agent: "System", body: "Hi {{name}}! Here are your try-on looks from {{store}}. View: {{link}}" },
+      { templateId: "WA-002", name: "Post-Visit Thank You", status: "Approved", agent: "AGT-02", body: "Thank you for visiting {{store}}, {{name}}! You tried {{count}} beautiful sarees." },
+      { templateId: "WA-003", name: "Festival Campaign", status: "Approved", agent: "AGT-02", body: "{{festival}} Special at {{store}}! {{offer}}. Visit us this week." },
+      { templateId: "WA-004", name: "Tailor Referral", status: "Approved", agent: "System", body: "Hi {{tailor}}, new blouse referral from {{store}}: {{customer}} needs {{service}}. Contact: {{phone}}" },
     ];
+    for (const w of waTemplates) { await ctx.db.insert("waTemplates", w); }
 
-    for (const template of waTemplatesList) {
-      await ctx.db.insert("waTemplates", template);
-    }
-
-    // ===================== RETENTION POLICIES =====================
-    const retentionList = [
-      { policyId: "RP-01", category: "Camera frames (raw)", retention: "0 — never stored", deletion: "Real-time discard", law: "DPDP S4" },
-      { policyId: "RP-02", category: "Try-on images (processed)", retention: "90 days", deletion: "Auto-delete", law: "DPDP S8(7)" },
-      { policyId: "RP-03", category: "Session analytics", retention: "2 years", deletion: "Anonymise → archive", law: "IT Act 43A" },
-      { policyId: "RP-04", category: "Customer PII", retention: "Until consent withdrawn", deletion: "Erasure within 72h", law: "DPDP S12-13" },
-      { policyId: "RP-05", category: "Transaction records", retention: "8 years", deletion: "Archive to cold storage", law: "GST Act" },
-      { policyId: "RP-06", category: "Audit logs", retention: "5 years", deletion: "Immutable, no deletion", law: "IT Act" },
+    // Feature Flags
+    const flags = [
+      { key: "ai_try_on", enabled: true, description: "Virtual try-on AI processing" },
+      { key: "tailor_marketplace", enabled: true, description: "Tailor discovery and referral" },
+      { key: "loyalty_program", enabled: true, description: "Customer loyalty points" },
+      { key: "demand_forecast", enabled: false, description: "AI demand forecasting" },
+      { key: "voice_search", enabled: false, description: "Voice search on kiosk" },
     ];
+    for (const f of flags) { await ctx.db.insert("featureFlags", f); }
 
-    for (const policy of retentionList) {
-      await ctx.db.insert("retentionPolicies", policy);
-    }
-
-    // ===================== ROLE EVENTS =====================
-    const roleEventsList = [
-      { eventId: "RE-01", userName: "Deepa K.", fromRole: "R03", toRole: "R02", reason: "Promotion to Store Manager", approvedBy: "admin@phygifyt.com", date: "Mar 12", approved: true },
-      { eventId: "RE-02", userName: "Ravi M.", fromRole: "R04", toRole: "R03", reason: "Training completed", approvedBy: "admin@phygifyt.com", date: "Mar 8", approved: true },
-      { eventId: "RE-03", userName: "Amit S.", fromRole: "R03", toRole: "R05", reason: "Role reassignment", approvedBy: "admin@phygifyt.com", date: "Feb 28", approved: true },
+    // Retention Policies
+    const retention = [
+      { policyId: "RP-001", category: "Session Data", retention: "12 months", deletion: "Auto-delete", law: "DPDP Act S8" },
+      { policyId: "RP-002", category: "Customer Photos", retention: "6 months", deletion: "On request (30d)", law: "DPDP Act S12-13" },
+      { policyId: "RP-003", category: "Payment Records", retention: "8 years", deletion: "Manual", law: "IT Act + GST" },
+      { policyId: "RP-004", category: "Body Scan Data", retention: "6 months", deletion: "Auto-delete", law: "DPDP Act S8" },
     ];
+    for (const r of retention) { await ctx.db.insert("retentionPolicies", r); }
 
-    for (const event of roleEventsList) {
-      await ctx.db.insert("roleEvents", event);
-    }
-
-    // ===================== STAFF =====================
-    const staffList = [
-      { name: "Deepa K.", phone: "+91 98XXXXXX01", role: "R02", storeId: "ST-001", status: "active" },
-      { name: "Ravi M.", phone: "+91 98XXXXXX02", role: "R03", storeId: "ST-003", status: "active" },
-      { name: "Meena P.", phone: "+91 98XXXXXX03", role: "R03", storeId: "ST-005", status: "active" },
-      { name: "Amit S.", phone: "+91 98XXXXXX04", role: "R05", storeId: "ST-002", status: "active" },
-      { name: "Priya R.", phone: "+91 98XXXXXX05", role: "R04", storeId: "ST-003", status: "active" },
-      { name: "Suresh V.", phone: "+91 98XXXXXX06", role: "R03", storeId: "ST-006", status: "active" },
+    // Incidents
+    const incidents = [
+      { incidentId: "INC-001", severity: "P2", title: "CDN cache purge failure", startTime: "2026-04-03 14:30", endTime: "2026-04-03 15:45", duration: "1h 15m", storesAffected: 3, rootCause: "CDN provider maintenance window", status: "resolved" },
+      { incidentId: "INC-002", severity: "P1", title: "Mirror GPU thermal at Banarasi House", startTime: "2026-04-05 11:00", storesAffected: 1, status: "open" },
     ];
+    for (const i of incidents) { await ctx.db.insert("incidents", i); }
 
-    for (const member of staffList) {
-      await ctx.db.insert("staff", member);
-    }
+    // KB Articles
+    const kbArticles = [
+      { articleId: "KB-001", title: "How to add sarees to catalog", views: 245, helpful: 89, category: "Catalog", content: "Step-by-step guide to digitizing your saree collection." },
+      { articleId: "KB-002", title: "Mirror troubleshooting guide", views: 180, helpful: 72, category: "Devices", content: "Common mirror issues and how to resolve them." },
+      { articleId: "KB-003", title: "Customer consent management", views: 120, helpful: 65, category: "Privacy", content: "Managing DPDP consent for your customers." },
+      { articleId: "KB-004", title: "Understanding your store health score", views: 310, helpful: 95, category: "Analytics", content: "How the health score is calculated and how to improve it." },
+    ];
+    for (const k of kbArticles) { await ctx.db.insert("kbArticles", k); }
+
+    // Platform Config
+    const configs = [
+      { key: "platform_version", value: "4.3.0" },
+      { key: "min_app_version", value: "4.0.0" },
+      { key: "default_language", value: "en" },
+      { key: "max_session_duration", value: "30" },
+      { key: "loyalty_points_per_visit", value: "100" },
+      { key: "loyalty_points_per_purchase", value: "500" },
+      { key: "referral_reward_points", value: "200" },
+    ];
+    for (const c of configs) { await ctx.db.insert("platformConfig", c); }
 
     return "Seeded successfully";
   },

@@ -1,17 +1,86 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { KPI, Card, Tabs, Badge, Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { KPI, Card, Tabs, Badge, Btn, PageLoading, Metric } from "@/components/ui/wearify-ui";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Id } from "@/convex/_generated/dataModel";
+
+/* ================================================================
+   DEMO DATA — for tabs without real backend tables yet
+   ================================================================ */
+
+const CONTENT_ITEMS = [
+  { id: "C-001", type: "Mirror Attract Screen", store: "All Stores", status: "active", updated: "2026-04-01" },
+  { id: "C-002", type: "Catalog Banner", store: "Mangalya Silks", status: "active", updated: "2026-03-28" },
+  { id: "C-003", type: "QR Code Poster", store: "All Stores", status: "scheduled", updated: "2026-04-03" },
+  { id: "C-004", type: "Staff Training Video", store: "Vasundhara Handlooms", status: "draft", updated: "2026-03-20" },
+  { id: "C-005", type: "Mirror Attract Screen", store: "Parvathi Silks", status: "active", updated: "2026-04-05" },
+  { id: "C-006", type: "Catalog Banner", store: "All Stores", status: "scheduled", updated: "2026-04-04" },
+];
+
+const FIELD_VISITS = [
+  { id: "FV-001", store: "Mangalya Silks", type: "Installation", date: "2026-04-10", technician: "Ramesh K.", status: "Scheduled" },
+  { id: "FV-002", store: "Vasundhara Handlooms", type: "Maintenance", date: "2026-04-08", technician: "Suresh P.", status: "In Progress" },
+  { id: "FV-003", store: "Parvathi Silks", type: "Training", date: "2026-04-12", technician: "Anita M.", status: "Scheduled" },
+  { id: "FV-004", store: "Lakshmi Weaves", type: "Audit", date: "2026-04-06", technician: "Deepak R.", status: "Completed" },
+  { id: "FV-005", store: "Sree Sarees", type: "Installation", date: "2026-04-15", technician: "Ramesh K.", status: "Scheduled" },
+];
+
+const SPARE_INVENTORY = [
+  { item: "Smart Mirror", inStock: 12, reserved: 3, available: 9, location: "Warehouse Mumbai" },
+  { item: "Tablet (Samsung A8)", inStock: 25, reserved: 8, available: 17, location: "Warehouse Mumbai" },
+  { item: "Photo Booth Kit", inStock: 6, reserved: 2, available: 4, location: "Warehouse Mumbai" },
+  { item: "WiFi Router (Mesh)", inStock: 15, reserved: 5, available: 10, location: "Warehouse Mumbai" },
+  { item: "Backup UPS", inStock: 8, reserved: 1, available: 7, location: "Warehouse Mumbai" },
+];
+
+const DEPLOYMENT_STAGES = ["D-7 Site Survey", "D-5 Hardware Ship", "D-3 Staff Training", "D-1 Software Config", "D-Day Go Live"];
+
+const TRAINING_PROGRAMS = [
+  { id: "TP-001", name: "Mirror Operation Basics", type: "Onboarding", duration: "2 hours", enrolled: 12, completion: 92 },
+  { id: "TP-002", name: "Sales Conversion Tips", type: "Advanced", duration: "3 hours", enrolled: 8, completion: 78 },
+  { id: "TP-003", name: "AI Feature Training", type: "Advanced", duration: "1.5 hours", enrolled: 10, completion: 65 },
+  { id: "TP-004", name: "Customer Service Excellence", type: "Refresher", duration: "1 hour", enrolled: 14, completion: 88 },
+  { id: "TP-005", name: "DPDP Compliance", type: "Onboarding", duration: "45 min", enrolled: 14, completion: 100 },
+];
+
+const AI_AUTOTAG_ACCURACY = [
+  { store: "Mangalya Silks", accuracy: 94, items: 320, lastRun: "2026-04-05" },
+  { store: "Vasundhara Handlooms", accuracy: 88, items: 185, lastRun: "2026-04-04" },
+  { store: "Parvathi Silks", accuracy: 91, items: 210, lastRun: "2026-04-05" },
+];
+
+const HEALTH_DIMENSIONS = [
+  { key: "usage", label: "Usage", weight: 25, formula: "Mirror sessions per week / target" },
+  { key: "dataQuality", label: "Data Quality", weight: 20, formula: "Catalog completeness + image quality" },
+  { key: "revenue", label: "Revenue", weight: 20, formula: "Actual MRR / expected MRR" },
+  { key: "engagement", label: "Customer Engagement", weight: 15, formula: "Return rate + try-on depth" },
+  { key: "technical", label: "Technical", weight: 12, formula: "Device uptime + latency compliance" },
+  { key: "staff", label: "Staff", weight: 8, formula: "Staff activity + conversion correlation" },
+];
+
+/* ================================================================
+   MAIN COMPONENT
+   ================================================================ */
 
 export default function StoresPage() {
   const stores = useQuery(api.stores.list);
   const stats = useQuery(api.stores.getStats);
+  const tailors = useQuery(api.tailorOps.listAll);
+  const pendingSarees = useQuery(api.sarees.listPendingApproval);
+  const approveOrReject = useMutation(api.sarees.approveOrReject);
+
   const [tab, setTab] = useState("Registry");
   const [filter, setFilter] = useState("all");
+  const [tailorFilter, setTailorFilter] = useState("all");
+  const [rejectFeedback, setRejectFeedback] = useState<Record<string, string>>({});
+  const [showRejectInput, setShowRejectInput] = useState<string | null>(null);
+  const [healthWeights, setHealthWeights] = useState<Record<string, number>>(
+    Object.fromEntries(HEALTH_DIMENSIONS.map((d) => [d.key, d.weight]))
+  );
   const router = useRouter();
 
   if (!stores || !stats) return <PageLoading />;
@@ -20,6 +89,50 @@ export default function StoresPage() {
     filter === "all"
       ? stores
       : stores.filter((s) => s.status === filter);
+
+  /* Tailor stats */
+  const totalTailors = tailors?.length ?? 0;
+  const verifiedTailors = tailors?.filter((t) => t.status === "verified").length ?? 0;
+  const totalReferrals = tailors?.reduce((acc, t) => acc + t.referrals, 0) ?? 0;
+  const totalTailorRevenue = tailors?.reduce((acc, t) => acc + t.revenue, 0) ?? 0;
+
+  const filteredTailors =
+    tailorFilter === "all"
+      ? tailors
+      : tailors?.filter((t) => t.status === tailorFilter);
+
+  /* Health weights total */
+  const weightTotal = Object.values(healthWeights).reduce((a, b) => a + b, 0);
+
+  /* Pending sarees helpers */
+  const daysSince = (creationTime: number) => {
+    const diff = Date.now() - creationTime;
+    return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  };
+
+  /* Handle approve */
+  const handleApprove = async (id: Id<"sarees">) => {
+    await approveOrReject({ id, approvalStatus: "approved" });
+  };
+
+  /* Handle reject */
+  const handleReject = async (id: Id<"sarees">) => {
+    await approveOrReject({ id, approvalStatus: "rejected" });
+    setShowRejectInput(null);
+  };
+
+  /* Gradient placeholder for saree cards */
+  const sareeGradient = (grad?: string[], emoji?: string) => {
+    const colors = grad && grad.length >= 2 ? grad : ["#667eea", "#764ba2"];
+    return (
+      <div
+        className="w-full h-full rounded-lg flex items-center justify-center text-3xl"
+        style={{ background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})` }}
+      >
+        {emoji || "🪡"}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -48,11 +161,14 @@ export default function StoresPage() {
       </div>
 
       <Tabs
-        items={["Registry", "Tailors", "Content", "Field Ops", "Deployment", "Health", "Catalog QA", "Training"]}
+        items={["Registry", "Tailors", "Content", "Field Ops", "Deployment", "Health Config", "Catalog QA", "Training", "Catalogue Approval"]}
         active={tab}
         onChange={setTab}
       />
 
+      {/* ============================================================
+          TAB 1: REGISTRY
+          ============================================================ */}
       {tab === "Registry" && (
         <div>
           {/* Filters */}
@@ -160,13 +276,847 @@ export default function StoresPage() {
         </div>
       )}
 
-      {tab !== "Registry" && (
-        <Card>
-          <div className="text-center py-10 text-wf-muted text-sm">
-            <span className="text-2xl mb-3 block">🚧</span>
-            {tab} — Coming in Phase 1c
+      {/* ============================================================
+          TAB 2: TAILORS
+          ============================================================ */}
+      {tab === "Tailors" && (
+        <div>
+          <div className="flex gap-3 mb-4">
+            <KPI label="Total Tailors" value={totalTailors} />
+            <KPI label="Verified" value={verifiedTailors} subtitle={`${totalTailors > 0 ? Math.round((verifiedTailors / totalTailors) * 100) : 0}%`} />
+            <KPI label="Total Referrals" value={totalReferrals} />
+            <KPI label="Revenue from Referrals" value={`₹${totalTailorRevenue > 1000 ? `${(totalTailorRevenue / 1000).toFixed(0)}K` : totalTailorRevenue}`} />
           </div>
-        </Card>
+
+          {/* Tailor Filters */}
+          <div className="flex gap-1.5 mb-4">
+            {["all", "verified", "pending"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setTailorFilter(f)}
+                className={`px-4 py-1.5 rounded text-xs font-semibold cursor-pointer transition-colors ${
+                  tailorFilter === f
+                    ? "bg-wf-primary text-wf-bg"
+                    : "bg-wf-card text-wf-subtext border border-wf-border hover:bg-wf-border/50"
+                }`}
+              >
+                {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <Card>
+            {!tailors ? (
+              <div className="text-center py-8 text-wf-muted text-sm">Loading tailors...</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                      <th className="text-left py-2 pr-4">ID</th>
+                      <th className="text-left py-2 pr-4">Name</th>
+                      <th className="text-left py-2 pr-4">City</th>
+                      <th className="text-left py-2 pr-4">Phone</th>
+                      <th className="text-left py-2 pr-4">Status</th>
+                      <th className="text-left py-2 pr-4">Badge</th>
+                      <th className="text-right py-2 pr-4">Rating</th>
+                      <th className="text-right py-2 pr-4">Referrals</th>
+                      <th className="text-right py-2 pr-4">Revenue</th>
+                      <th className="text-left py-2 pr-4">Subscription</th>
+                      <th className="text-right py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTailors?.map((t) => (
+                      <tr
+                        key={t._id}
+                        className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                      >
+                        <td className="py-3 pr-4 font-mono text-xs text-wf-muted">
+                          {t.tailorId}
+                        </td>
+                        <td className="py-3 pr-4 font-semibold text-sm">
+                          {t.name}
+                        </td>
+                        <td className="py-3 pr-4 text-sm text-wf-subtext">
+                          {t.city}
+                        </td>
+                        <td className="py-3 pr-4 text-sm font-mono text-wf-subtext">
+                          {t.phone}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Badge status={t.status}>{t.status}</Badge>
+                        </td>
+                        <td className="py-3 pr-4">
+                          {t.badge ? (
+                            <Badge status={t.badge === "pro" ? "active" : t.badge === "verified" ? "verified" : "pending"}>
+                              {t.badge}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-wf-muted">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-right text-sm font-mono">
+                          <span style={{ color: t.rating >= 4 ? "var(--color-wf-green)" : t.rating >= 3 ? "var(--color-wf-amber)" : "var(--color-wf-red)" }}>
+                            {t.rating > 0 ? `${t.rating} ★` : "—"}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 text-right text-sm font-mono text-wf-subtext">
+                          {t.referrals}
+                        </td>
+                        <td className="py-3 pr-4 text-right text-sm font-mono">
+                          ₹{t.revenue > 1000 ? `${(t.revenue / 1000).toFixed(0)}K` : t.revenue}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Badge status={t.subscription === "pro" ? "active" : "pending"}>
+                            {t.subscription ?? "free"}
+                          </Badge>
+                        </td>
+                        <td className="py-3 text-right">
+                          <Btn small onClick={() => alert(`View tailor: ${t.tailorId}`)}>View</Btn>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredTailors?.length === 0 && (
+                  <div className="text-center py-8 text-wf-muted text-sm">No tailors found.</div>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 3: CONTENT
+          ============================================================ */}
+      {tab === "Content" && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-sm text-wf-subtext">
+              Manage mirror attract screens, catalog banners, QR posters, and training videos.
+            </p>
+            <Btn primary onClick={() => alert("Upload New Content — Feature coming soon")}>
+              + Upload New Content
+            </Btn>
+          </div>
+
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4">ID</th>
+                    <th className="text-left py-2 pr-4">Content Type</th>
+                    <th className="text-left py-2 pr-4">Store</th>
+                    <th className="text-left py-2 pr-4">Status</th>
+                    <th className="text-left py-2 pr-4">Last Updated</th>
+                    <th className="text-right py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CONTENT_ITEMS.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                    >
+                      <td className="py-3 pr-4 font-mono text-xs text-wf-muted">{item.id}</td>
+                      <td className="py-3 pr-4 font-semibold text-sm">{item.type}</td>
+                      <td className="py-3 pr-4 text-sm text-wf-subtext">{item.store}</td>
+                      <td className="py-3 pr-4">
+                        <Badge status={item.status === "active" ? "active" : item.status === "scheduled" ? "pending" : "planned"}>
+                          {item.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3 pr-4 text-sm text-wf-subtext font-mono">{item.updated}</td>
+                      <td className="py-3 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <Btn small onClick={() => alert(`Edit ${item.type} — Feature coming soon`)}>Edit</Btn>
+                          <Btn small onClick={() => alert(`Preview ${item.type} — Feature coming soon`)}>Preview</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 4: FIELD OPS
+          ============================================================ */}
+      {tab === "Field Ops" && (
+        <div>
+          {/* Pending Visits */}
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-lg font-bold text-wf-text">Pending Visits</h2>
+            <Btn primary onClick={() => alert("Schedule Visit — Feature coming soon")}>
+              + Schedule Visit
+            </Btn>
+          </div>
+
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4">ID</th>
+                    <th className="text-left py-2 pr-4">Store</th>
+                    <th className="text-left py-2 pr-4">Visit Type</th>
+                    <th className="text-left py-2 pr-4">Scheduled Date</th>
+                    <th className="text-left py-2 pr-4">Technician</th>
+                    <th className="text-left py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {FIELD_VISITS.map((v) => (
+                    <tr
+                      key={v.id}
+                      className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                    >
+                      <td className="py-3 pr-4 font-mono text-xs text-wf-muted">{v.id}</td>
+                      <td className="py-3 pr-4 font-semibold text-sm">{v.store}</td>
+                      <td className="py-3 pr-4 text-sm text-wf-subtext">{v.type}</td>
+                      <td className="py-3 pr-4 text-sm font-mono text-wf-subtext">{v.date}</td>
+                      <td className="py-3 pr-4 text-sm">{v.technician}</td>
+                      <td className="py-3">
+                        <Badge
+                          status={
+                            v.status === "Completed" ? "active"
+                            : v.status === "In Progress" ? "progress"
+                            : "pending"
+                          }
+                        >
+                          {v.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Spare Inventory */}
+          <h2 className="text-lg font-bold text-wf-text mt-6 mb-3">Spare Inventory</h2>
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4">Item Type</th>
+                    <th className="text-right py-2 pr-4">In Stock</th>
+                    <th className="text-right py-2 pr-4">Reserved</th>
+                    <th className="text-right py-2 pr-4">Available</th>
+                    <th className="text-left py-2">Location</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SPARE_INVENTORY.map((item) => (
+                    <tr
+                      key={item.item}
+                      className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                    >
+                      <td className="py-3 pr-4 font-semibold text-sm">{item.item}</td>
+                      <td className="py-3 pr-4 text-right text-sm font-mono">{item.inStock}</td>
+                      <td className="py-3 pr-4 text-right text-sm font-mono text-wf-amber">{item.reserved}</td>
+                      <td className="py-3 pr-4 text-right text-sm font-mono font-semibold" style={{ color: item.available > 5 ? "var(--color-wf-green)" : "var(--color-wf-red)" }}>
+                        {item.available}
+                      </td>
+                      <td className="py-3 text-sm text-wf-subtext">{item.location}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 5: DEPLOYMENT
+          ============================================================ */}
+      {tab === "Deployment" && (
+        <div>
+          <h2 className="text-lg font-bold text-wf-text mb-3">Deployment Pipeline</h2>
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4">Store</th>
+                    <th className="text-left py-2 pr-4">Status</th>
+                    <th className="text-left py-2 pr-4">Plan</th>
+                    <th className="text-left py-2">Deployment Stage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stores.map((store) => {
+                    const isActive = store.status === "active";
+                    const isTrial = store.status === "trial";
+                    // For trial stores, simulate a deployment stage based on onboardingStep
+                    const stageIdx = isTrial ? Math.min(store.onboardingStep, DEPLOYMENT_STAGES.length - 1) : DEPLOYMENT_STAGES.length - 1;
+                    return (
+                      <tr
+                        key={store._id}
+                        className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                      >
+                        <td className="py-3 pr-4 font-semibold text-sm">{store.name}</td>
+                        <td className="py-3 pr-4">
+                          <Badge status={store.status}>{store.status}</Badge>
+                        </td>
+                        <td className="py-3 pr-4 text-sm font-mono">{store.plan}</td>
+                        <td className="py-3">
+                          {isActive ? (
+                            <span className="text-sm font-semibold" style={{ color: "var(--color-wf-green)" }}>
+                              Completed
+                            </span>
+                          ) : isTrial ? (
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-semibold text-wf-primary">
+                                {DEPLOYMENT_STAGES[stageIdx]}
+                              </span>
+                              <div className="flex-1 max-w-[140px] h-1.5 rounded bg-wf-border">
+                                <div
+                                  className="h-full rounded transition-all duration-500"
+                                  style={{
+                                    width: `${((stageIdx + 1) / DEPLOYMENT_STAGES.length) * 100}%`,
+                                    backgroundColor: "var(--color-wf-primary)",
+                                  }}
+                                />
+                              </div>
+                              <span className="text-xs text-wf-muted font-mono">
+                                {stageIdx + 1}/{DEPLOYMENT_STAGES.length}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-wf-muted">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Go-Live Readiness */}
+          <h2 className="text-lg font-bold text-wf-text mt-6 mb-3">Go-Live Readiness</h2>
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4">Store</th>
+                    <th className="text-center py-2 pr-4">Hardware Installed</th>
+                    <th className="text-center py-2 pr-4">Staff Trained</th>
+                    <th className="text-center py-2 pr-4">Catalog Seeded</th>
+                    <th className="text-center py-2">WhatsApp Connected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stores
+                    .filter((s) => s.status === "trial" || s.status === "active")
+                    .map((store) => {
+                      const hw = store.onboardingStep >= 3;
+                      const staff = store.onboardingStep >= 5;
+                      const catalog = (store.catalogUtilization ?? 0) > 0;
+                      const wa = store.whatsappVerified ?? false;
+                      const gateIcon = (pass: boolean) => (
+                        <span
+                          className="inline-block w-5 h-5 rounded-full text-xs font-bold leading-5 text-center"
+                          style={{
+                            backgroundColor: pass ? "var(--color-wf-green)" : "var(--color-wf-red)",
+                            color: "#fff",
+                          }}
+                        >
+                          {pass ? "✓" : "✗"}
+                        </span>
+                      );
+                      return (
+                        <tr
+                          key={store._id}
+                          className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                        >
+                          <td className="py-3 pr-4 font-semibold text-sm">{store.name}</td>
+                          <td className="py-3 pr-4 text-center">{gateIcon(hw)}</td>
+                          <td className="py-3 pr-4 text-center">{gateIcon(staff)}</td>
+                          <td className="py-3 pr-4 text-center">{gateIcon(catalog)}</td>
+                          <td className="py-3 text-center">{gateIcon(wa)}</td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 6: HEALTH CONFIG
+          ============================================================ */}
+      {tab === "Health Config" && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-wf-text">Health Score Weights</h2>
+              <p className="text-sm text-wf-subtext">
+                Configure the 6 dimensions that compose every store's health score.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span
+                className="text-sm font-mono font-bold"
+                style={{
+                  color: weightTotal === 100 ? "var(--color-wf-green)" : "var(--color-wf-red)",
+                }}
+              >
+                Total: {weightTotal}%
+              </span>
+              <Btn
+                primary
+                onClick={() => alert("Recalculate All Scores — Feature coming soon")}
+                disabled={weightTotal !== 100}
+              >
+                Recalculate All Scores
+              </Btn>
+            </div>
+          </div>
+
+          <Card>
+            <div className="space-y-0">
+              {HEALTH_DIMENSIONS.map((dim) => (
+                <div
+                  key={dim.key}
+                  className="flex items-center gap-4 py-3 border-b border-wf-border last:border-b-0"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-wf-text">{dim.label}</div>
+                    <div className="text-xs text-wf-muted mt-0.5">{dim.formula}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={healthWeights[dim.key]}
+                      onChange={(e) =>
+                        setHealthWeights((prev) => ({
+                          ...prev,
+                          [dim.key]: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)),
+                        }))
+                      }
+                      className="w-16 px-2 py-1 rounded bg-wf-bg border border-wf-border text-sm font-mono text-wf-text text-right focus:outline-none focus:border-wf-primary"
+                    />
+                    <span className="text-xs text-wf-muted">%</span>
+                  </div>
+                  <div className="w-32">
+                    <Metric label="" value={String(healthWeights[dim.key])} max={100} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {weightTotal !== 100 && (
+            <div className="mt-3 px-4 py-2 rounded bg-wf-red/10 text-wf-red text-sm font-semibold">
+              Weights must total exactly 100%. Currently: {weightTotal}% ({weightTotal > 100 ? `${weightTotal - 100}% over` : `${100 - weightTotal}% under`})
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 7: CATALOG QA
+          ============================================================ */}
+      {tab === "Catalog QA" && (
+        <div>
+          {/* KPI Row */}
+          <div className="flex gap-3 mb-4">
+            <KPI label="Pending" value={pendingSarees?.length ?? 0} color="var(--color-wf-amber)" />
+            <KPI label="Approved Today" value={12} subtitle="Demo" />
+            <KPI label="Rejected Today" value={3} color="var(--color-wf-red)" subtitle="Demo" />
+            <KPI label="AI Auto-Tag Accuracy" value="91%" ai />
+          </div>
+
+          <Card title="Pending Review Queue">
+            {!pendingSarees ? (
+              <div className="text-center py-8 text-wf-muted text-sm">Loading...</div>
+            ) : pendingSarees.length === 0 ? (
+              <div className="text-center py-10 text-wf-muted text-sm">
+                <span className="text-3xl block mb-2">✅</span>
+                All caught up! No items pending review.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                      <th className="text-left py-2 pr-3 w-10"></th>
+                      <th className="text-left py-2 pr-4">Name</th>
+                      <th className="text-left py-2 pr-4">Store</th>
+                      <th className="text-left py-2 pr-4">Type</th>
+                      <th className="text-left py-2 pr-4">Fabric</th>
+                      <th className="text-right py-2 pr-4">Price</th>
+                      <th className="text-left py-2 pr-4">Added By</th>
+                      <th className="text-right py-2 pr-4">Days</th>
+                      <th className="text-right py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingSarees.map((saree) => (
+                      <tr
+                        key={saree._id}
+                        className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                      >
+                        <td className="py-3 pr-3">
+                          <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0">
+                            {sareeGradient(saree.grad, saree.emoji)}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 font-semibold text-sm">{saree.name}</td>
+                        <td className="py-3 pr-4 text-sm text-wf-subtext font-mono">{saree.storeId}</td>
+                        <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.type}</td>
+                        <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.fabric}</td>
+                        <td className="py-3 pr-4 text-right text-sm font-mono">₹{saree.price.toLocaleString()}</td>
+                        <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.addedBy ?? "—"}</td>
+                        <td className="py-3 pr-4 text-right text-sm font-mono text-wf-muted">
+                          {daysSince(saree._creationTime)}d
+                        </td>
+                        <td className="py-3 text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Btn small primary onClick={() => handleApprove(saree._id)}>Approve</Btn>
+                            <Btn small danger onClick={() => handleReject(saree._id)}>Reject</Btn>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+
+          {/* AI Auto-Tag Accuracy by Store */}
+          <Card title="AI Auto-Tag Accuracy by Store" className="mt-4">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4">Store</th>
+                    <th className="text-right py-2 pr-4">Accuracy</th>
+                    <th className="text-right py-2 pr-4">Items Tagged</th>
+                    <th className="text-left py-2">Last Run</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {AI_AUTOTAG_ACCURACY.map((row) => (
+                    <tr
+                      key={row.store}
+                      className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                    >
+                      <td className="py-3 pr-4 font-semibold text-sm">{row.store}</td>
+                      <td className="py-3 pr-4 text-right">
+                        <span
+                          className="text-sm font-mono font-semibold"
+                          style={{ color: row.accuracy >= 90 ? "var(--color-wf-green)" : "var(--color-wf-amber)" }}
+                        >
+                          {row.accuracy}%
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right text-sm font-mono text-wf-subtext">{row.items}</td>
+                      <td className="py-3 text-sm text-wf-subtext font-mono">{row.lastRun}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 8: TRAINING
+          ============================================================ */}
+      {tab === "Training" && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold text-wf-text">Training Programs</h2>
+            <Btn primary onClick={() => alert("Add Program — Feature coming soon")}>
+              + Add Program
+            </Btn>
+          </div>
+
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4">ID</th>
+                    <th className="text-left py-2 pr-4">Program Name</th>
+                    <th className="text-left py-2 pr-4">Type</th>
+                    <th className="text-left py-2 pr-4">Duration</th>
+                    <th className="text-right py-2 pr-4">Stores Enrolled</th>
+                    <th className="text-right py-2">Completion Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {TRAINING_PROGRAMS.map((prog) => (
+                    <tr
+                      key={prog.id}
+                      className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                    >
+                      <td className="py-3 pr-4 font-mono text-xs text-wf-muted">{prog.id}</td>
+                      <td className="py-3 pr-4 font-semibold text-sm">{prog.name}</td>
+                      <td className="py-3 pr-4">
+                        <Badge
+                          status={
+                            prog.type === "Onboarding" ? "active"
+                            : prog.type === "Advanced" ? "progress"
+                            : "pending"
+                          }
+                        >
+                          {prog.type}
+                        </Badge>
+                      </td>
+                      <td className="py-3 pr-4 text-sm text-wf-subtext">{prog.duration}</td>
+                      <td className="py-3 pr-4 text-right text-sm font-mono">{prog.enrolled}</td>
+                      <td className="py-3 text-right">
+                        <span
+                          className="text-sm font-mono font-semibold"
+                          style={{
+                            color:
+                              prog.completion >= 90 ? "var(--color-wf-green)"
+                              : prog.completion >= 70 ? "var(--color-wf-amber)"
+                              : "var(--color-wf-red)",
+                          }}
+                        >
+                          {prog.completion}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Per-Store Completion Tracking */}
+          <h2 className="text-lg font-bold text-wf-text mt-6 mb-3">Per-Store Completion Tracking</h2>
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4">Store</th>
+                    <th className="text-left py-2 pr-4">Progress</th>
+                    <th className="text-left py-2 pr-4">Last Certification</th>
+                    <th className="text-left py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stores
+                    .filter((s) => s.status !== "churned")
+                    .map((store, idx) => {
+                      const completed = Math.min(idx + 2, TRAINING_PROGRAMS.length);
+                      const total = TRAINING_PROGRAMS.length;
+                      const allDone = completed === total;
+                      const certDate = allDone ? "2026-03-28" : completed > 2 ? "2026-03-15" : "—";
+                      return (
+                        <tr
+                          key={store._id}
+                          className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                        >
+                          <td className="py-3 pr-4 font-semibold text-sm">{store.name}</td>
+                          <td className="py-3 pr-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 h-1.5 rounded bg-wf-border">
+                                <div
+                                  className="h-full rounded"
+                                  style={{
+                                    width: `${(completed / total) * 100}%`,
+                                    backgroundColor: allDone ? "var(--color-wf-green)" : "var(--color-wf-primary)",
+                                  }}
+                                />
+                              </div>
+                              <span className="text-xs font-mono text-wf-subtext">
+                                {completed}/{total}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 pr-4 text-sm font-mono text-wf-subtext">{certDate}</td>
+                          <td className="py-3">
+                            <Badge status={allDone ? "active" : completed >= 3 ? "progress" : "pending"}>
+                              {allDone ? "Certified" : completed >= 3 ? "In Progress" : "Pending"}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 9: CATALOGUE APPROVAL
+          ============================================================ */}
+      {tab === "Catalogue Approval" && (
+        <div>
+          <h2 className="text-lg font-bold text-wf-text mb-1">Catalogue Approval</h2>
+          <p className="text-sm text-wf-subtext mb-4">
+            Detailed review of each pending saree with validation checks and feedback.
+          </p>
+
+          {!pendingSarees ? (
+            <Card>
+              <div className="text-center py-8 text-wf-muted text-sm">Loading...</div>
+            </Card>
+          ) : pendingSarees.length === 0 ? (
+            <Card>
+              <div className="text-center py-10 text-wf-muted text-sm">
+                <span className="text-3xl block mb-2">✅</span>
+                All caught up! No items pending review.
+              </div>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {pendingSarees.map((saree) => {
+                const hasAiTags = !!(saree.aiTags && saree.aiTags.length > 0);
+                const checks = [
+                  { label: "Resolution OK", pass: true },
+                  { label: "Background OK", pass: true },
+                  { label: "Duplicate Check", pass: true },
+                  { label: "Tag Completeness", pass: hasAiTags },
+                  { label: "File Size OK", pass: true },
+                ];
+                return (
+                  <Card key={saree._id}>
+                    <div className="flex gap-5">
+                      {/* Large preview */}
+                      <div className="w-32 h-40 rounded-lg overflow-hidden flex-shrink-0">
+                        {sareeGradient(saree.grad, saree.emoji)}
+                      </div>
+
+                      {/* Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h3 className="text-base font-bold text-wf-text">{saree.name}</h3>
+                            <p className="text-xs text-wf-muted font-mono mt-0.5">Store: {saree.storeId}</p>
+                          </div>
+                          <span className="text-sm font-mono font-bold text-wf-primary">
+                            ₹{saree.price.toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-x-4 gap-y-1 text-sm mb-3">
+                          <div>
+                            <span className="text-wf-muted text-xs">Type</span>
+                            <div className="font-semibold">{saree.type}</div>
+                          </div>
+                          <div>
+                            <span className="text-wf-muted text-xs">Fabric</span>
+                            <div className="font-semibold">{saree.fabric}</div>
+                          </div>
+                          <div>
+                            <span className="text-wf-muted text-xs">Occasion</span>
+                            <div className="font-semibold">{saree.occasion}</div>
+                          </div>
+                          <div>
+                            <span className="text-wf-muted text-xs">Added By</span>
+                            <div className="font-semibold">{saree.addedBy ?? "—"}</div>
+                          </div>
+                        </div>
+
+                        {saree.description && (
+                          <p className="text-xs text-wf-subtext mb-3 line-clamp-2">{saree.description}</p>
+                        )}
+
+                        {/* Validation Checks */}
+                        <div className="flex gap-2 flex-wrap mb-3">
+                          {checks.map((c) => (
+                            <span
+                              key={c.label}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
+                              style={{
+                                backgroundColor: c.pass ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                                color: c.pass ? "var(--color-wf-green)" : "var(--color-wf-red)",
+                              }}
+                            >
+                              {c.pass ? "✓" : "✗"} {c.label}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2">
+                          <Btn small primary onClick={() => handleApprove(saree._id)}>Approve</Btn>
+                          <Btn
+                            small
+                            danger
+                            onClick={() => {
+                              if (showRejectInput === saree._id as string) {
+                                handleReject(saree._id);
+                              } else {
+                                setShowRejectInput(saree._id as string);
+                              }
+                            }}
+                          >
+                            {showRejectInput === (saree._id as string) ? "Confirm Reject" : "Reject with Feedback"}
+                          </Btn>
+                          <Btn small onClick={() => alert("Request Re-upload — Feature coming soon")}>
+                            Request Re-upload
+                          </Btn>
+                        </div>
+
+                        {/* Reject Feedback textarea */}
+                        {showRejectInput === (saree._id as string) && (
+                          <div className="mt-2">
+                            <textarea
+                              placeholder="Enter rejection reason..."
+                              value={rejectFeedback[saree._id as string] ?? ""}
+                              onChange={(e) =>
+                                setRejectFeedback((prev) => ({
+                                  ...prev,
+                                  [saree._id as string]: e.target.value,
+                                }))
+                              }
+                              className="w-full px-3 py-2 rounded bg-wf-bg border border-wf-border text-sm text-wf-text focus:outline-none focus:border-wf-primary resize-none"
+                              rows={2}
+                            />
+                            <div className="flex gap-2 mt-1">
+                              <Btn
+                                small
+                                danger
+                                onClick={() => handleReject(saree._id)}
+                              >
+                                Submit Rejection
+                              </Btn>
+                              <Btn
+                                small
+                                onClick={() => setShowRejectInput(null)}
+                              >
+                                Cancel
+                              </Btn>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -100,7 +100,7 @@ export default function NetworkPage() {
                   {tailor.rating} ★
                 </span>
                 <span className="w-[90px] text-right text-[9px] text-wf-subtext">
-                  {tailor.specialization}
+                  {tailor.specialties?.join(", ") || "—"}
                 </span>
               </Row>
             ))}
