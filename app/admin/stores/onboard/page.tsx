@@ -5,438 +5,605 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, Btn } from "@/components/ui/wearify-ui";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const STEPS = [
   "Store Profile",
-  "Owner KYC",
-  "Docs Upload",
-  "Legal Agreements",
-  "Plan Selection",
+  "KYC & Documents",
+  "Agreements",
+  "Plan & Billing",
+  "Hardware",
   "Staff Setup",
-  "Hardware Config",
-  "Go Live",
+  "WhatsApp",
+  "Review & Activate",
 ];
 
 type Errors = Record<string, string>;
+type StaffMember = { name: string; phone: string; pin: string; role: string };
+type MirrorEntry = { serial: string; iotId: string; source: string };
+type TabletEntry = { serial: string; source: string };
 
-const VALIDATORS = {
+const V = {
   phone: (v: string) => {
-    if (!v.trim()) return "Phone number is required";
-    if (!/^\d{10}$/.test(v)) return "Enter a valid 10-digit mobile number";
+    if (!v.trim()) return "Required";
+    if (!/^\d{10}$/.test(v)) return "Must be 10 digits";
     return "";
   },
   email: (v: string) => {
-    if (!v.trim()) return "";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "Enter a valid email address";
+    if (!v.trim()) return "Required";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "Invalid email";
     return "";
   },
   pan: (v: string) => {
-    if (!v.trim()) return "";
-    if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(v.toUpperCase())) return "PAN must be like AAAPZ1234C";
+    if (!v.trim()) return "Required";
+    if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(v.toUpperCase())) return "Format: AAAPZ1234C";
     return "";
   },
   gstin: (v: string) => {
-    if (!v.trim()) return "";
-    if (!/^\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z0-9]$/.test(v.toUpperCase()))
-      return "GSTIN must be like 22AAAPZ1234C1Z5";
+    if (!v.trim()) return "Required";
+    if (!/^\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z0-9]$/.test(v.toUpperCase())) return "Format: 22AAAAA0000A1Z5";
     return "";
   },
   pin: (v: string) => {
-    if (!v.trim()) return "";
-    if (!/^\d{6}$/.test(v)) return "PIN code must be 6 digits";
+    if (!v.trim()) return "Required";
+    if (!/^\d{6}$/.test(v)) return "Must be 6 digits";
     return "";
   },
+  required: (v: string) => (!v.trim() ? "Required" : ""),
 };
 
 export default function OnboardPage() {
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Errors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [agreements, setAgreements] = useState<Record<string, boolean>>({});
-  const [data, setData] = useState({
-    name: "",
-    city: "",
-    state: "",
-    address: "",
-    pin: "",
-    ownerName: "",
-    ownerPhone: "",
-    ownerEmail: "",
-    gstin: "",
-    pan: "",
-    plan: "Digital",
-    billingCycle: "monthly",
-    staffName: "",
-    staffPhone: "",
-    staffRole: "R04",
-  });
   const router = useRouter();
   const createStore = useMutation(api.stores.create);
 
+  // Step 1: Store Profile & Business Details
+  const [d, setD] = useState({
+    name: "", ownerName: "", ownerPhone: "", ownerEmail: "",
+    address: "", city: "", state: "", pin: "", area: "",
+    hours: "10:00 AM - 9:00 PM", gstin: "", pan: "", shopLicense: "",
+  });
+
+  // Step 2: KYC & Documents
+  const [bankAccount, setBankAccount] = useState("");
+  const [bankIfsc, setBankIfsc] = useState("");
+  const [bankName, setBankName] = useState("");
+
+  // Step 3: Agreements
+  const [agreements, setAgreements] = useState<Record<string, boolean>>({});
+  const [signerName, setSignerName] = useState("");
+  const [signDate, setSignDate] = useState("");
+  const [signerConfirm, setSignerConfirm] = useState(false);
+
+  // Step 4: Plan & Billing
+  const [plan, setPlan] = useState("Smart");
+  const [billingCycle, setBillingCycle] = useState("monthly");
+  const [discountCode, setDiscountCode] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("UPI (Razorpay)");
+
+  // Step 5: Hardware
+  const [mirrors, setMirrors] = useState<MirrorEntry[]>([{ serial: "", iotId: "", source: "From spare inventory" }]);
+  const [tablets, setTablets] = useState<TabletEntry[]>([{ serial: "", source: "From spare inventory" }]);
+  const [accessories, setAccessories] = useState({ photoBooth: true, wifiRouter: true });
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [installDate, setInstallDate] = useState("");
+  const [technician, setTechnician] = useState("");
+
+  // Step 6: Staff
+  const [staffList, setStaffList] = useState<StaffMember[]>([{ name: "", phone: "", pin: "", role: "R05" }]);
+
+  // Step 7: WhatsApp
+  const [waNumber, setWaNumber] = useState("");
+  const [waVerified, setWaVerified] = useState(false);
+
+  // --- Helpers ---
   const upd = (key: string, raw: string) => {
     let val = raw;
-    // Enforce input constraints per field
     if (key === "pin") val = raw.replace(/\D/g, "").slice(0, 6);
     if (key === "pan") val = raw.replace(/[^A-Za-z0-9]/g, "").slice(0, 10).toUpperCase();
     if (key === "gstin") val = raw.replace(/[^A-Za-z0-9]/g, "").slice(0, 15).toUpperCase();
-    if (key === "ownerPhone" || key === "staffPhone") {
-      // Strip to digits only
-      const digits = raw.replace(/\D/g, "");
-      // Remove leading 91 if user types it (we add the prefix ourselves)
-      const local = digits.startsWith("91") && digits.length > 10 ? digits.slice(2) : digits;
-      val = local.slice(0, 10);
-    }
-
-    setData((p) => ({ ...p, [key]: val }));
-    if (touched[key]) {
-      validateField(key, val);
-    }
+    if (key === "ownerPhone") { val = raw.replace(/\D/g, ""); val = (val.startsWith("91") && val.length > 10) ? val.slice(2) : val; val = val.slice(0, 10); }
+    setD((p) => ({ ...p, [key]: val }));
+    if (touched[key]) validateField(key, val);
   };
 
   const touch = (key: string) => {
     setTouched((p) => ({ ...p, [key]: true }));
-    validateField(key, (data as Record<string, string>)[key] || "");
+    validateField(key, (d as Record<string, string>)[key] || "");
   };
 
   const validateField = (key: string, val: string) => {
     let err = "";
-    if (key === "name" && !val.trim()) err = "Store name is required";
-    if (key === "city" && !val.trim()) err = "City is required";
-    if (key === "ownerName" && !val.trim()) err = "Owner name is required";
-    if (key === "ownerPhone") err = VALIDATORS.phone(val);
-    if (key === "ownerEmail") err = VALIDATORS.email(val);
-    if (key === "pan") err = VALIDATORS.pan(val);
-    if (key === "gstin") err = VALIDATORS.gstin(val);
-    if (key === "pin") err = VALIDATORS.pin(val);
+    if (["name", "ownerName", "city", "state", "address"].includes(key)) err = V.required(val);
+    if (key === "ownerPhone") err = V.phone(val);
+    if (key === "ownerEmail") err = V.email(val);
+    if (key === "pan") err = V.pan(val);
+    if (key === "gstin") err = V.gstin(val);
+    if (key === "pin") err = V.pin(val);
     setErrors((p) => ({ ...p, [key]: err }));
     return err;
   };
 
   const validateStep = (): boolean => {
-    const newErrors: Errors = {};
-    const newTouched: Record<string, boolean> = {};
+    const errs: Errors = {};
+    const t: Record<string, boolean> = {};
+    const check = (key: string, validator: (v: string) => string, val?: string) => {
+      const fieldVal = val !== undefined ? val : ((d as Record<string, string>)[key] || "");
+      const e = validator(fieldVal);
+      if (e) { errs[key] = e; t[key] = true; }
+    };
 
     if (step === 0) {
-      if (!data.name.trim()) { newErrors.name = "Store name is required"; newTouched.name = true; }
-      if (!data.city.trim()) { newErrors.city = "City is required"; newTouched.city = true; }
-      const pinErr = VALIDATORS.pin(data.pin);
-      if (pinErr) { newErrors.pin = pinErr; newTouched.pin = true; }
-    }
-    if (step === 1) {
-      if (!data.ownerName.trim()) { newErrors.ownerName = "Owner name is required"; newTouched.ownerName = true; }
-      const phoneErr = VALIDATORS.phone(data.ownerPhone);
-      if (phoneErr) { newErrors.ownerPhone = phoneErr; newTouched.ownerPhone = true; }
-      const emailErr = VALIDATORS.email(data.ownerEmail);
-      if (emailErr) { newErrors.ownerEmail = emailErr; newTouched.ownerEmail = true; }
-      const panErr = VALIDATORS.pan(data.pan);
-      if (panErr) { newErrors.pan = panErr; newTouched.pan = true; }
-      const gstErr = VALIDATORS.gstin(data.gstin);
-      if (gstErr) { newErrors.gstin = gstErr; newTouched.gstin = true; }
+      check("name", V.required); check("ownerName", V.required);
+      check("ownerPhone", V.phone); check("ownerEmail", V.email);
+      check("address", V.required); check("city", V.required);
+      check("state", V.required); check("pin", V.pin);
+      check("gstin", V.gstin); check("pan", V.pan);
     }
     if (step === 5) {
-      if (data.staffPhone.trim()) {
-        const phoneErr = VALIDATORS.phone(data.staffPhone);
-        if (phoneErr) { newErrors.staffPhone = phoneErr; newTouched.staffPhone = true; }
-      }
+      staffList.forEach((s, i) => {
+        if (!s.name.trim()) { errs[`staff_${i}_name`] = "Required"; t[`staff_${i}_name`] = true; }
+        if (!/^\d{10}$/.test(s.phone)) { errs[`staff_${i}_phone`] = "10 digits"; t[`staff_${i}_phone`] = true; }
+        if (!/^\d{4,6}$/.test(s.pin)) { errs[`staff_${i}_pin`] = "4-6 digits"; t[`staff_${i}_pin`] = true; }
+      });
+    }
+    if (step === 6) {
+      if (!waNumber.trim() || !/^\d{10}$/.test(waNumber)) { errs.waNumber = "10 digits required"; t.waNumber = true; }
     }
 
-    setErrors((p) => ({ ...p, ...newErrors }));
-    setTouched((p) => ({ ...p, ...newTouched }));
-    return Object.values(newErrors).every((e) => !e);
+    setErrors((p) => ({ ...p, ...errs }));
+    setTouched((p) => ({ ...p, ...t }));
+    return Object.values(errs).every((e) => !e);
   };
 
-  const handleNext = () => {
-    if (validateStep()) {
-      setStep(step + 1);
-    }
-  };
+  const handleNext = () => { if (validateStep()) setStep(step + 1); };
 
-  const handleFinish = async () => {
+  const handleActivate = async (status: "trial" | "active") => {
     await createStore({
       storeId: `ST-${String(Date.now()).slice(-3)}`,
-      name: data.name,
-      city: data.city,
-      state: data.state || undefined,
-      address: data.address || undefined,
-      pin: data.pin || undefined,
-      status: "trial",
-      plan: data.plan,
-      mrr: data.plan === "Smart" ? 15000 : data.plan === "Digital" ? 10000 : 0,
-      ownerName: data.ownerName || undefined,
-      ownerPhone: data.ownerPhone ? `+91 ${data.ownerPhone}` : undefined,
-      ownerEmail: data.ownerEmail || undefined,
-      gstin: data.gstin || undefined,
+      name: d.name, city: d.city,
+      state: d.state || undefined, address: d.address || undefined, pin: d.pin || undefined,
+      status, plan,
+      mrr: plan === "Smart" ? 15000 : plan === "Digital" ? 10000 : 0,
+      ownerName: d.ownerName || undefined,
+      ownerPhone: d.ownerPhone ? `+91 ${d.ownerPhone}` : undefined,
+      ownerEmail: d.ownerEmail || undefined,
+      gstin: d.gstin || undefined,
     });
     router.push("/admin/stores");
   };
 
-  const renderInput = (
-    label: string,
-    key: string,
-    placeholder: string,
-    options?: { type?: string; required?: boolean; hint?: string; maxLength?: number; prefix?: string }
-  ) => {
-    const { type = "text", required = false, hint, maxLength, prefix } = options || {};
-    const hasError = touched[key] && errors[key];
-    const borderClass = hasError
-      ? "border-wf-red focus-within:border-wf-red focus-within:ring-wf-red/20"
-      : "border-wf-border focus-within:border-wf-primary focus-within:ring-wf-primary/20";
+  const allAgreementsSigned = ["MSA", "DPA", "AUP", "HW", "SLA"].every((k) => agreements[k]);
+
+  // --- Render helpers ---
+  const inp = (label: string, key: string, placeholder: string, opts?: { required?: boolean; maxLength?: number; prefix?: string; type?: string; disabled?: boolean }) => {
+    const { required, maxLength, prefix, type = "text", disabled } = opts || {};
+    const hasErr = touched[key] && errors[key];
+    const bc = hasErr ? "border-wf-red focus-within:border-wf-red focus-within:ring-wf-red/20" : "border-wf-border focus-within:border-wf-primary focus-within:ring-wf-primary/20";
     return (
       <div className="mb-3">
-        <label className="block text-sm font-semibold text-wf-subtext mb-1">
-          {label} {required && <span className="text-wf-red">*</span>}
-        </label>
+        <label className="block text-sm font-semibold text-wf-subtext mb-1">{label}{required && <span className="text-wf-red"> *</span>}</label>
         {prefix ? (
-          <div className={`flex items-center rounded-lg border bg-white focus-within:ring-2 transition-colors ${borderClass}`}>
+          <div className={`flex items-center rounded-lg border bg-white focus-within:ring-2 transition-colors ${bc}`}>
             <span className="pl-3 pr-1 text-sm font-semibold text-wf-subtext select-none">{prefix}</span>
-            <input
-              type={type}
-              value={(data as Record<string, string>)[key] || ""}
-              onChange={(e) => upd(key, e.target.value)}
-              onBlur={() => touch(key)}
-              placeholder={placeholder}
-              maxLength={maxLength}
-              className="flex-1 px-2 py-2 bg-transparent text-sm text-wf-text focus:outline-none"
-            />
+            <input type={type} value={(d as Record<string, string>)[key] || ""} onChange={(e) => upd(key, e.target.value)} onBlur={() => touch(key)} placeholder={placeholder} maxLength={maxLength} disabled={disabled} className="flex-1 px-2 py-2 bg-transparent text-sm text-wf-text focus:outline-none disabled:text-wf-muted" />
           </div>
         ) : (
-          <input
-            type={type}
-            value={(data as Record<string, string>)[key] || ""}
-            onChange={(e) => upd(key, e.target.value)}
-            onBlur={() => touch(key)}
-            placeholder={placeholder}
-            maxLength={maxLength}
-            className={`w-full px-3 py-2 rounded-lg border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 transition-colors ${
-              hasError
-                ? "border-wf-red focus:border-wf-red focus:ring-wf-red/20"
-                : "border-wf-border focus:border-wf-primary focus:ring-wf-primary/20"
-            }`}
-          />
+          <input type={type} value={(d as Record<string, string>)[key] || ""} onChange={(e) => upd(key, e.target.value)} onBlur={() => touch(key)} placeholder={placeholder} maxLength={maxLength} disabled={disabled}
+            className={`w-full px-3 py-2 rounded-lg border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 transition-colors disabled:text-wf-muted disabled:bg-wf-bg ${bc}`} />
         )}
-        {hint && !hasError && (
-          <p className="text-xs text-wf-muted mt-0.5">{hint}</p>
-        )}
-        {hasError && (
-          <p className="text-xs text-wf-red mt-0.5">{errors[key]}</p>
-        )}
+        {hasErr && <p className="text-xs text-wf-red mt-0.5">{errors[key]}</p>}
       </div>
     );
   };
 
-  const toggleAgreement = (name: string) => {
-    setAgreements((p) => ({ ...p, [name]: !p[name] }));
+  const uploadBox = (label: string, accept: string, required?: boolean) => (
+    <div className="mb-4">
+      <label className="block text-sm font-semibold text-wf-subtext mb-1">{label}{required && <span className="text-wf-red"> *</span>}</label>
+      <div className="border border-dashed border-wf-border rounded-lg bg-wf-bg px-4 py-5 text-center cursor-pointer hover:border-wf-primary transition-colors">
+        <p className="text-sm text-wf-muted">Click to upload</p>
+        <p className="text-xs text-wf-muted">{accept}</p>
+      </div>
+    </div>
+  );
+
+  const stepDone = (i: number) => {
+    if (i === 0) return d.name.trim() !== "" && d.city.trim() !== "" && d.ownerName.trim() !== "";
+    if (i === 1) return true; // KYC docs are optional for progression
+    if (i === 2) return allAgreementsSigned && signerName.trim() !== "" && signerConfirm;
+    if (i === 3) return true;
+    if (i === 4) return mirrors[0].serial.trim() !== "";
+    if (i === 5) return staffList[0].name.trim() !== "";
+    if (i === 6) return waNumber.length === 10;
+    return false;
   };
 
-  const allAgreementsSigned = [
-    "MSA", "DPA", "AUP", "HW", "SLA"
-  ].every((k) => agreements[k]);
-
-  const goLiveChecks = [
-    ["Store Profile", data.name.trim() !== "" && data.city.trim() !== ""],
-    ["Owner KYC", data.ownerName.trim() !== "" && data.ownerPhone.trim() !== ""],
-    ["Documents Uploaded", false],
-    ["Legal Agreements Signed", allAgreementsSigned],
-    [`Plan Selected: ${data.plan}`, true],
-    ["Staff Assigned", data.staffName.trim() !== ""],
-    ["Hardware Configured", true],
-  ] as [string, boolean][];
-
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-xl font-extrabold text-wf-text mb-0.5">
-        Onboard New Store
-      </h1>
-      <p className="text-sm text-wf-subtext mb-3">
-        Step {step + 1} of {STEPS.length}: {STEPS[step]}
-      </p>
+    <div>
+      {/* Breadcrumb & cancel */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs text-wf-muted">
+          Mission Control &rsaquo; <Link href="/admin/stores" className="text-wf-primary hover:underline no-underline">Stores</Link>
+        </div>
+      </div>
+      <Link href="/admin/stores"><Btn small className="mb-3">Cancel Onboarding</Btn></Link>
 
-      {/* Progress */}
-      <div className="flex gap-1 mb-4">
+      <h1 className="text-xl font-extrabold text-wf-text mb-3">New Store Onboarding</h1>
+
+      {/* Step tabs */}
+      <div className="flex gap-2 mb-5 flex-wrap">
         {STEPS.map((s, i) => (
-          <div key={s} className="flex-1 flex flex-col items-center gap-0.5">
-            <div
-              className={`w-full h-1 rounded transition-colors ${
-                i < step
-                  ? "bg-wf-green"
-                  : i === step
-                    ? "bg-wf-primary"
-                    : "bg-wf-border"
-              }`}
-            />
-            <span className={`text-[10px] leading-tight ${i <= step ? "text-wf-text font-semibold" : "text-wf-muted"}`}>
-              {s}
+          <button
+            key={s}
+            onClick={() => i < step && setStep(i)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer border ${
+              i === step
+                ? "bg-wf-primary/10 text-wf-primary border-wf-primary"
+                : i < step
+                  ? "bg-wf-card text-wf-text border-wf-border"
+                  : "bg-wf-bg text-wf-muted border-wf-border"
+            }`}
+          >
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+              i < step ? "bg-wf-green text-white" : i === step ? "bg-wf-primary text-white" : "bg-wf-border text-wf-muted"
+            }`}>
+              {i < step ? "✓" : i + 1}
             </span>
-          </div>
+            {s}
+          </button>
         ))}
       </div>
 
-      <Card>
-        {step === 0 && (
-          <>
-            <h3 className="text-sm font-bold text-wf-text mb-3">Store Profile</h3>
-            <div className="grid grid-cols-2 gap-x-4">
-              <div>{renderInput("Store Name", "name", "e.g. MAUVE Sarees", { required: true })}</div>
-              <div>{renderInput("City", "city", "e.g. Mumbai", { required: true })}</div>
-              <div>{renderInput("State", "state", "e.g. Maharashtra")}</div>
-              <div>{renderInput("PIN Code", "pin", "e.g. 400001", { hint: "6-digit postal code", maxLength: 6 })}</div>
-            </div>
-            {renderInput("Address", "address", "Full store address")}
-          </>
-        )}
-        {step === 1 && (
-          <>
-            <h3 className="text-sm font-bold text-wf-text mb-3">Owner KYC</h3>
-            <div className="grid grid-cols-2 gap-x-4">
-              <div>{renderInput("Owner Name", "ownerName", "Full legal name", { required: true })}</div>
-              <div>{renderInput("Phone", "ownerPhone", "9876543210", { required: true, hint: "10-digit mobile number", maxLength: 10, prefix: "+91" })}</div>
-              <div>{renderInput("Email", "ownerEmail", "owner@example.com", { type: "email" })}</div>
-              <div>{renderInput("PAN", "pan", "AAAPZ1234C", { hint: "e.g. AAAPZ1234C", maxLength: 10 })}</div>
-            </div>
-            {renderInput("GSTIN", "gstin", "22AAAPZ1234C1Z5", { hint: "15-character GST number", maxLength: 15 })}
-          </>
-        )}
-        {step === 2 && (
-          <>
-            <h3 className="text-sm font-bold text-wf-text mb-3">Document Upload</h3>
-            {["Aadhaar Card", "PAN Card", "GST Certificate", "Shop License", "Store Photo (Exterior)", "Store Photo (Interior)"].map((doc) => (
-              <div key={doc} className="flex items-center justify-between py-3 border-b border-wf-border last:border-0">
-                <span className="text-sm text-wf-text">{doc}</span>
-                <div className="px-4 py-2 rounded-lg border border-dashed border-wf-border text-xs text-wf-muted cursor-pointer hover:border-wf-primary hover:text-wf-primary transition-colors">
-                  Upload file
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-        {step === 3 && (
-          <>
-            <h3 className="text-sm font-bold text-wf-text mb-3">Legal Agreements</h3>
-            {[
-              ["MSA", "Master Service Agreement (MSA)", "Covers services, SLA, payment terms"],
-              ["DPA", "Data Processing Agreement (DPA)", "DPDP Act compliance, camera/CV processing"],
-              ["AUP", "Acceptable Use Policy (AUP)", "Mirror usage rules, content guidelines"],
-              ["HW", "Hardware Lease Agreement", "Mirror hardware ownership, insurance"],
-              ["SLA", "SLA & Support Terms", "99.9% uptime commitment, support hours"],
-            ].map(([key, name, desc]) => (
-              <div key={key} className="flex items-center gap-3 py-3 border-b border-wf-border last:border-0">
-                <input
-                  type="checkbox"
-                  checked={agreements[key] || false}
-                  onChange={() => toggleAgreement(key)}
-                  className="w-4 h-4 accent-wf-primary cursor-pointer flex-shrink-0"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-wf-text">{name}</div>
-                  <div className="text-xs text-wf-muted mt-0.5">{desc}</div>
-                </div>
-                <span className="text-xs text-wf-primary cursor-pointer hover:underline">View PDF</span>
-              </div>
-            ))}
-            {!allAgreementsSigned && (
-              <p className="text-xs text-wf-amber mt-3">All agreements must be accepted to proceed.</p>
-            )}
-          </>
-        )}
-        {step === 4 && (
-          <>
-            <h3 className="text-sm font-bold text-wf-text mb-3">Plan Selection</h3>
-            {[
-              { id: "Trial", price: "Free / 30 days", features: "1 mirror, basic catalog, limited AI" },
-              { id: "Digital", price: "₹10,000/mo", features: "1 mirror, full catalog, AI search, WhatsApp" },
-              { id: "Smart", price: "₹15,000/mo", features: "2 mirrors, full AI, CRM, campaigns, analytics" },
-            ].map((p) => (
-              <div
-                key={p.id}
-                onClick={() => upd("plan", p.id)}
-                className={`p-3 rounded-lg border-2 mb-2 cursor-pointer transition-all ${
-                  data.plan === p.id
-                    ? "border-wf-primary bg-wf-primary/5"
-                    : "border-wf-border hover:border-wf-primary/30"
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-wf-text">{p.id} Plan</span>
-                  <span className="text-sm font-semibold text-wf-primary">{p.price}</span>
-                </div>
-                <div className="text-xs text-wf-subtext mt-0.5">{p.features}</div>
-              </div>
-            ))}
-          </>
-        )}
-        {step === 5 && (
-          <>
-            <h3 className="text-sm font-bold text-wf-text mb-3">Staff Setup</h3>
-            <div className="grid grid-cols-2 gap-x-4">
-              <div>{renderInput("Staff Name", "staffName", "Primary staff member")}</div>
-              <div>{renderInput("Staff Phone", "staffPhone", "9876543210", { hint: "10-digit mobile number", maxLength: 10, prefix: "+91" })}</div>
+      {/* Step 1: Store Profile & Business Details */}
+      {step === 0 && (
+        <Card title="Step 1: Store Profile & Business Details">
+          <div className="grid grid-cols-2 gap-x-5">
+            {inp("Store Name", "name", "e.g. MAUVE Sarees", { required: true })}
+            {inp("Owner Full Name", "ownerName", "e.g. Smita Kabra", { required: true })}
+            {inp("Owner Phone", "ownerPhone", "98XXXXXXXX", { required: true, maxLength: 10, prefix: "+91" })}
+            {inp("Owner Email", "ownerEmail", "owner@store.com", { required: true })}
+          </div>
+          {inp("Store Address", "address", "Full street address", { required: true })}
+          <div className="grid grid-cols-2 gap-x-5">
+            {inp("City", "city", "e.g. Mumbai", { required: true })}
+            {inp("State", "state", "e.g. Maharashtra", { required: true })}
+            {inp("PIN Code", "pin", "e.g. 400005", { required: true, maxLength: 6 })}
+            {inp("Store Area (sq ft)", "area", "e.g. 800")}
+            {inp("Operating Hours", "hours", "10:00 AM - 9:00 PM")}
+            {inp("GSTIN", "gstin", "22AAAAA0000A1Z5", { required: true, maxLength: 15 })}
+            {inp("PAN Number", "pan", "AAAAA9999A", { required: true, maxLength: 10 })}
+            {inp("Shop & Est. License #", "shopLicense", "License number")}
+          </div>
+          {uploadBox("Store Logo", "PNG, JPG (max 2MB)")}
+        </Card>
+      )}
+
+      {/* Step 2: KYC & Compliance Documents */}
+      {step === 1 && (
+        <Card title="Step 2: KYC & Compliance Documents">
+          <p className="text-xs text-wf-subtext mb-4">All documents will be verified within 24 hours. Store activation depends on successful KYC.</p>
+          <div className="grid grid-cols-2 gap-x-5">
+            {uploadBox("Owner Aadhaar Card", "PDF, JPG (max 5MB)", true)}
+            {uploadBox("Owner PAN Card", "PDF, JPG (max 5MB)", true)}
+            {uploadBox("GST Registration Certificate", "PDF (max 5MB)", true)}
+            {uploadBox("Shop & Est. License Copy", "PDF (max 5MB)")}
+          </div>
+
+          <h4 className="text-sm font-bold text-wf-text mt-4 mb-2">Bank Details (for Razorpay Payouts)</h4>
+          <div className="mb-3">
+            <label className="block text-sm font-semibold text-wf-subtext mb-1">Account Number</label>
+            <input value={bankAccount} onChange={(e) => setBankAccount(e.target.value.replace(/\D/g, ""))} placeholder="Account number" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+          </div>
+          <div className="grid grid-cols-2 gap-x-5">
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-wf-subtext mb-1">IFSC Code</label>
+              <input value={bankIfsc} onChange={(e) => setBankIfsc(e.target.value.toUpperCase().slice(0, 11))} placeholder="SBIN0001234" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
             </div>
             <div className="mb-3">
-              <label className="block text-sm font-semibold text-wf-subtext mb-1">Role</label>
-              <select
-                value={data.staffRole}
-                onChange={(e) => upd("staffRole", e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:border-wf-primary focus:ring-2 focus:ring-wf-primary/20"
-              >
-                <option value="R03">Store Owner (R03)</option>
-                <option value="R04">Store Manager (R04)</option>
-                <option value="R05">Sales Staff (R05)</option>
-              </select>
+              <label className="block text-sm font-semibold text-wf-subtext mb-1">Bank & Branch</label>
+              <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="SBI, Colaba Branch" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
             </div>
-          </>
-        )}
-        {step === 6 && (
-          <>
-            <h3 className="text-sm font-bold text-wf-text mb-3">Hardware Configuration</h3>
-            <div className="text-center py-4">
-              <div className="text-3xl mb-2">🪞</div>
-              <p className="text-sm text-wf-text font-semibold">Smart Mirror Setup</p>
-              <p className="text-xs text-wf-muted mt-1">Hardware: Jetson Orin NX + 55&quot; Touch Display</p>
-              <p className="text-xs text-wf-muted">Camera: Intel RealSense D455</p>
-              <p className="text-xs text-wf-muted">Network: WiFi 6 / Ethernet</p>
-              <div className="mt-3 p-3 rounded-lg bg-wf-bg border border-wf-border">
-                <p className="text-xs text-wf-subtext">
-                  Hardware will be pre-configured and shipped. Plug-and-play setup with QR provisioning. Expected delivery: 5-7 business days after plan activation.
-                </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-5 mt-2">
+            {uploadBox("Store Photo (Exterior)", "JPG, PNG (max 5MB)")}
+            {uploadBox("Store Photo (Interior)", "JPG, PNG (max 5MB)")}
+          </div>
+        </Card>
+      )}
+
+      {/* Step 3: Agreements & E-Signature */}
+      {step === 2 && (
+        <Card title="Step 3: Agreement Acceptance & E-Signature">
+          <p className="text-xs text-wf-subtext mb-4">The following legal agreements must be read and accepted before store activation. Electronic acceptance is legally binding under the IT Act 2000.</p>
+          {[
+            ["MSA", "Master Subscription Agreement (MSA)", "Governs the SaaS subscription, payment terms, SLA, liability caps, termination clauses"],
+            ["DPA", "Data Processing Agreement (DPA)", "DPDP Act 2023 compliance: data handling, processing purpose, retention, deletion"],
+            ["AUP", "Acceptable Use Policy (AUP)", "Prohibited uses: counterfeit goods, spam, reverse-engineering, data abuse"],
+            ["HW", "Hardware Rental Addendum", "Smart Mirror and Tablet remain company property. Care obligations, replacement terms"],
+            ["SLA", "SLA Schedule", "99.5% uptime target. Service credit formula. Escalation matrix."],
+          ].map(([key, name, desc]) => (
+            <div key={key} className="py-4 border-b border-wf-border last:border-0">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-sm font-bold text-wf-text">{name}</div>
+                  <div className="text-xs text-wf-muted mt-0.5">{desc}</div>
+                </div>
+                <Btn small className="flex-shrink-0 ml-4">View PDF</Btn>
+              </div>
+              <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                <input type="checkbox" checked={agreements[key] || false} onChange={() => setAgreements((p) => ({ ...p, [key]: !p[key] }))} className="w-4 h-4 accent-wf-primary cursor-pointer" />
+                <span className="text-sm text-wf-text">I have read and accept the {name}</span>
+              </label>
+            </div>
+          ))}
+
+          <div className="mt-4 bg-wf-bg rounded-lg border border-wf-border p-4">
+            <h4 className="text-sm font-bold text-wf-text mb-3">Electronic Signature (IT Act 2000 compliant)</h4>
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-wf-subtext mb-1">Full Legal Name of Signer <span className="text-wf-red">*</span></label>
+              <input value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="As on PAN card" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+            </div>
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-wf-subtext mb-1">Date of Signing <span className="text-wf-red">*</span></label>
+              <input type="date" value={signDate} onChange={(e) => setSignDate(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+            </div>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" checked={signerConfirm} onChange={() => setSignerConfirm(!signerConfirm)} className="w-4 h-4 accent-wf-primary cursor-pointer mt-0.5" />
+              <span className="text-xs text-wf-text">I confirm that I am authorised to sign on behalf of the store and that this electronic signature has the same legal validity as a wet signature under the Information Technology Act, 2000.</span>
+            </label>
+            <p className="text-[10px] text-wf-muted mt-2 italic">IP Address and timestamp will be recorded for legal validity.</p>
+          </div>
+        </Card>
+      )}
+
+      {/* Step 4: Plan & Billing */}
+      {step === 3 && (
+        <Card title="Step 4: Plan & Billing Configuration">
+          <h4 className="text-sm font-bold text-wf-text mb-3">Select Subscription Plan</h4>
+          {[
+            { id: "Digital", name: "Dukaan Digital", desc: "Catalog + AI Search + CRM + WhatsApp (no Mirror)", price: "Rs 10,000/mo" },
+            { id: "Smart", name: "Dukaan Smart", desc: "Everything in Digital + Smart Mirror + Virtual Try-On + AI Stylist", price: "Rs 15,000/mo" },
+          ].map((p) => (
+            <div key={p.id} onClick={() => setPlan(p.id)}
+              className={`p-4 rounded-lg border-2 mb-3 cursor-pointer transition-all ${plan === p.id ? "border-wf-primary bg-wf-primary/5" : "border-wf-border hover:border-wf-primary/30"}`}>
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-sm font-bold text-wf-text">{p.name}</span>
+                  <p className="text-xs text-wf-subtext mt-0.5">{p.desc}</p>
+                </div>
+                <span className="text-base font-bold font-mono text-wf-primary whitespace-nowrap ml-4">{p.price}</span>
               </div>
             </div>
-          </>
-        )}
-        {step === 7 && (
-          <>
-            <h3 className="text-sm font-bold text-wf-text mb-3">Go Live Checklist</h3>
-            {goLiveChecks.map(([item, done]) => (
-              <div key={item} className="flex items-center gap-3 py-2 text-sm">
-                <span className={`text-lg ${done ? "text-wf-green" : "text-wf-amber"}`}>
-                  {done ? "✓" : "○"}
-                </span>
-                <span className={done ? "text-wf-text font-medium" : "text-wf-muted"}>{item}</span>
+          ))}
+
+          <h4 className="text-sm font-bold text-wf-text mt-4 mb-2">Billing Cycle</h4>
+          {[
+            { id: "monthly", label: "Monthly", sub: "Full price" },
+            { id: "annual", label: "Annual (25% off)", sub: `Billed yearly, Rs ${plan === "Smart" ? "1,35,000" : "90,000"}` },
+          ].map((c) => (
+            <label key={c.id} className="flex items-center gap-3 mb-2 cursor-pointer">
+              <input type="radio" name="billing" checked={billingCycle === c.id} onChange={() => setBillingCycle(c.id)} className="w-4 h-4 accent-wf-primary" />
+              <span className="text-sm font-semibold text-wf-text">{c.label}</span>
+              <span className="text-xs text-wf-muted">{c.sub}</span>
+            </label>
+          ))}
+
+          <div className="mt-4 mb-3">
+            <label className="block text-sm font-semibold text-wf-subtext mb-1">Discount Code (if applicable)</label>
+            <input value={discountCode} onChange={(e) => setDiscountCode(e.target.value.toUpperCase())} placeholder="e.g. EARLY40, ASSOC30" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+          </div>
+          <div className="mb-3">
+            <label className="block text-sm font-semibold text-wf-subtext mb-1">Payment Method <span className="text-wf-red">*</span></label>
+            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20">
+              <option>UPI (Razorpay)</option>
+              <option>Net Banking</option>
+              <option>Credit/Debit Card</option>
+              <option>Bank Transfer (NEFT/RTGS)</option>
+            </select>
+          </div>
+          <p className="text-xs text-wf-muted italic">First invoice with GST (18%) will be generated upon activation. Razorpay subscription ID will be created automatically.</p>
+        </Card>
+      )}
+
+      {/* Step 5: Hardware Assignment */}
+      {step === 4 && (
+        <Card title="Step 5: Hardware Assignment">
+          <h4 className="text-sm font-bold text-wf-text mb-3">Smart Mirrors</h4>
+          {mirrors.map((m, i) => (
+            <div key={i} className="bg-wf-bg rounded-lg border border-wf-border p-4 mb-3">
+              <p className="text-xs font-bold text-wf-subtext mb-2">Mirror #{i + 1}</p>
+              <div className="grid grid-cols-2 gap-x-5">
+                <div className="mb-3">
+                  <label className="block text-sm font-semibold text-wf-subtext mb-1">Serial Number <span className="text-wf-red">*</span></label>
+                  <input value={m.serial} onChange={(e) => { const u = [...mirrors]; u[i].serial = e.target.value; setMirrors(u); }} placeholder="e.g. WFY-MR-2026-XXX" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+                </div>
+                <div className="mb-3">
+                  <label className="block text-sm font-semibold text-wf-subtext mb-1">IoT Device ID</label>
+                  <input value={m.iotId} onChange={(e) => { const u = [...mirrors]; u[i].iotId = e.target.value; setMirrors(u); }} placeholder="Auto-generated from AWS IoT Core" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+                </div>
+              </div>
+              <div className="mb-1">
+                <label className="block text-sm font-semibold text-wf-subtext mb-1">Source</label>
+                <select value={m.source} onChange={(e) => { const u = [...mirrors]; u[i].source = e.target.value; setMirrors(u); }} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20">
+                  <option>From spare inventory</option>
+                  <option>New order</option>
+                  <option>Refurbished</option>
+                </select>
+              </div>
+            </div>
+          ))}
+          <Btn small primary onClick={() => setMirrors([...mirrors, { serial: "", iotId: "", source: "From spare inventory" }])}>+ Add Another Mirror</Btn>
+
+          <h4 className="text-sm font-bold text-wf-text mt-5 mb-3">Tablets</h4>
+          {tablets.map((t, i) => (
+            <div key={i} className="bg-wf-bg rounded-lg border border-wf-border p-4 mb-3">
+              <p className="text-xs font-bold text-wf-subtext mb-2">Tablet #{i + 1}</p>
+              <div className="mb-3">
+                <label className="block text-sm font-semibold text-wf-subtext mb-1">Tablet Serial</label>
+                <input value={t.serial} onChange={(e) => { const u = [...tablets]; u[i].serial = e.target.value; setTablets(u); }} placeholder="Tab serial number" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+              </div>
+              <div className="mb-1">
+                <label className="block text-sm font-semibold text-wf-subtext mb-1">Source</label>
+                <select value={t.source} onChange={(e) => { const u = [...tablets]; u[i].source = e.target.value; setTablets(u); }} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20">
+                  <option>From spare inventory</option>
+                  <option>New order</option>
+                </select>
+              </div>
+            </div>
+          ))}
+          <Btn small primary onClick={() => setTablets([...tablets, { serial: "", source: "From spare inventory" }])}>+ Add Another Tablet</Btn>
+
+          <h4 className="text-sm font-bold text-wf-text mt-5 mb-2">Accessories</h4>
+          {[
+            ["photoBooth", "Photo Booth Kit (tripod + light + backdrop)"],
+            ["wifiRouter", "WiFi Router (pre-configured, WPA3)"],
+          ].map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 mb-2 cursor-pointer">
+              <input type="checkbox" checked={accessories[key as keyof typeof accessories]} onChange={() => setAccessories((p) => ({ ...p, [key]: !p[key as keyof typeof accessories] }))} className="w-4 h-4 accent-wf-green cursor-pointer" />
+              <span className="text-sm text-wf-text">{label}</span>
+            </label>
+          ))}
+
+          <div className="mt-4 mb-3">
+            <label className="block text-sm font-semibold text-wf-subtext mb-1">Shipping Address (if different from store)</label>
+            <input value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} placeholder="Leave blank to use store address" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+          </div>
+          <div className="grid grid-cols-2 gap-x-5">
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-wf-subtext mb-1">Preferred Installation Date</label>
+              <input type="date" value={installDate} onChange={(e) => setInstallDate(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+            </div>
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-wf-subtext mb-1">Assigned Field Technician</label>
+              <input value={technician} onChange={(e) => setTechnician(e.target.value)} placeholder="e.g. Amit Kumar" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Step 6: Staff Setup & Credentials */}
+      {step === 5 && (
+        <Card title="Step 6: Staff Setup & Credentials">
+          <p className="text-xs text-wf-subtext mb-3">Store Owner (from Step 1) is automatically assigned Role R03. Add managers and salespersons below. Each gets a unique login with role-based access.</p>
+          <div className="bg-wf-amber/10 text-wf-amber text-xs font-semibold px-4 py-2 rounded-lg mb-4">
+            Auto-created: {d.ownerName || "Owner"} — Role R03 (Store Owner) — Phone: {d.ownerPhone ? `+91 ${d.ownerPhone}` : "---"}
+          </div>
+
+          {staffList.map((s, i) => (
+            <div key={i} className="bg-wf-bg rounded-lg border border-wf-border p-4 mb-3">
+              <p className="text-xs font-bold text-wf-subtext mb-2">Staff #{i + 1}</p>
+              <div className="grid grid-cols-2 gap-x-5">
+                <div className="mb-3">
+                  <label className="block text-sm font-semibold text-wf-subtext mb-1">Full Name <span className="text-wf-red">*</span></label>
+                  <input value={s.name} onChange={(e) => { const u = [...staffList]; u[i].name = e.target.value; setStaffList(u); }} placeholder="Staff name" className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+                  {touched[`staff_${i}_name`] && errors[`staff_${i}_name`] && <p className="text-xs text-wf-red mt-0.5">{errors[`staff_${i}_name`]}</p>}
+                </div>
+                <div className="mb-3">
+                  <label className="block text-sm font-semibold text-wf-subtext mb-1">Phone <span className="text-wf-red">*</span></label>
+                  <div className="flex items-center rounded-lg border border-wf-border bg-white focus-within:ring-2 focus-within:border-wf-primary focus-within:ring-wf-primary/20">
+                    <span className="pl-3 pr-1 text-sm font-semibold text-wf-subtext select-none">+91</span>
+                    <input value={s.phone} onChange={(e) => { const u = [...staffList]; u[i].phone = e.target.value.replace(/\D/g, "").slice(0, 10); setStaffList(u); }} placeholder="XXXXXXXXXX" maxLength={10} className="flex-1 px-2 py-2 bg-transparent text-sm text-wf-text focus:outline-none" />
+                  </div>
+                  {touched[`staff_${i}_phone`] && errors[`staff_${i}_phone`] && <p className="text-xs text-wf-red mt-0.5">{errors[`staff_${i}_phone`]}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-5">
+                <div className="mb-3">
+                  <label className="block text-sm font-semibold text-wf-subtext mb-1">Login PIN (4-6 digits) <span className="text-wf-red">*</span></label>
+                  <input value={s.pin} onChange={(e) => { const u = [...staffList]; u[i].pin = e.target.value.replace(/\D/g, "").slice(0, 6); setStaffList(u); }} placeholder="e.g. 4521" maxLength={6} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+                  {touched[`staff_${i}_pin`] && errors[`staff_${i}_pin`] && <p className="text-xs text-wf-red mt-0.5">{errors[`staff_${i}_pin`]}</p>}
+                </div>
+                <div className="mb-3">
+                  <label className="block text-sm font-semibold text-wf-subtext mb-1">Role</label>
+                  <select value={s.role} onChange={(e) => { const u = [...staffList]; u[i].role = e.target.value; setStaffList(u); }} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20">
+                    <option value="R04">R04 - Store Manager</option>
+                    <option value="R05">R05 - Salesperson</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          ))}
+          <Btn small primary onClick={() => setStaffList([...staffList, { name: "", phone: "", pin: "", role: "R05" }])}>+ Add Staff Member</Btn>
+          <p className="text-xs text-wf-muted mt-3 italic">Credentials are generated on activation. SMS sent to each staff member with app download link + PIN.</p>
+        </Card>
+      )}
+
+      {/* Step 7: WhatsApp Business Integration */}
+      {step === 6 && (
+        <Card title="Step 7: WhatsApp Business Integration">
+          <p className="text-xs text-wf-subtext mb-4">Connect the store&apos;s WhatsApp Business number for customer sharing, campaigns, and automated notifications via Gupshup API.</p>
+          <div className="mb-3">
+            <label className="block text-sm font-semibold text-wf-subtext mb-1">WhatsApp Business Phone Number <span className="text-wf-red">*</span></label>
+            <div className="flex items-center rounded-lg border border-wf-border bg-white focus-within:ring-2 focus-within:border-wf-primary focus-within:ring-wf-primary/20">
+              <span className="pl-3 pr-1 text-sm font-semibold text-wf-subtext select-none">+91</span>
+              <input value={waNumber} onChange={(e) => setWaNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="98XXXXXXXX" maxLength={10} className="flex-1 px-2 py-2 bg-transparent text-sm text-wf-text focus:outline-none" />
+            </div>
+            {touched.waNumber && errors.waNumber && <p className="text-xs text-wf-red mt-0.5">{errors.waNumber}</p>}
+          </div>
+          <Btn small primary onClick={() => setWaVerified(true)}>{waVerified ? "Verified ✓" : "Verify via Gupshup OTP"}</Btn>
+        </Card>
+      )}
+
+      {/* Step 8: Review & Activate */}
+      {step === 7 && (
+        <Card title="Step 8: Review & Activate">
+          <h4 className="text-sm font-bold text-wf-text mb-3">Complete Onboarding Summary</h4>
+          <div className="border border-wf-border rounded-lg overflow-hidden mb-4">
+            {[
+              ["Store", d.name],
+              ["Owner", d.ownerName],
+              ["GSTIN", d.gstin],
+              ["Plan", `${plan === "Smart" ? "Dukaan Smart (Rs 15K)" : "Dukaan Digital (Rs 10K)"}`, billingCycle === "monthly" ? "Monthly" : "Annual"],
+              ["Mirrors", `${mirrors.length} assigned`],
+              ["Tablets", `${tablets.length} assigned`],
+              ["Staff", `${staffList.length + 1} total (incl. owner)`],
+              ["WhatsApp", waNumber ? `+91 ${waNumber}` : "---", waVerified ? "Verified" : "Not verified"],
+            ].map(([label, value, extra], i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b border-wf-border last:border-0 text-sm">
+                <span className="text-wf-muted">{label}</span>
+                <div className="flex items-center gap-4">
+                  <span className="font-semibold text-wf-text">{value}</span>
+                  {extra && <span className="text-xs text-wf-muted">{extra}</span>}
+                </div>
               </div>
             ))}
-          </>
-        )}
-      </Card>
+          </div>
 
-      {/* Navigation */}
-      <div className="flex justify-between mt-4">
-        <Btn
-          onClick={() => setStep(Math.max(0, step - 1))}
-          disabled={step === 0}
-        >
-          ← Previous
-        </Btn>
-        {step < STEPS.length - 1 ? (
-          <Btn
-            primary
-            onClick={handleNext}
-          >
-            Next: {STEPS[step + 1]} →
-          </Btn>
-        ) : (
-          <Btn primary onClick={handleFinish}>
-            Go Live
-          </Btn>
-        )}
+          <h4 className="text-sm font-bold text-wf-text mb-2">Compliance Checklist</h4>
+          {[
+            ["KYC Documents", stepDone(1)],
+            ["Agreements Signed", allAgreementsSigned],
+            ["E-Signature Captured", signerConfirm && signerName.trim() !== ""],
+            ["Payment Configured", true],
+            ["Hardware Assigned", mirrors[0]?.serial.trim() !== ""],
+            ["Staff Created", staffList[0]?.name.trim() !== ""],
+            ["WhatsApp Connected", waVerified],
+          ].map(([label, ok]) => (
+            <div key={label as string} className="flex items-center gap-2 py-1 text-sm">
+              <span className={ok ? "text-wf-green" : "text-wf-red font-bold"}>
+                {ok ? "✓" : "✗"}
+              </span>
+              <span className={ok ? "text-wf-text" : "text-wf-red"}>{label as string}</span>
+            </div>
+          ))}
+
+          <div className="flex gap-3 mt-5">
+            <Btn primary onClick={() => handleActivate("trial")}>Activate as Trial</Btn>
+            <Btn onClick={() => handleActivate("active")}>Activate as Active</Btn>
+            <Btn danger onClick={() => router.push("/admin/stores")}>Discard</Btn>
+          </div>
+        </Card>
+      )}
+
+      {/* Footer navigation */}
+      <div className="flex items-center justify-between mt-4">
+        <Btn onClick={() => step > 0 ? setStep(step - 1) : router.push("/admin/stores")} disabled={step === 0}>Previous</Btn>
+        <span className="text-xs text-wf-muted">Step {step + 1} of {STEPS.length}{step < 7 ? " — Complete required fields" : ""}</span>
+        {step < 7 && <Btn primary onClick={handleNext}>Next Step</Btn>}
+        {step === 7 && <Btn primary disabled>Next Step</Btn>}
       </div>
     </div>
   );
