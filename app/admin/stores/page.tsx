@@ -3,10 +3,71 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { KPI, Card, Tabs, Badge, Btn, PageLoading, Metric } from "@/components/ui/wearify-ui";
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
+
+/* ================================================================
+   HELPER COMPONENTS — image preview for saree cards
+   ================================================================ */
+
+/** Renders a single image from Convex file storage */
+function SareeImg({ fileId, className }: { fileId: Id<"_storage">; className?: string }) {
+  const url = useQuery(api.files.getUrl, { fileId });
+  if (!url) {
+    return (
+      <div className={`bg-wf-border/30 animate-pulse rounded ${className ?? "w-full h-full"}`} />
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt="Saree"
+      className={`object-cover rounded ${className ?? "w-full h-full"}`}
+    />
+  );
+}
+
+/** Renders up to 4 image thumbnails in a row; falls back to gradient+emoji */
+function SareeImageRow({
+  imageIds,
+  grad,
+  emoji,
+  size = "sm",
+}: {
+  imageIds?: Id<"_storage">[];
+  grad?: string[];
+  emoji?: string;
+  size?: "sm" | "lg";
+}) {
+  const sizeClasses = size === "lg" ? "w-28 h-36" : "w-10 h-10";
+
+  if (!imageIds || imageIds.length === 0) {
+    const colors = grad && grad.length >= 2 ? grad : ["#667eea", "#764ba2"];
+    return (
+      <div className="flex gap-1.5">
+        <div
+          className={`${sizeClasses} rounded-lg flex items-center justify-center ${size === "lg" ? "text-3xl" : "text-lg"}`}
+          style={{ background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})` }}
+        >
+          {emoji || "\uD83E\uDE61"}
+        </div>
+      </div>
+    );
+  }
+
+  const displayIds = imageIds.slice(0, 4);
+  return (
+    <div className="flex gap-1.5">
+      {displayIds.map((id) => (
+        <div key={id} className={`${sizeClasses} rounded-lg overflow-hidden flex-shrink-0`}>
+          <SareeImg fileId={id} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /* ================================================================
    DEMO DATA — for tabs without real backend tables yet
@@ -78,6 +139,10 @@ export default function StoresPage() {
   const [tailorFilter, setTailorFilter] = useState("all");
   const [rejectFeedback, setRejectFeedback] = useState<Record<string, string>>({});
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null);
+  const [showRejectConfirm, setShowRejectConfirm] = useState<string | null>(null);
+  const [showCorrectionInput, setShowCorrectionInput] = useState<string | null>(null);
+  const [correctionNotes, setCorrectionNotes] = useState<Record<string, string>>({});
+  const [qaPreviewId, setQaPreviewId] = useState<string | null>(null);
   const [healthWeights, setHealthWeights] = useState<Record<string, number>>(
     Object.fromEntries(HEALTH_DIMENSIONS.map((d) => [d.key, d.weight]))
   );
@@ -117,8 +182,19 @@ export default function StoresPage() {
 
   /* Handle reject */
   const handleReject = async (id: Id<"sarees">) => {
-    await approveOrReject({ id, approvalStatus: "rejected" });
+    const reason = rejectFeedback[id as string] || undefined;
+    await approveOrReject({ id, approvalStatus: "rejected", rejectionReason: reason });
     setShowRejectInput(null);
+    setShowRejectConfirm(null);
+  };
+
+  /* Handle send for corrections */
+  const handleCorrections = async (id: Id<"sarees">) => {
+    const note = correctionNotes[id as string] || "";
+    if (!note.trim()) return;
+    await approveOrReject({ id, approvalStatus: "corrections", correctionNote: note });
+    setShowCorrectionInput(null);
+    setCorrectionNotes((prev) => ({ ...prev, [id as string]: "" }));
   };
 
   /* Gradient placeholder for saree cards */
@@ -749,15 +825,15 @@ export default function StoresPage() {
               <div className="text-center py-8 text-wf-muted text-sm">Loading...</div>
             ) : pendingSarees.length === 0 ? (
               <div className="text-center py-10 text-wf-muted text-sm">
-                <span className="text-3xl block mb-2">✅</span>
-                All caught up! No items pending review.
+                <span className="text-3xl block mb-2">All caught up!</span>
+                No items pending review.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-wf-border text-xs font-bold text-wf-muted uppercase tracking-wider">
-                      <th className="text-left py-2 pr-3 w-10"></th>
+                      <th className="text-left py-2 pr-3 w-12">Image</th>
                       <th className="text-left py-2 pr-4">Name</th>
                       <th className="text-left py-2 pr-4">Store</th>
                       <th className="text-left py-2 pr-4">Type</th>
@@ -770,31 +846,97 @@ export default function StoresPage() {
                   </thead>
                   <tbody>
                     {pendingSarees.map((saree) => (
-                      <tr
-                        key={saree._id}
-                        className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
-                      >
-                        <td className="py-3 pr-3">
-                          <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0">
-                            {sareeGradient(saree.grad, saree.emoji)}
-                          </div>
-                        </td>
-                        <td className="py-3 pr-4 font-semibold text-sm">{saree.name}</td>
-                        <td className="py-3 pr-4 text-sm text-wf-subtext font-mono">{saree.storeId}</td>
-                        <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.type}</td>
-                        <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.fabric}</td>
-                        <td className="py-3 pr-4 text-right text-sm font-mono">₹{saree.price.toLocaleString()}</td>
-                        <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.addedBy ?? "—"}</td>
-                        <td className="py-3 pr-4 text-right text-sm font-mono text-wf-muted">
-                          {daysSince(saree._creationTime)}d
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Btn small primary onClick={() => handleApprove(saree._id)}>Approve</Btn>
-                            <Btn small danger onClick={() => handleReject(saree._id)}>Reject</Btn>
-                          </div>
-                        </td>
-                      </tr>
+                      <Fragment key={saree._id}>
+                        <tr
+                          className="border-b border-wf-border hover:bg-wf-primary/5 transition-colors"
+                        >
+                          <td className="py-3 pr-3">
+                            <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0">
+                              {saree.imageIds && saree.imageIds.length > 0 ? (
+                                <SareeImg fileId={saree.imageIds[0]} />
+                              ) : (
+                                sareeGradient(saree.grad, saree.emoji)
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 pr-4 font-semibold text-sm">{saree.name}</td>
+                          <td className="py-3 pr-4 text-sm text-wf-subtext font-mono">{saree.storeId}</td>
+                          <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.type}</td>
+                          <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.fabric}</td>
+                          <td className="py-3 pr-4 text-right text-sm font-mono">{"\u20B9"}{saree.price.toLocaleString()}</td>
+                          <td className="py-3 pr-4 text-sm text-wf-subtext">{saree.addedBy ?? "\u2014"}</td>
+                          <td className="py-3 pr-4 text-right text-sm font-mono text-wf-muted">
+                            {daysSince(saree._creationTime)}d
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex gap-2 justify-end">
+                              <Btn small primary onClick={() => handleApprove(saree._id)}>Approve</Btn>
+                              <Btn small danger onClick={() => handleReject(saree._id)}>Reject</Btn>
+                              <Btn
+                                small
+                                onClick={() =>
+                                  setQaPreviewId(qaPreviewId === (saree._id as string) ? null : (saree._id as string))
+                                }
+                              >
+                                {qaPreviewId === (saree._id as string) ? "Close" : "Preview"}
+                              </Btn>
+                            </div>
+                          </td>
+                        </tr>
+                        {/* Inline preview expansion */}
+                        {qaPreviewId === (saree._id as string) && (
+                          <tr className="border-b border-wf-border bg-wf-card/50">
+                            <td colSpan={9} className="py-4 px-4">
+                              <div className="flex gap-5">
+                                <SareeImageRow imageIds={saree.imageIds} grad={saree.grad} emoji={saree.emoji} size="lg" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="grid grid-cols-4 gap-x-4 gap-y-2 text-sm mb-3">
+                                    <div>
+                                      <span className="text-wf-muted text-xs">Occasion</span>
+                                      <div className="font-semibold">{saree.occasion}</div>
+                                    </div>
+                                    <div>
+                                      <span className="text-wf-muted text-xs">Stock</span>
+                                      <div className="font-semibold">{saree.stock}</div>
+                                    </div>
+                                    <div>
+                                      <span className="text-wf-muted text-xs">Colors</span>
+                                      <div className="font-semibold">{saree.colors?.join(", ") || "\u2014"}</div>
+                                    </div>
+                                    <div>
+                                      <span className="text-wf-muted text-xs">Region</span>
+                                      <div className="font-semibold">{saree.region || "\u2014"}</div>
+                                    </div>
+                                    <div>
+                                      <span className="text-wf-muted text-xs">Weave</span>
+                                      <div className="font-semibold">{saree.weave || "\u2014"}</div>
+                                    </div>
+                                    <div>
+                                      <span className="text-wf-muted text-xs">Weight</span>
+                                      <div className="font-semibold">{saree.weight || "\u2014"}</div>
+                                    </div>
+                                    {saree.aiTags && saree.aiTags.length > 0 && (
+                                      <div className="col-span-2">
+                                        <span className="text-wf-muted text-xs">AI Tags</span>
+                                        <div className="flex flex-wrap gap-1 mt-0.5">
+                                          {saree.aiTags.map((tag) => (
+                                            <span key={tag} className="px-1.5 py-0.5 rounded text-xs bg-wf-primary/10 text-wf-primary font-medium">
+                                              {tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {saree.description && (
+                                    <p className="text-xs text-wf-subtext">{saree.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -982,8 +1124,8 @@ export default function StoresPage() {
           ) : pendingSarees.length === 0 ? (
             <Card>
               <div className="text-center py-10 text-wf-muted text-sm">
-                <span className="text-3xl block mb-2">✅</span>
-                All caught up! No items pending review.
+                <span className="text-base font-semibold block mb-2">All caught up!</span>
+                No items pending review.
               </div>
             </Card>
           ) : (
@@ -997,12 +1139,13 @@ export default function StoresPage() {
                   { label: "Tag Completeness", pass: hasAiTags },
                   { label: "File Size OK", pass: true },
                 ];
+                const sid = saree._id as string;
                 return (
                   <Card key={saree._id}>
                     <div className="flex gap-5">
-                      {/* Large preview */}
-                      <div className="w-32 h-40 rounded-lg overflow-hidden flex-shrink-0">
-                        {sareeGradient(saree.grad, saree.emoji)}
+                      {/* Image previews */}
+                      <div className="flex-shrink-0">
+                        <SareeImageRow imageIds={saree.imageIds} grad={saree.grad} emoji={saree.emoji} size="lg" />
                       </div>
 
                       {/* Details */}
@@ -1013,11 +1156,12 @@ export default function StoresPage() {
                             <p className="text-xs text-wf-muted font-mono mt-0.5">Store: {saree.storeId}</p>
                           </div>
                           <span className="text-sm font-mono font-bold text-wf-primary">
-                            ₹{saree.price.toLocaleString()}
+                            {"\u20B9"}{saree.price.toLocaleString()}
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-x-4 gap-y-1 text-sm mb-3">
+                        {/* Full detail grid */}
+                        <div className="grid grid-cols-4 gap-x-4 gap-y-1.5 text-sm mb-3">
                           <div>
                             <span className="text-wf-muted text-xs">Type</span>
                             <div className="font-semibold">{saree.type}</div>
@@ -1031,10 +1175,48 @@ export default function StoresPage() {
                             <div className="font-semibold">{saree.occasion}</div>
                           </div>
                           <div>
+                            <span className="text-wf-muted text-xs">Stock</span>
+                            <div className="font-semibold">{saree.stock}</div>
+                          </div>
+                          <div>
+                            <span className="text-wf-muted text-xs">Colors</span>
+                            <div className="font-semibold">{saree.colors?.join(", ") || "\u2014"}</div>
+                          </div>
+                          <div>
+                            <span className="text-wf-muted text-xs">Region</span>
+                            <div className="font-semibold">{saree.region || "\u2014"}</div>
+                          </div>
+                          <div>
+                            <span className="text-wf-muted text-xs">Weave</span>
+                            <div className="font-semibold">{saree.weave || "\u2014"}</div>
+                          </div>
+                          <div>
+                            <span className="text-wf-muted text-xs">Weight</span>
+                            <div className="font-semibold">{saree.weight || "\u2014"}</div>
+                          </div>
+                          <div>
                             <span className="text-wf-muted text-xs">Added By</span>
-                            <div className="font-semibold">{saree.addedBy ?? "—"}</div>
+                            <div className="font-semibold">{saree.addedBy ?? "\u2014"}</div>
+                          </div>
+                          <div>
+                            <span className="text-wf-muted text-xs">Pending</span>
+                            <div className="font-semibold">{daysSince(saree._creationTime)}d ago</div>
                           </div>
                         </div>
+
+                        {/* AI Tags */}
+                        {saree.aiTags && saree.aiTags.length > 0 && (
+                          <div className="mb-3">
+                            <span className="text-wf-muted text-xs block mb-1">AI Tags</span>
+                            <div className="flex flex-wrap gap-1">
+                              {saree.aiTags.map((tag) => (
+                                <span key={tag} className="px-1.5 py-0.5 rounded text-xs bg-wf-primary/10 text-wf-primary font-medium">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {saree.description && (
                           <p className="text-xs text-wf-subtext mb-3 line-clamp-2">{saree.description}</p>
@@ -1051,61 +1233,81 @@ export default function StoresPage() {
                                 color: c.pass ? "var(--color-wf-green)" : "var(--color-wf-red)",
                               }}
                             >
-                              {c.pass ? "✓" : "✗"} {c.label}
+                              {c.pass ? "\u2713" : "\u2717"} {c.label}
                             </span>
                           ))}
                         </div>
 
-                        {/* Actions */}
+                        {/* Three action buttons */}
                         <div className="flex items-center gap-2">
                           <Btn small primary onClick={() => handleApprove(saree._id)}>Approve</Btn>
                           <Btn
                             small
                             danger
-                            onClick={() => {
-                              if (showRejectInput === saree._id as string) {
-                                handleReject(saree._id);
-                              } else {
-                                setShowRejectInput(saree._id as string);
-                              }
-                            }}
+                            onClick={() => setShowRejectConfirm(showRejectConfirm === sid ? null : sid)}
                           >
-                            {showRejectInput === (saree._id as string) ? "Confirm Reject" : "Reject with Feedback"}
+                            Reject &amp; Remove
                           </Btn>
-                          <Btn small onClick={() => alert("Request Re-upload — Feature coming soon")}>
-                            Request Re-upload
+                          <Btn
+                            small
+                            className="!bg-amber-500 !text-white !border-none hover:!bg-amber-600"
+                            onClick={() => setShowCorrectionInput(showCorrectionInput === sid ? null : sid)}
+                          >
+                            Send for Corrections
                           </Btn>
                         </div>
 
-                        {/* Reject Feedback textarea */}
-                        {showRejectInput === (saree._id as string) && (
-                          <div className="mt-2">
+                        {/* Reject confirmation dialog */}
+                        {showRejectConfirm === sid && (
+                          <div className="mt-3 p-3 rounded-lg border border-wf-red/30 bg-wf-red/5">
+                            <p className="text-sm text-wf-text font-semibold mb-1">Confirm Rejection</p>
+                            <p className="text-xs text-wf-subtext mb-2">
+                              This will permanently delete the saree from the catalog. This action cannot be undone.
+                            </p>
                             <textarea
-                              placeholder="Enter rejection reason..."
-                              value={rejectFeedback[saree._id as string] ?? ""}
+                              placeholder="Optional rejection reason..."
+                              value={rejectFeedback[sid] ?? ""}
                               onChange={(e) =>
-                                setRejectFeedback((prev) => ({
-                                  ...prev,
-                                  [saree._id as string]: e.target.value,
-                                }))
+                                setRejectFeedback((prev) => ({ ...prev, [sid]: e.target.value }))
                               }
-                              className="w-full px-3 py-2 rounded bg-wf-bg border border-wf-border text-sm text-wf-text focus:outline-none focus:border-wf-primary resize-none"
+                              className="w-full px-3 py-2 rounded bg-wf-bg border border-wf-border text-sm text-wf-text focus:outline-none focus:border-wf-red resize-none mb-2"
                               rows={2}
                             />
-                            <div className="flex gap-2 mt-1">
+                            <div className="flex gap-2">
+                              <Btn small danger onClick={() => handleReject(saree._id)}>
+                                Yes, Reject &amp; Remove
+                              </Btn>
+                              <Btn small onClick={() => setShowRejectConfirm(null)}>Cancel</Btn>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Corrections feedback textarea */}
+                        {showCorrectionInput === sid && (
+                          <div className="mt-3 p-3 rounded-lg border border-amber-400/30 bg-amber-500/5">
+                            <p className="text-sm text-wf-text font-semibold mb-1">Send for Corrections</p>
+                            <p className="text-xs text-wf-subtext mb-2">
+                              Describe what the retailer needs to fix before re-submitting.
+                            </p>
+                            <textarea
+                              placeholder="Enter correction notes for the retailer..."
+                              value={correctionNotes[sid] ?? ""}
+                              onChange={(e) =>
+                                setCorrectionNotes((prev) => ({ ...prev, [sid]: e.target.value }))
+                              }
+                              className="w-full px-3 py-2 rounded bg-wf-bg border border-wf-border text-sm text-wf-text focus:outline-none focus:border-amber-500 resize-none mb-2"
+                              rows={3}
+                            />
+                            <div className="flex gap-2">
                               <Btn
                                 small
-                                danger
-                                onClick={() => handleReject(saree._id)}
+                                className="!bg-amber-500 !text-white !border-none hover:!bg-amber-600"
+                                onClick={() => handleCorrections(saree._id)}
+                                disabled={!(correctionNotes[sid]?.trim())}
                               >
-                                Submit Rejection
+                                Submit Corrections
                               </Btn>
-                              <Btn
-                                small
-                                onClick={() => setShowRejectInput(null)}
-                              >
-                                Cancel
-                              </Btn>
+                              <Btn small onClick={() => setShowCorrectionInput(null)}>Cancel</Btn>
                             </div>
                           </div>
                         )}

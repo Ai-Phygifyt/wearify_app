@@ -44,6 +44,7 @@ export default function SareeDetailPage() {
   const [editForm, setEditForm] = useState<Record<string, string | number>>({});
   const [saving, setSaving] = useState(false);
   const [photoTab, setPhotoTab] = useState(0);
+  const [resubmitting, setResubmitting] = useState(false);
 
   if (saree === undefined) {
     return (
@@ -72,6 +73,16 @@ export default function SareeDetailPage() {
         </div>
       </div>
     );
+  }
+
+  const isPending = saree.approvalStatus === "pending";
+  const isCorrections = saree.approvalStatus === "corrections";
+
+  async function handleResubmit() {
+    setResubmitting(true);
+    try {
+      await updateSaree({ id: sareeId, approvalStatus: "pending" });
+    } catch { /* */ } finally { setResubmitting(false); }
   }
 
   function startEditing() {
@@ -142,12 +153,82 @@ export default function SareeDetailPage() {
         }}>
           {saree.name}
         </h1>
-        {!editing && (
+        {!editing && !isPending && (
           <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={startEditing}>
             Edit
           </button>
         )}
       </div>
+
+      {/* Approval Status Banners */}
+      {isPending && (
+        <div style={{
+          padding: "12px 16px",
+          borderRadius: "var(--rt-radius-lg)",
+          background: "rgba(10, 22, 40, 0.06)",
+          border: "1.5px solid rgba(10, 22, 40, 0.12)",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>{"\u23F3"}</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--rt-navy)" }}>
+              Pending Admin Approval
+            </div>
+            <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
+              This saree is awaiting admin review. Editing is not available until approved.
+            </div>
+          </div>
+        </div>
+      )}
+      {isCorrections && (
+        <div style={{
+          padding: "12px 16px",
+          borderRadius: "var(--rt-radius-lg)",
+          background: "rgba(245, 166, 35, 0.08)",
+          border: "1.5px solid rgba(245, 166, 35, 0.25)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 18 }}>{"\u270F\uFE0F"}</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#B8860B" }}>
+                Corrections Requested
+              </div>
+              <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
+                Admin has requested changes. Please edit and resubmit.
+              </div>
+            </div>
+          </div>
+          {saree.correctionNote && (
+            <div style={{
+              padding: "8px 12px",
+              borderRadius: "var(--rt-radius-sm)",
+              background: "rgba(245, 166, 35, 0.06)",
+              border: "1px solid rgba(245, 166, 35, 0.15)",
+              fontSize: 13,
+              color: "var(--rt-text-mid)",
+              lineHeight: 1.5,
+            }}>
+              <span style={{ fontWeight: 700, color: "#B8860B", fontSize: 11, display: "block", marginBottom: 2 }}>
+                Admin Note:
+              </span>
+              {saree.correctionNote}
+            </div>
+          )}
+          <button
+            className="rt-btn rt-btn-primary rt-btn-sm"
+            onClick={handleResubmit}
+            disabled={resubmitting}
+            style={{ alignSelf: "flex-start" }}
+          >
+            {resubmitting ? "Resubmitting..." : "Resubmit for Approval"}
+          </button>
+        </div>
+      )}
 
       {/* Hero */}
       <div style={{
@@ -457,60 +538,66 @@ export default function SareeDetailPage() {
       )}
 
       {/* Stock Update */}
-      <div className="rt-card">
-        <div className="rt-card-title">Update Stock</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>
-              New stock quantity
-            </label>
-            <input
-              type="number"
-              value={stockInput}
-              onChange={(e) => setStockInput(e.target.value)}
-              placeholder={String(saree.stock)}
-              className="rt-input rt-mono"
-            />
+      {!isPending && (
+        <div className="rt-card">
+          <div className="rt-card-title">Update Stock</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>
+                New stock quantity
+              </label>
+              <input
+                type="number"
+                value={stockInput}
+                onChange={(e) => setStockInput(e.target.value)}
+                placeholder={String(saree.stock)}
+                className="rt-input rt-mono"
+              />
+            </div>
+            <button
+              className="rt-btn rt-btn-primary rt-btn-sm"
+              onClick={handleStockUpdate}
+              style={{ marginBottom: 1 }}
+            >
+              Update
+            </button>
           </div>
-          <button
-            className="rt-btn rt-btn-primary rt-btn-sm"
-            onClick={handleStockUpdate}
-            style={{ marginBottom: 1 }}
-          >
-            Update
-          </button>
         </div>
-      </div>
+      )}
 
       {/* Action Buttons */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <button
-          className="rt-btn rt-btn-primary"
-          onClick={startEditing}
-        >
-          Edit Details
-        </button>
-        <button
-          className="rt-btn rt-btn-ghost"
-          onClick={() => {
-            const msg = encodeURIComponent(
-              `Check out ${saree.name} (${saree.fabric}) at \u20B9${saree.price.toLocaleString("en-IN")} on Wearify!`
-            );
-            window.open(`https://wa.me/?text=${msg}`, "_blank");
-          }}
-        >
-          Share on WhatsApp
-        </button>
-      </div>
+      {!isPending && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <button
+            className="rt-btn rt-btn-primary"
+            onClick={startEditing}
+          >
+            Edit Details
+          </button>
+          <button
+            className="rt-btn rt-btn-ghost"
+            onClick={() => {
+              const msg = encodeURIComponent(
+                `Check out ${saree.name} (${saree.fabric}) at \u20B9${saree.price.toLocaleString("en-IN")} on Wearify!`
+              );
+              window.open(`https://wa.me/?text=${msg}`, "_blank");
+            }}
+          >
+            Share on WhatsApp
+          </button>
+        </div>
+      )}
 
       {/* Delete */}
-      <button
-        className="rt-btn rt-btn-danger"
-        style={{ width: "100%" }}
-        onClick={() => setShowDelete(true)}
-      >
-        Delete Saree
-      </button>
+      {!isPending && (
+        <button
+          className="rt-btn rt-btn-danger"
+          style={{ width: "100%" }}
+          onClick={() => setShowDelete(true)}
+        >
+          Delete Saree
+        </button>
+      )}
 
       {/* Delete Modal */}
       {showDelete && (

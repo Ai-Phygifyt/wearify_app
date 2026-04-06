@@ -143,7 +143,8 @@ export default defineSchema({
     conversions: v.optional(v.number()),
     daysOld: v.optional(v.number()),
     // Catalog approval
-    approvalStatus: v.optional(v.string()), // "pending" | "approved" | "rejected"
+    approvalStatus: v.optional(v.string()), // "pending" | "approved" | "rejected" | "corrections"
+    correctionNote: v.optional(v.string()), // admin feedback when sent for corrections
     addedBy: v.optional(v.string()), // staff name
     // Images (file storage)
     imageIds: v.optional(v.array(v.id("_storage"))),

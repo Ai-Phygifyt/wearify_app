@@ -31,7 +31,7 @@ function SareeThumbnail({ fileId, emoji, grad, size }: {
   );
 }
 
-const FILTER_PILLS = ["All", "In Stock", "Low Stock", "Aging"] as const;
+const FILTER_PILLS = ["All", "In Stock", "Low Stock", "Aging", "Pending"] as const;
 type Filter = (typeof FILTER_PILLS)[number];
 
 function stockDotColor(status: string): string {
@@ -138,6 +138,7 @@ export default function InventoryPage() {
       if (filter === "In Stock") return s.status === "active";
       if (filter === "Low Stock") return s.status === "low_stock";
       if (filter === "Aging") return (s.daysOld ?? 0) >= 60;
+      if (filter === "Pending") return s.approvalStatus === "pending" || s.approvalStatus === "corrections";
       return true;
     });
   }, [sarees, search, filter]);
@@ -353,22 +354,30 @@ export default function InventoryPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {filtered.map((saree) => {
             const grad = saree.grad ?? defaultGrad(saree.type);
+            const isPending = saree.approvalStatus === "pending";
+            const isCorrections = saree.approvalStatus === "corrections";
             return (
               <button
                 key={saree._id}
-                onClick={() => router.push(`/store/inventory/${saree._id}`)}
+                onClick={() => {
+                  if (isPending) return;
+                  router.push(`/store/inventory/${saree._id}`);
+                }}
                 className="rt-card"
                 style={{
                   padding: 0,
                   overflow: "hidden",
-                  cursor: "pointer",
+                  cursor: isPending ? "default" : "pointer",
                   textAlign: "left",
                   width: "100%",
+                  opacity: isPending ? 0.75 : 1,
                   transition: "border-color 0.2s, box-shadow 0.2s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--rt-gold)";
-                  e.currentTarget.style.boxShadow = "0 4px 16px rgba(201,148,26,0.12)";
+                  if (!isPending) {
+                    e.currentTarget.style.borderColor = "var(--rt-gold)";
+                    e.currentTarget.style.boxShadow = "0 4px 16px rgba(201,148,26,0.12)";
+                  }
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = "var(--rt-border)";
@@ -389,7 +398,47 @@ export default function InventoryPage() {
                     grad={grad}
                     size={48}
                   />
-                  {saree.tag && (
+                  {/* Pending overlay */}
+                  {isPending && (
+                    <div style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "rgba(10, 22, 40, 0.55)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}>
+                      <span style={{
+                        padding: "4px 10px",
+                        borderRadius: "var(--rt-radius-pill)",
+                        background: "rgba(255,255,255,0.9)",
+                        color: "var(--rt-navy)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        backdropFilter: "blur(4px)",
+                      }}>
+                        Waiting for Approval
+                      </span>
+                    </div>
+                  )}
+                  {/* Corrections badge */}
+                  {isCorrections && (
+                    <span style={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                      padding: "3px 8px",
+                      borderRadius: "var(--rt-radius-pill)",
+                      background: "rgba(245,166,35,0.2)",
+                      color: "#B8860B",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      backdropFilter: "blur(4px)",
+                    }}>
+                      Corrections Needed
+                    </span>
+                  )}
+                  {saree.tag && !isPending && (
                     <span
                       style={{
                         position: "absolute",
@@ -420,6 +469,18 @@ export default function InventoryPage() {
                   <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
                     {saree.fabric}
                   </div>
+                  {isCorrections && saree.correctionNote && (
+                    <div style={{
+                      fontSize: 11,
+                      color: "#B8860B",
+                      marginTop: 4,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {saree.correctionNote}
+                    </div>
+                  )}
                   <div
                     style={{
                       display: "flex",
@@ -454,23 +515,31 @@ export default function InventoryPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {filtered.map((saree) => {
             const grad = saree.grad ?? defaultGrad(saree.type);
+            const isPending = saree.approvalStatus === "pending";
+            const isCorrections = saree.approvalStatus === "corrections";
             return (
               <button
                 key={saree._id}
-                onClick={() => router.push(`/store/inventory/${saree._id}`)}
+                onClick={() => {
+                  if (isPending) return;
+                  router.push(`/store/inventory/${saree._id}`);
+                }}
                 className="rt-card"
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
                   padding: "10px 12px",
-                  cursor: "pointer",
+                  cursor: isPending ? "default" : "pointer",
                   textAlign: "left",
                   width: "100%",
+                  opacity: isPending ? 0.75 : 1,
                   transition: "border-color 0.2s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--rt-gold)";
+                  if (!isPending) {
+                    e.currentTarget.style.borderColor = "var(--rt-gold)";
+                  }
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = "var(--rt-border)";
@@ -484,6 +553,7 @@ export default function InventoryPage() {
                     borderRadius: "var(--rt-radius-sm)",
                     overflow: "hidden",
                     flexShrink: 0,
+                    position: "relative",
                   }}
                 >
                   <SareeThumbnail
@@ -492,25 +562,77 @@ export default function InventoryPage() {
                     grad={grad}
                     size={28}
                   />
+                  {isPending && (
+                    <div style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "rgba(10, 22, 40, 0.5)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}>
+                      <span style={{ fontSize: 14 }}>{"\u23F3"}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: "var(--rt-text)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {saree.name}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: "var(--rt-text)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {saree.name}
+                    </div>
+                    {isPending && (
+                      <span style={{
+                        padding: "1px 6px",
+                        borderRadius: "var(--rt-radius-pill)",
+                        background: "rgba(10, 22, 40, 0.08)",
+                        color: "var(--rt-muted)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}>
+                        Pending
+                      </span>
+                    )}
+                    {isCorrections && (
+                      <span style={{
+                        padding: "1px 6px",
+                        borderRadius: "var(--rt-radius-pill)",
+                        background: "rgba(245,166,35,0.15)",
+                        color: "#B8860B",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}>
+                        Corrections
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
                     {saree.fabric} &middot; {saree.type}
                   </div>
+                  {isCorrections && saree.correctionNote && (
+                    <div style={{
+                      fontSize: 11,
+                      color: "#B8860B",
+                      marginTop: 2,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {saree.correctionNote}
+                    </div>
+                  )}
                 </div>
 
                 {/* Price + stock badge */}
@@ -529,35 +651,50 @@ export default function InventoryPage() {
                   >
                     {"\u20B9"}{saree.price.toLocaleString("en-IN")}
                   </span>
-                  <span
-                    className={`rt-badge ${
-                      saree.status === "active"
-                        ? "rt-badge-success"
+                  {isPending ? (
+                    <span style={{
+                      padding: "2px 8px",
+                      borderRadius: "var(--rt-radius-pill)",
+                      background: "rgba(10, 22, 40, 0.06)",
+                      color: "var(--rt-muted)",
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}>
+                      Awaiting Review
+                    </span>
+                  ) : (
+                    <span
+                      className={`rt-badge ${
+                        saree.status === "active"
+                          ? "rt-badge-success"
+                          : saree.status === "low_stock"
+                            ? "rt-badge-amber"
+                            : "rt-badge-alert"
+                      }`}
+                    >
+                      {saree.status === "active"
+                        ? "In Stock"
                         : saree.status === "low_stock"
-                          ? "rt-badge-amber"
-                          : "rt-badge-alert"
-                    }`}
-                  >
-                    {saree.status === "active"
-                      ? "In Stock"
-                      : saree.status === "low_stock"
-                        ? `${saree.stock} left`
-                        : "Out"}
-                  </span>
+                          ? `${saree.stock} left`
+                          : "Out"}
+                    </span>
+                  )}
                 </div>
 
                 {/* Chevron */}
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="var(--rt-muted)"
-                  strokeWidth="2"
-                  style={{ flexShrink: 0 }}
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+                {!isPending && (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--rt-muted)"
+                    strokeWidth="2"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                )}
               </button>
             );
           })}

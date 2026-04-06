@@ -188,16 +188,47 @@ export const listPendingApproval = query({
   },
 });
 
-// 10. Approve or reject a saree
+// 10. Approve, reject (delete), or send for corrections
 export const approveOrReject = mutation({
   args: {
     id: v.id("sarees"),
-    approvalStatus: v.union(v.literal("approved"), v.literal("rejected")),
+    approvalStatus: v.union(
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("corrections")
+    ),
+    rejectionReason: v.optional(v.string()),
+    correctionNote: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
+    if (args.approvalStatus === "rejected") {
+      // Delete the saree on rejection — removed from catalog
+      await ctx.db.delete(args.id);
+      return;
+    }
+    const patch: Record<string, unknown> = {
       approvalStatus: args.approvalStatus,
-    });
+    };
+    if (args.approvalStatus === "corrections" && args.correctionNote) {
+      patch.correctionNote = args.correctionNote;
+    }
+    if (args.approvalStatus === "approved") {
+      // Clear any old correction notes on approval
+      patch.correctionNote = undefined;
+    }
+    await ctx.db.patch(args.id, patch);
+  },
+});
+
+// List sarees sent back for corrections
+export const listCorrections = query({
+  args: { storeId: v.string() },
+  handler: async (ctx, args) => {
+    const all = await ctx.db
+      .query("sarees")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .take(200);
+    return all.filter((s) => s.approvalStatus === "corrections");
   },
 });
 
