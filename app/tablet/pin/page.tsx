@@ -55,7 +55,8 @@ export default function TabletPinPage() {
             storeId: result.storeId,
           })
         );
-        router.replace("/tablet");
+        // Hard navigation to avoid layout race condition with stale staffData state
+        window.location.href = "/tablet";
       } else {
         setError(result.error || "Invalid PIN");
         setPin("");

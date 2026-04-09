@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge } from "@/components/ui/wearify-ui";
@@ -23,7 +23,6 @@ export default function TabletLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const [storeConfig, setStoreConfig] = useState<StoreConfig | null>(null);
   const [staffData, setStaffData] = useState<StaffData | null>(null);
@@ -33,17 +32,23 @@ export default function TabletLayout({
   const [language, setLanguage] = useState("EN");
   const [checked, setChecked] = useState(false);
 
-  // Read localStorage on mount
+  // Single effect: read localStorage AND redirect in one pass (no race)
   useEffect(() => {
+    const isSetup = pathname === "/tablet/setup";
+    const isPin = pathname === "/tablet/pin";
+
     const storeRaw = localStorage.getItem("wearify_tablet_store");
     const staffRaw = localStorage.getItem("wearify_tablet_staff");
     const sessRaw = localStorage.getItem("wearify_tablet_session");
 
+    let store: StoreConfig | null = null;
+    let staff: StaffData | null = null;
+
     if (storeRaw) {
-      try { setStoreConfig(JSON.parse(storeRaw)); } catch { /* ignore */ }
+      try { store = JSON.parse(storeRaw); } catch { /* ignore */ }
     }
     if (staffRaw) {
-      try { setStaffData(JSON.parse(staffRaw)); } catch { /* ignore */ }
+      try { staff = JSON.parse(staffRaw); } catch { /* ignore */ }
     }
     if (sessRaw) {
       try {
@@ -52,24 +57,22 @@ export default function TabletLayout({
         setSessionStart(sess.startTime);
       } catch { /* ignore */ }
     }
+
+    setStoreConfig(store);
+    setStaffData(staff);
+
+    // Redirect logic — uses freshly-read values, not stale state
+    if (!store && !isSetup) {
+      window.location.href = "/tablet/setup";
+      return;
+    }
+    if (store && !staff && !isSetup && !isPin) {
+      window.location.href = "/tablet/pin";
+      return;
+    }
+
     setChecked(true);
   }, [pathname]);
-
-  // Redirect logic
-  useEffect(() => {
-    if (!checked) return;
-    const isSetup = pathname === "/tablet/setup";
-    const isPin = pathname === "/tablet/pin";
-
-    if (!storeConfig && !isSetup) {
-      router.replace("/tablet/setup");
-      return;
-    }
-    if (storeConfig && !staffData && !isSetup && !isPin) {
-      router.replace("/tablet/pin");
-      return;
-    }
-  }, [checked, storeConfig, staffData, pathname, router]);
 
   // Session timer
   useEffect(() => {
@@ -146,7 +149,7 @@ export default function TabletLayout({
               onClick={() => {
                 localStorage.removeItem("wearify_tablet_staff");
                 localStorage.removeItem("wearify_tablet_session");
-                router.replace("/tablet/pin");
+                window.location.href = "/tablet/pin";
               }}
               className="px-3 py-1 rounded text-xs font-semibold text-wf-red hover:bg-wf-red/10 cursor-pointer transition-colors"
             >

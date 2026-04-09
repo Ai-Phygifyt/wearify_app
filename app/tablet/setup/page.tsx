@@ -34,7 +34,7 @@ export default function TabletSetupPage() {
       "wearify_tablet_store",
       JSON.stringify({ storeId: store.storeId, storeName: store.name })
     );
-    router.replace("/tablet/pin");
+    window.location.href = "/tablet/pin";
   }, [store, submitted, router]);
 
   const handleSubmit = (e: React.FormEvent) => {
