@@ -29,7 +29,8 @@ export default function StoreLoginPage() {
   function saveAndGo(token: string, storeId: string, storeName: string) {
     localStorage.setItem("wearify_auth_token", token);
     localStorage.setItem("wearify_auth_user", JSON.stringify({ storeId, storeName, role: "store_owner" }));
-    router.replace("/store");
+    // Hard navigation to avoid React state contamination from login page
+    window.location.href = "/store";
   }
 
   async function handleSendOtp() {
@@ -43,6 +44,12 @@ export default function StoreLoginPage() {
     try {
       const r = await loginWithOtp({ phone: "+91" + phone, otp, role: "store_owner" });
       if (!r.success) { setError(r.error || "Login failed"); setLoading(false); return; }
+      if (r.hasPassword) {
+        // User already has a password — go straight to store
+        saveAndGo(r.token!, r.storeId!, r.storeName || "My Store");
+        return;
+      }
+      // First-time OTP user — offer to set password
       setOtpLoginData({ token: r.token!, storeId: r.storeId!, storeName: r.storeName || "My Store" });
       setOtpStep("set-password");
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Login failed"); }

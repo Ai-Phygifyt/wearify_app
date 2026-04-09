@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import "./store-theme.css";
@@ -43,9 +43,7 @@ function TopBar({ storeName }: { storeName: string }) {
           <span style={{ color: "#C9941A", fontSize: 14, fontWeight: 800, letterSpacing: 2, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>W</span>
         </div>
         <div>
-          <div className="rt-serif" style={{ fontSize: 17, fontWeight: 700, color: "#0A1628", fontStyle: "italic", lineHeight: 1.2 }}>
-            {storeName}
-          </div>
+          <div className="rt-serif" style={{ fontSize: 17, fontWeight: 700, color: "#0A1628", fontStyle: "italic", lineHeight: 1.2 }}>{storeName}</div>
           <div style={{ fontSize: 11, color: "#7A6E8A" }}>{dateStr}</div>
         </div>
       </div>
@@ -81,61 +79,90 @@ function BottomNav() {
   );
 }
 
+function LoadingScreen() {
+  return (
+    <div className="store-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #0A1628, #1A4A65)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ color: "#C9941A", fontSize: 14, fontWeight: 800, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>W</span>
+        </div>
+        <span style={{ fontSize: 14, color: "#7A6E8A" }}>Loading store...</span>
+      </div>
+    </div>
+  );
+}
+
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
-  const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
-  const [token, setToken] = useState<string | null>(null);
-  const [storeName, setStoreName] = useState("My Store");
   const pathname = usePathname();
-  const router = useRouter();
   const isLoginPage = pathname === "/store/login";
 
+  // Read token directly from localStorage (not from state that can go stale)
+  const [token, setToken] = useState<string | null>(null);
+  const [storeName, setStoreName] = useState("My Store");
+  const [ready, setReady] = useState(false);
+  const redirectedRef = useRef(false);
+
+  // Read localStorage on mount and pathname change
   useEffect(() => {
-    if (isLoginPage) { setAuthState("unauthenticated"); return; }
+    if (isLoginPage) {
+      setReady(true);
+      return;
+    }
     const savedToken = localStorage.getItem("wearify_auth_token");
-    if (!savedToken) { router.replace("/store/login"); setAuthState("unauthenticated"); return; }
+    if (!savedToken) {
+      // No token — hard redirect to login (only once)
+      if (!redirectedRef.current) {
+        redirectedRef.current = true;
+        window.location.href = "/store/login";
+      }
+      return;
+    }
     setToken(savedToken);
     try {
       const userData = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
       if (userData.storeName) setStoreName(userData.storeName);
     } catch { /* */ }
-  }, [isLoginPage, router]);
+    setReady(true);
+  }, [isLoginPage, pathname]);
 
-  const session = useQuery(api.phoneAuth.validateSession, token ? { token } : "skip");
+  // Validate token with Convex
+  const session = useQuery(
+    api.phoneAuth.validateSession,
+    token ? { token } : "skip"
+  );
 
-  const redirectToLogin = useCallback(() => {
-    localStorage.removeItem("wearify_auth_token");
-    localStorage.removeItem("wearify_auth_user");
-    setAuthState("unauthenticated");
-    router.replace("/store/login");
-  }, [router]);
-
-  useEffect(() => {
-    if (isLoginPage || !token) return;
-    if (session === undefined) return;
-    if (session === null || session.role !== "store_owner") { redirectToLogin(); return; }
-    setAuthState("authenticated");
-  }, [session, token, isLoginPage, redirectToLogin]);
-
-  if (isLoginPage) return <>{children}</>;
-
-  if (authState === "loading") {
-    return (
-      <div className="store-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #0A1628, #1A4A65)", display: "flex", alignItems: "center", justifyContent: "center", animation: "pulse 2s infinite" }}>
-            <span style={{ color: "#C9941A", fontSize: 14, fontWeight: 800, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>W</span>
-          </div>
-          <span style={{ fontSize: 14, color: "#7A6E8A" }}>Loading store...</span>
-        </div>
-      </div>
-    );
+  // Login page — no shell
+  if (isLoginPage) {
+    return <>{children}</>;
   }
 
-  if (authState === "unauthenticated") return null;
+  // Still initializing
+  if (!ready || !token) {
+    return <LoadingScreen />;
+  }
 
+  // Waiting for Convex to validate
+  if (session === undefined) {
+    return <LoadingScreen />;
+  }
+
+  // Token is invalid or expired — hard redirect (only once, don't clear during render)
+  if (session === null || session.role !== "store_owner") {
+    if (!redirectedRef.current) {
+      redirectedRef.current = true;
+      // Clear and redirect outside of render
+      setTimeout(() => {
+        localStorage.removeItem("wearify_auth_token");
+        localStorage.removeItem("wearify_auth_user");
+        window.location.href = "/store/login";
+      }, 100);
+    }
+    return <LoadingScreen />;
+  }
+
+  // Authenticated — render the store
   return (
     <>
-      {/* Google Fonts */}
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
       <div className="store-shell" style={{ minHeight: "100vh" }}>

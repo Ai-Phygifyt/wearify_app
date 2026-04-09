@@ -292,7 +292,8 @@ export const loginWithOtp = mutation({
           lastLogin: Date.now(),
         });
       }
-      return { success: true, token, storeId: store.storeId, storeName: store.name, role: "store_owner" };
+      const hasPassword = !!(user?.passwordHash);
+      return { success: true, token, storeId: store.storeId, storeName: store.name, role: "store_owner", hasPassword };
     }
 
     if (args.role === "customer") {
@@ -390,10 +391,18 @@ export const setPassword = mutation({
   },
   handler: async (ctx, args) => {
     const hash = await hashPassword(args.password);
-    const user = await ctx.db
+    const normalized = normalizePhone(args.phone);
+    let user = await ctx.db
       .query("users")
-      .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+      .withIndex("by_phone", (q) => q.eq("phone", normalized))
       .first();
+    if (!user) {
+      const withSpace = normalized.replace(/^\+91/, "+91 ");
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phone", withSpace))
+        .first();
+    }
     if (!user) {
       return { success: false, error: "User not found" };
     }
