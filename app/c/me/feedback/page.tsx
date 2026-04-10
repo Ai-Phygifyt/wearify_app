@@ -4,15 +4,15 @@ import React, { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
-import { Btn, PageLoading } from "@/components/ui/wearify-ui";
 import { useRouter } from "next/navigation";
 
 const QUICK_CHIPS = [
-  "Loved it",
-  "Great staff",
-  "Beautiful collection",
-  "Easy to use",
-  "Need more variety",
+  "Great Service",
+  "Beautiful Collection",
+  "Quick Try-On",
+  "Friendly Staff",
+  "Clean Store",
+  "Good Lighting",
 ];
 
 export default function FeedbackPage() {
@@ -28,16 +28,13 @@ export default function FeedbackPage() {
   const [submitting, setSubmitting] = useState(false);
 
   function toggleChip(chip: string) {
-    if (selectedChips.includes(chip)) {
-      setSelectedChips(selectedChips.filter((c) => c !== chip));
-    } else {
-      setSelectedChips([...selectedChips, chip]);
-    }
+    setSelectedChips((prev) =>
+      prev.includes(chip) ? prev.filter((c) => c !== chip) : [...prev, chip]
+    );
   }
 
   async function handleSubmit() {
-    if (rating === 0) return;
-    if (!customerId) return;
+    if (rating === 0 || !customerId) return;
     setSubmitting(true);
     try {
       await submitFeedback({
@@ -51,163 +48,413 @@ export default function FeedbackPage() {
       });
       setSubmitted(true);
     } catch {
-      // handle error silently
+      /* silently handle */
     }
     setSubmitting(false);
   }
 
   if (!customerId) {
     return (
-      <div className="p-5">
-        <PageLoading />
+      <div
+        className="cx-pageIn"
+        style={{
+          minHeight: "100%",
+          background: "#FDF8F0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div className="cx-typing">
+          <span />
+          <span />
+          <span />
+        </div>
       </div>
     );
   }
 
+  /* ── Success state ──────────────────────────────────── */
   if (submitted) {
-    const referralUrl = `https://wa.me/?text=${encodeURIComponent(
-      "I just had an amazing experience with Wearify virtual try-on! You should try it too!"
-    )}`;
-
     return (
-      <div className="px-5 pt-6 pb-4">
-        <div className="flex items-center gap-3 mb-5">
-          <button
-            onClick={() => router.back()}
-            className="text-wf-primary text-lg cursor-pointer"
-          >
-            {"\u2190"}
-          </button>
-          <h1 className="text-lg font-bold text-wf-text">Feedback</h1>
+      <div
+        className="cx-pageIn"
+        style={{ minHeight: "100%", background: "#FDF8F0" }}
+      >
+        {/* Hero */}
+        <div
+          className="cx-noise cx-paisley"
+          style={{
+            background: "var(--cx-grad-hero)",
+            padding: "28px 18px 22px",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <button
+              onClick={() => router.back()}
+              className="cx-press"
+              style={{
+                background: "rgba(253,248,240,.12)",
+                border: "1px solid rgba(253,248,240,.18)",
+                borderRadius: 100,
+                width: 36,
+                height: 36,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                marginBottom: 14,
+              }}
+            >
+              <svg
+                width={18}
+                height={18}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#FDF8F0"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <h1
+              className="cx-serif"
+              style={{
+                fontSize: 26,
+                fontWeight: 700,
+                fontStyle: "italic",
+                color: "#FDF8F0",
+                margin: 0,
+              }}
+            >
+              Feedback
+            </h1>
+          </div>
         </div>
+        <div className="cx-zari" />
 
-        <div className="text-center py-8">
-          <div className="text-4xl mb-3">{"\u2713"}</div>
-          <div className="text-lg font-bold text-wf-text">Thank You!</div>
-          <div className="text-sm text-wf-muted mt-1">
+        {/* Thank you */}
+        <div
+          className="cx-scaleIn"
+          style={{ textAlign: "center", padding: "56px 24px" }}
+        >
+          <div
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: "50%",
+              background: "#E8F5E9",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 20px",
+            }}
+          >
+            <svg
+              width={32}
+              height={32}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#1B5E20"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <div
+            className="cx-serif"
+            style={{
+              fontSize: 24,
+              fontWeight: 700,
+              color: "#1A0A1E",
+              fontStyle: "italic",
+            }}
+          >
+            Thank you!
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              color: "#8B7EA0",
+              marginTop: 8,
+              lineHeight: 1.5,
+            }}
+          >
             Your feedback helps us improve
           </div>
 
-          {rating >= 4 && (
-            <div className="mt-6 bg-wf-card rounded-xl border border-wf-border p-4">
-              <div className="text-sm font-bold text-wf-text mb-2">
-                Loved your experience?
-              </div>
-              <div className="text-xs text-wf-muted mb-3">
-                Recommend Wearify to a friend!
-              </div>
-              <Btn
-                primary
-                onClick={() => window.open(referralUrl, "_blank")}
-                className="w-full"
-              >
-                Share on WhatsApp
-              </Btn>
-            </div>
-          )}
-
-          <Btn
+          <button
             onClick={() => router.push("/c/me")}
-            className="mt-4 w-full"
+            className="cx-press"
+            style={{
+              marginTop: 28,
+              width: "100%",
+              padding: "14px",
+              borderRadius: 100,
+              background: "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)",
+              border: "none",
+              color: "#FDF8F0",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
           >
             Back to Profile
-          </Btn>
+          </button>
         </div>
       </div>
     );
   }
 
+  /* ── Main form ──────────────────────────────────────── */
   return (
-    <div className="px-5 pt-6 pb-4">
-      <div className="flex items-center gap-3 mb-5">
-        <button
-          onClick={() => router.back()}
-          className="text-wf-primary text-lg cursor-pointer"
-        >
-          {"\u2190"}
-        </button>
-        <h1 className="text-lg font-bold text-wf-text">Feedback</h1>
-      </div>
-
-      {/* Star rating */}
-      <div className="mb-6">
-        <div className="text-sm font-bold text-wf-text mb-3">
-          How was your experience?
-        </div>
-        <div className="flex gap-2 justify-center">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              key={star}
-              onClick={() => setRating(star)}
-              className="text-3xl cursor-pointer transition-transform hover:scale-110"
+    <div
+      className="cx-pageIn"
+      style={{ minHeight: "100%", background: "#FDF8F0" }}
+    >
+      {/* ── Hero ────────────────────────────────────────── */}
+      <div
+        className="cx-noise cx-paisley"
+        style={{
+          background: "var(--cx-grad-hero)",
+          padding: "28px 18px 22px",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <button
+            onClick={() => router.back()}
+            className="cx-press"
+            style={{
+              background: "rgba(253,248,240,.12)",
+              border: "1px solid rgba(253,248,240,.18)",
+              borderRadius: 100,
+              width: 36,
+              height: 36,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              marginBottom: 14,
+            }}
+          >
+            <svg
+              width={18}
+              height={18}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#FDF8F0"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <span
-                className={
-                  star <= rating ? "text-wf-amber" : "text-wf-border"
-                }
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <h1
+            className="cx-serif"
+            style={{
+              fontSize: 26,
+              fontWeight: 700,
+              fontStyle: "italic",
+              color: "#FDF8F0",
+              margin: 0,
+            }}
+          >
+            Rate Your Visit
+          </h1>
+          <p
+            style={{
+              fontSize: 13,
+              color: "rgba(253,248,240,.55)",
+              margin: "4px 0 0",
+            }}
+          >
+            We value your feedback
+          </p>
+        </div>
+      </div>
+      <div className="cx-zari" />
+
+      {/* ── Content ─────────────────────────────────────── */}
+      <div style={{ padding: "24px 18px 32px" }}>
+        {/* Star rating */}
+        <div className="cx-slideUp cx-d1" style={{ marginBottom: 28 }}>
+          <div
+            className="cx-serif"
+            style={{
+              fontSize: 16,
+              fontWeight: 600,
+              color: "#1A0A1E",
+              fontStyle: "italic",
+              marginBottom: 14,
+              textAlign: "center",
+            }}
+          >
+            How was your experience?
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              justifyContent: "center",
+            }}
+          >
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                onClick={() => setRating(star)}
+                className="cx-press"
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 28,
+                  lineHeight: 1,
+                  color: star <= rating ? "#C9941A" : "#E8D5E0",
+                  transition: "color .15s, transform .15s",
+                  padding: 4,
+                }}
               >
                 {star <= rating ? "\u2605" : "\u2606"}
-              </span>
-            </button>
-          ))}
-        </div>
-        {rating > 0 && (
-          <div className="text-center text-xs text-wf-muted mt-2">
-            {rating === 5
-              ? "Excellent!"
-              : rating === 4
-                ? "Great!"
-                : rating === 3
-                  ? "Good"
-                  : rating === 2
-                    ? "Fair"
-                    : "Poor"}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
-
-      {/* Quick chips */}
-      <div className="mb-5">
-        <div className="text-sm font-bold text-wf-text mb-2">Quick Tags</div>
-        <div className="flex flex-wrap gap-2">
-          {QUICK_CHIPS.map((chip) => (
-            <button
-              key={chip}
-              onClick={() => toggleChip(chip)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
-                selectedChips.includes(chip)
-                  ? "bg-wf-primary text-white"
-                  : "bg-wf-bg border border-wf-border text-wf-subtext"
-              }`}
+          {rating > 0 && (
+            <div
+              style={{
+                textAlign: "center",
+                fontSize: 13,
+                color: "#8B7EA0",
+                marginTop: 8,
+              }}
             >
-              {chip}
-            </button>
-          ))}
+              {rating === 5
+                ? "Excellent!"
+                : rating === 4
+                  ? "Great!"
+                  : rating === 3
+                    ? "Good"
+                    : rating === 2
+                      ? "Fair"
+                      : "Poor"}
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Comment */}
-      <div className="mb-5">
-        <div className="text-sm font-bold text-wf-text mb-2">
-          Tell us more (optional)
+        {/* Quick feedback chips */}
+        <div className="cx-slideUp cx-d2" style={{ marginBottom: 24 }}>
+          <div
+            className="cx-serif"
+            style={{
+              fontSize: 16,
+              fontWeight: 600,
+              color: "#1A0A1E",
+              fontStyle: "italic",
+              marginBottom: 10,
+            }}
+          >
+            Quick Feedback
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {QUICK_CHIPS.map((chip) => {
+              const active = selectedChips.includes(chip);
+              return (
+                <button
+                  key={chip}
+                  onClick={() => toggleChip(chip)}
+                  className="cx-press"
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: 100,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    border: active ? "none" : "1px solid #E8D5E0",
+                    background: active
+                      ? "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)"
+                      : "#F4EFF9",
+                    color: active ? "#FDF8F0" : "#4A3558",
+                    transition: "all .2s",
+                  }}
+                >
+                  {chip}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <textarea
-          placeholder="Share your detailed feedback..."
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          rows={4}
-          className="w-full bg-wf-bg border border-wf-border rounded-lg px-3 py-2.5 text-sm text-wf-text outline-none focus:border-wf-primary resize-none"
-        />
-      </div>
 
-      <Btn
-        primary
-        onClick={handleSubmit}
-        disabled={rating === 0 || submitting}
-        className="w-full"
-      >
-        {submitting ? "Submitting..." : "Submit Feedback"}
-      </Btn>
+        {/* Comment */}
+        <div className="cx-slideUp cx-d3" style={{ marginBottom: 28 }}>
+          <div
+            className="cx-serif"
+            style={{
+              fontSize: 16,
+              fontWeight: 600,
+              color: "#1A0A1E",
+              fontStyle: "italic",
+              marginBottom: 10,
+            }}
+          >
+            Tell us more{" "}
+            <span style={{ fontWeight: 400, color: "#8B7EA0" }}>
+              (optional)
+            </span>
+          </div>
+          <textarea
+            placeholder="Share your detailed feedback..."
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={4}
+            style={{
+              width: "100%",
+              padding: "14px",
+              borderRadius: 16,
+              border: "1px solid #E8D5E0",
+              background: "#FFFFFF",
+              fontSize: 14,
+              color: "#1A0A1E",
+              outline: "none",
+              resize: "none",
+              lineHeight: 1.55,
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {/* Submit */}
+        <button
+          onClick={handleSubmit}
+          disabled={rating === 0 || submitting}
+          className="cx-press"
+          style={{
+            width: "100%",
+            padding: "14px",
+            borderRadius: 100,
+            background:
+              rating === 0
+                ? "#E8D5E0"
+                : "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)",
+            border: "none",
+            color: rating === 0 ? "#8B7EA0" : "#FDF8F0",
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: rating === 0 || submitting ? "default" : "pointer",
+            opacity: submitting ? 0.7 : 1,
+            transition: "opacity .2s, background .2s",
+          }}
+        >
+          {submitting ? "Submitting..." : "Submit Feedback"}
+        </button>
+      </div>
     </div>
   );
 }

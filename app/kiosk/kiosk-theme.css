@@ -1,0 +1,273 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   WEARIFY KIOSK — Saree Try-On Mirror UI
+   Warm beige / maroon / gold · Full-screen touch-optimized
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --k-bg: #F5F0EA;
+  --k-bg-warm: #EDE6DC;
+  --k-card: #FFFFFF;
+  --k-maroon: #6B1A1A;
+  --k-maroon-l: #8B2E2E;
+  --k-maroon-d: #4A0E0E;
+  --k-gold: #C9941A;
+  --k-gold-l: #E8C46A;
+  --k-gold-d: #8B6914;
+  --k-text: #2A2220;
+  --k-text-mid: #5A4A42;
+  --k-text-muted: #8A7A72;
+  --k-text-light: #B0A098;
+  --k-border: #E0D6CC;
+  --k-border-l: #EDE6DC;
+  --k-green: #2D8544;
+  --k-green-bg: rgba(45,133,68,.1);
+  --k-red: #C0392B;
+  --k-red-bg: rgba(192,57,43,.08);
+  --k-shadow: 0 2px 16px rgba(42,34,32,.08);
+  --k-shadow-md: 0 6px 28px rgba(42,34,32,.14);
+  --k-shadow-lg: 0 16px 48px rgba(42,34,32,.22);
+  --k-r: 16px;
+  --k-r-sm: 10px;
+  --k-r-lg: 24px;
+  --k-r-pill: 100px;
+}
+
+/* ── Fonts ──────────────────────────────────────────────────────────── */
+.k-brand {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.k-mono { font-family: "DM Mono", "JetBrains Mono", monospace; }
+
+/* ── Animations ────────────────────────────────────────────────────── */
+@keyframes k-fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes k-slideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+@keyframes k-slideDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes k-scaleIn { from{opacity:0;transform:scale(.92)} to{opacity:1;transform:scale(1)} }
+@keyframes k-popIn { from{opacity:0;transform:scale(.6)} to{opacity:1;transform:scale(1)} }
+@keyframes k-scanLine { 0%{top:10%} 50%{top:85%} 100%{top:10%} }
+@keyframes k-pulse { 0%,100%{opacity:.6} 50%{opacity:1} }
+@keyframes k-cornerPulse { 0%,100%{opacity:.7;border-color:#2D8544} 50%{opacity:1;border-color:#4ADE80} }
+@keyframes k-shimmer { 0%{transform:translateX(-130%) rotate(18deg)} 100%{transform:translateX(260%) rotate(18deg)} }
+@keyframes k-slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+@keyframes k-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+@keyframes k-heartBeat { 0%,100%{transform:scale(1)} 25%{transform:scale(1.3)} 50%{transform:scale(1.08)} }
+
+.k-fadeIn { animation: k-fadeIn .35s ease both; }
+.k-slideUp { animation: k-slideUp .45s cubic-bezier(.22,1,.36,1) both; }
+.k-slideDown { animation: k-slideDown .35s cubic-bezier(.22,1,.36,1) both; }
+.k-scaleIn { animation: k-scaleIn .35s cubic-bezier(.22,1,.36,1) both; }
+.k-popIn { animation: k-popIn .3s cubic-bezier(.34,1.56,.64,1) both; }
+.k-slideIn { animation: k-slideIn .4s cubic-bezier(.22,1,.36,1) both; }
+.k-heartBeat { animation: k-heartBeat .35s ease both; }
+
+.k-d1{animation-delay:.05s} .k-d2{animation-delay:.1s} .k-d3{animation-delay:.15s}
+.k-d4{animation-delay:.2s} .k-d5{animation-delay:.25s} .k-d6{animation-delay:.3s}
+
+/* ── Press effect ──────────────────────────────────────────────────── */
+.k-press:active { transform:scale(.95)!important; transition:transform .08s ease!important; }
+
+/* ── Silk shimmer overlay ──────────────────────────────────────────── */
+.k-silk { position:relative; overflow:hidden; }
+.k-silk::after {
+  content:''; position:absolute; top:0; left:-100%; width:55%; height:100%;
+  background:linear-gradient(105deg,transparent 20%,rgba(255,255,255,.18) 50%,transparent 80%);
+  animation:k-shimmer 4.5s ease-in-out infinite; pointer-events:none;
+}
+
+/* ── Shell ──────────────────────────────────────────────────────────── */
+.k-shell {
+  width:100%; min-height:100vh; max-height:100vh;
+  background:var(--k-bg);
+  overflow:hidden; display:flex; flex-direction:column;
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  color:var(--k-text);
+  position:relative;
+}
+
+/* ── Top Bar ───────────────────────────────────────────────────────── */
+.k-topbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 18px; background:var(--k-card);
+  border-bottom:1px solid var(--k-border-l);
+  flex-shrink:0; z-index:40;
+}
+.k-topbar-logo {
+  width:32px; height:32px; border-radius:50%;
+  border:1.5px solid var(--k-border);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:12px; color:var(--k-text);
+}
+
+/* ── Sub Header ────────────────────────────────────────────────────── */
+.k-subheader {
+  display:flex; align-items:center; padding:10px 18px;
+  background:var(--k-card); border-bottom:1px solid var(--k-border-l);
+}
+
+/* ── Custom Numpad ─────────────────────────────────────────────────── */
+.k-numpad {
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:6px; padding:8px 24px; background:var(--k-bg-warm);
+  border-top:1px solid var(--k-border);
+}
+.k-numpad button {
+  height:56px; border-radius:10px; border:1px solid var(--k-border);
+  background:var(--k-card); font-size:22px; font-weight:600;
+  color:var(--k-text); cursor:pointer; transition:all .12s;
+}
+.k-numpad button:active { background:var(--k-border-l); transform:scale(.96); }
+.k-numpad .k-num-back {
+  background:transparent; border:none; font-size:20px; color:var(--k-text-muted);
+}
+
+/* ── Scan Frame ────────────────────────────────────────────────────── */
+.k-scan-frame { position:relative; }
+.k-scan-corner {
+  position:absolute; width:28px; height:28px;
+  border-color:#2D8544; animation:k-cornerPulse 1.5s ease infinite;
+}
+.k-scan-corner.tl { top:0;left:0; border-top:3px solid; border-left:3px solid; border-radius:4px 0 0 0; }
+.k-scan-corner.tr { top:0;right:0; border-top:3px solid; border-right:3px solid; border-radius:0 4px 0 0; }
+.k-scan-corner.bl { bottom:0;left:0; border-bottom:3px solid; border-left:3px solid; border-radius:0 0 0 4px; }
+.k-scan-corner.br { bottom:0;right:0; border-bottom:3px solid; border-right:3px solid; border-radius:0 0 4px 0; }
+.k-scan-line {
+  position:absolute; left:5%; width:90%; height:2px;
+  background:linear-gradient(90deg,transparent,#3B82F6,transparent);
+  animation:k-scanLine 3s ease-in-out infinite;
+}
+
+/* ── Timer Pill ────────────────────────────────────────────────────── */
+.k-timer {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 14px; border-radius:var(--k-r-pill);
+  background:var(--k-card); border:1.5px solid var(--k-border);
+  font-weight:700; font-size:14px; color:var(--k-text);
+  box-shadow:var(--k-shadow);
+}
+
+/* ── Wardrobe Shelf ────────────────────────────────────────────────── */
+.k-shelf-item {
+  background:linear-gradient(180deg, #F5EDE4 0%, #E8DDD0 100%);
+  border-radius:var(--k-r-sm);
+  padding:10px; text-align:center;
+  box-shadow:inset 0 -3px 6px rgba(0,0,0,.06), var(--k-shadow);
+  border:1px solid var(--k-border);
+}
+
+/* ── Product Card ──────────────────────────────────────────────────── */
+.k-product-card {
+  background:var(--k-card); border-radius:var(--k-r);
+  overflow:hidden; box-shadow:var(--k-shadow);
+  border:1px solid var(--k-border-l);
+  transition:transform .2s, box-shadow .2s;
+}
+.k-product-card:active { transform:scale(.97); }
+
+/* ── Heart Button ──────────────────────────────────────────────────── */
+.k-heart {
+  position:absolute; top:8px; right:8px; width:30px; height:30px;
+  border-radius:50%; background:rgba(255,255,255,.85);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; z-index:5; transition:all .15s;
+  box-shadow:0 1px 4px rgba(0,0,0,.12);
+}
+.k-heart:active { transform:scale(1.2); }
+.k-heart.active { background:var(--k-maroon); }
+
+/* ── Color Swatch ──────────────────────────────────────────────────── */
+.k-swatch {
+  width:20px; height:20px; border-radius:50%;
+  border:2px solid transparent; cursor:pointer;
+  transition:all .15s;
+}
+.k-swatch.active { border-color:var(--k-maroon); box-shadow:0 0 0 2px rgba(107,26,26,.2); }
+
+/* ── Bottom Action Buttons ─────────────────────────────────────────── */
+.k-action-btn {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 20px; border-radius:var(--k-r-pill);
+  background:var(--k-card); border:1.5px solid var(--k-border);
+  box-shadow:var(--k-shadow); cursor:pointer;
+  font-weight:600; font-size:15px; color:var(--k-text);
+  transition:all .15s;
+}
+.k-action-btn:active { transform:scale(.97); background:var(--k-bg); }
+.k-action-btn .k-action-arrow {
+  width:32px; height:32px; border-radius:50%;
+  background:var(--k-maroon); display:flex;
+  align-items:center; justify-content:center;
+}
+
+/* ── Modal Overlay ─────────────────────────────────────────────────── */
+.k-overlay {
+  position:fixed; inset:0;
+  background:rgba(42,34,32,.55); backdrop-filter:blur(8px);
+  z-index:100; display:flex; align-items:center; justify-content:center;
+  padding:24px;
+}
+.k-modal {
+  background:var(--k-card); border-radius:var(--k-r-lg);
+  padding:28px 24px; max-width:380px; width:100%;
+  box-shadow:var(--k-shadow-lg); text-align:center;
+}
+
+/* ── Bill/Receipt ──────────────────────────────────────────────────── */
+.k-receipt {
+  background:var(--k-card); border-radius:var(--k-r-lg);
+  padding:28px 24px; max-width:400px; width:100%;
+  margin:0 auto; box-shadow:var(--k-shadow-md);
+}
+.k-receipt-divider {
+  height:1px; background:var(--k-border);
+  margin:14px 0;
+}
+
+/* ── Tailor Card ───────────────────────────────────────────────────── */
+.k-tailor-card {
+  background:var(--k-card); border-radius:var(--k-r);
+  padding:16px; box-shadow:var(--k-shadow);
+  border:1px solid var(--k-border-l);
+  margin-bottom:12px;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+.k-footer {
+  padding:8px 18px; text-align:center;
+  font-size:10px; color:var(--k-text-light);
+  background:var(--k-bg-warm);
+  border-top:1px solid var(--k-border-l);
+  flex-shrink:0;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────── */
+.k-shell ::-webkit-scrollbar { width:3px; height:3px; }
+.k-shell ::-webkit-scrollbar-thumb { background:rgba(201,148,26,.25); border-radius:4px; }
+.k-no-scroll { -ms-overflow-style:none; scrollbar-width:none; }
+.k-no-scroll::-webkit-scrollbar { display:none; }
+
+/* ── Star Rating ───────────────────────────────────────────────────── */
+.k-star { font-size:32px; cursor:pointer; transition:transform .12s; user-select:none; }
+.k-star:active { transform:scale(1.25); }
+
+/* ── Idle screen ───────────────────────────────────────────────────── */
+.k-idle-bg {
+  position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(245,240,234,.2) 0%, rgba(245,240,234,.7) 60%, rgba(245,240,234,.95) 85%);
+  z-index:1;
+}
+
+/* ── Complete Look Tabs ────────────────────────────────────────────── */
+.k-look-tab {
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:8px 16px; cursor:pointer; font-size:11px;
+  font-weight:600; color:var(--k-text-muted);
+  border-bottom:2px solid transparent;
+  transition:all .15s;
+}
+.k-look-tab.active {
+  color:var(--k-maroon);
+  border-bottom-color:var(--k-maroon);
+}

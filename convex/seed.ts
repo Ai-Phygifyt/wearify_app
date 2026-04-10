@@ -3,9 +3,9 @@ import { internalMutation } from "./_generated/server";
 export const seedAll = internalMutation({
   args: {},
   handler: async (ctx) => {
-    // Check if already seeded
-    const existingStore = await ctx.db.query("stores").first();
-    if (existingStore) return "Already seeded";
+    // Check if our seed data already exists (look for ST-001)
+    const existingSeed = await ctx.db.query("stores").withIndex("by_storeId", (q) => q.eq("storeId", "ST-001")).first();
+    if (existingSeed) return "Already seeded";
 
     // ===================== STORES =====================
     const stores = [
@@ -332,5 +332,264 @@ export const seedAll = internalMutation({
     for (const c of configs) { await ctx.db.insert("platformConfig", c); }
 
     return "Seeded successfully";
+  },
+});
+
+// =====================================================================
+// ADDITIVE SEED — interconnected session/look/visit/order data
+// Run this AFTER seedAll to populate the relational data that connects
+// customers ↔ stores ↔ sessions ↔ looks ↔ tailors ↔ orders
+// =====================================================================
+export const seedRelational = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+
+    // Look up real IDs
+    const allCustomers = await ctx.db.query("customers").take(10);
+    const allStaff = await ctx.db.query("staff").take(20);
+    const allSarees = await ctx.db.query("sarees").take(50);
+    const allTailors = await ctx.db.query("tailors").take(10);
+
+    if (allCustomers.length === 0 || allSarees.length === 0) {
+      return "Run seedAll first";
+    }
+
+    // Helper to find entities
+    const custByPhone = (p: string) => allCustomers.find((c) => c.phone === p);
+    const staffByStore = (sid: string) => allStaff.filter((s) => s.storeId === sid);
+    const sareesByStore = (sid: string) => allSarees.filter((s) => s.storeId === sid);
+    const tailorById = (tid: string) => allTailors.find((t) => t.tailorId === tid);
+
+    const c1 = custByPhone("+919900000001"); // Ananya Mehta
+    const c2 = custByPhone("+919900000002"); // Deepika Reddy
+    const c3 = custByPhone("+919900000003"); // Lakshmi Iyer
+    const c4 = custByPhone("+919900000004"); // Fatima Sheikh
+    const c5 = custByPhone("+919900000005"); // Prerna Joshi
+
+    const st001Staff = staffByStore("ST-001");
+    const st002Staff = staffByStore("ST-002");
+    const st003Staff = staffByStore("ST-003");
+    const st001Sarees = sareesByStore("ST-001");
+    const st002Sarees = sareesByStore("ST-002");
+    const st003Sarees = sareesByStore("ST-003");
+
+    // ===================== SESSIONS =====================
+    const now = Date.now();
+    const DAY = 86400000;
+
+    const sessions = [
+      // Ananya @ MAUVE - recent session (completed)
+      { sessionId: "SS-10001", storeId: "ST-001", storeName: "MAUVE Sarees", staffId: st001Staff[0]?._id, staffName: st001Staff[0]?.name || "Ravi Patil", customerId: c1?._id, customerPhone: c1?.phone, status: "completed", startTime: now - 2 * DAY, endTime: now - 2 * DAY + 1800000, duration: "30m", sareesTriedOn: 3, sareesBrowsed: 8, purchased: true, occasion: "Wedding", budget: "₹25K-50K", rating: 5, ratingComment: "Amazing experience!" },
+      // Ananya @ MAUVE - older session
+      { sessionId: "SS-10002", storeId: "ST-001", storeName: "MAUVE Sarees", staffId: st001Staff[1]?._id, staffName: st001Staff[1]?.name || "Priya Sharma", customerId: c1?._id, customerPhone: c1?.phone, status: "completed", startTime: now - 15 * DAY, endTime: now - 15 * DAY + 2400000, duration: "40m", sareesTriedOn: 4, sareesBrowsed: 12, purchased: true, occasion: "Festival" },
+      // Ananya @ Kanchi Collections
+      { sessionId: "SS-10003", storeId: "ST-003", storeName: "Kanchi Collections", staffId: st003Staff[0]?._id, staffName: st003Staff[0]?.name || "Lakshmi Devi", customerId: c1?._id, customerPhone: c1?.phone, status: "completed", startTime: now - 30 * DAY, endTime: now - 30 * DAY + 2100000, duration: "35m", sareesTriedOn: 2, sareesBrowsed: 6, purchased: false, occasion: "Wedding" },
+      // Deepika @ MAUVE
+      { sessionId: "SS-10004", storeId: "ST-001", storeName: "MAUVE Sarees", staffId: st001Staff[2]?._id, staffName: st001Staff[2]?.name || "Amit Verma", customerId: c2?._id, customerPhone: c2?.phone, status: "completed", startTime: now - 5 * DAY, endTime: now - 5 * DAY + 1500000, duration: "25m", sareesTriedOn: 2, sareesBrowsed: 5, purchased: true, occasion: "Party" },
+      // Lakshmi @ Silk Heritage
+      { sessionId: "SS-10005", storeId: "ST-002", storeName: "Silk Heritage", staffId: st002Staff[0]?._id, staffName: st002Staff[0]?.name || "Sunita Reddy", customerId: c3?._id, customerPhone: c3?.phone, status: "completed", startTime: now - 8 * DAY, endTime: now - 8 * DAY + 3600000, duration: "60m", sareesTriedOn: 5, sareesBrowsed: 15, purchased: true, occasion: "Wedding", budget: "₹50K+", rating: 5 },
+      // Lakshmi @ Kanchi
+      { sessionId: "SS-10006", storeId: "ST-003", storeName: "Kanchi Collections", staffId: st003Staff[1]?._id, staffName: st003Staff[1]?.name || "Arjun Nair", customerId: c3?._id, customerPhone: c3?.phone, status: "completed", startTime: now - 20 * DAY, endTime: now - 20 * DAY + 2700000, duration: "45m", sareesTriedOn: 3, sareesBrowsed: 10, purchased: true, occasion: "Festival" },
+      // Prerna @ MAUVE
+      { sessionId: "SS-10007", storeId: "ST-001", storeName: "MAUVE Sarees", staffId: st001Staff[0]?._id, staffName: st001Staff[0]?.name || "Ravi Patil", customerId: c5?._id, customerPhone: c5?.phone, status: "completed", startTime: now - 3 * DAY, endTime: now - 3 * DAY + 2400000, duration: "40m", sareesTriedOn: 4, sareesBrowsed: 10, purchased: true, occasion: "Party", budget: "₹50K+", rating: 4 },
+      // Fatima @ MAUVE (no purchase)
+      { sessionId: "SS-10008", storeId: "ST-001", storeName: "MAUVE Sarees", staffId: st001Staff[1]?._id, staffName: st001Staff[1]?.name || "Priya Sharma", customerId: c4?._id, customerPhone: c4?.phone, status: "completed", startTime: now - 60 * DAY, endTime: now - 60 * DAY + 1200000, duration: "20m", sareesTriedOn: 2, sareesBrowsed: 4, purchased: false, occasion: "Festival" },
+    ];
+
+    for (const s of sessions) {
+      await ctx.db.insert("sessions", s as any);
+    }
+
+    // ===================== LOOKS (virtual try-on results) =====================
+    const looks = [];
+    // Ananya's looks at MAUVE session 1
+    if (c1 && st001Sarees.length >= 3) {
+      looks.push(
+        { sessionId: "SS-10001", storeId: "ST-001", customerId: c1._id, customerPhone: c1.phone, sareeId: st001Sarees[0]._id, sareeName: st001Sarees[0].name, fabric: st001Sarees[0].fabric, price: st001Sarees[0].price, drapeStyle: "Nivi", isFav: true, isWished: false, grad: st001Sarees[0].grad || ["#8B0000", "#FFD700"], createdAt: now - 2 * DAY },
+        { sessionId: "SS-10001", storeId: "ST-001", customerId: c1._id, customerPhone: c1.phone, sareeId: st001Sarees[1]._id, sareeName: st001Sarees[1].name, fabric: st001Sarees[1].fabric, price: st001Sarees[1].price, drapeStyle: "Seedha Pallu", isFav: false, isWished: true, grad: st001Sarees[1].grad || ["#800000", "#C5A900"], createdAt: now - 2 * DAY + 300000 },
+        { sessionId: "SS-10001", storeId: "ST-001", customerId: c1._id, customerPhone: c1.phone, sareeId: st001Sarees[2]._id, sareeName: st001Sarees[2].name, fabric: st001Sarees[2].fabric, price: st001Sarees[2].price, drapeStyle: "Nivi", isFav: false, isWished: false, grad: st001Sarees[2].grad || ["#FFB6C1", "#FFFFFF"], createdAt: now - 2 * DAY + 600000 },
+      );
+    }
+    // Ananya session 2 looks
+    if (c1 && st001Sarees.length >= 6) {
+      looks.push(
+        { sessionId: "SS-10002", storeId: "ST-001", customerId: c1._id, customerPhone: c1.phone, sareeId: st001Sarees[4]._id, sareeName: st001Sarees[4].name, fabric: st001Sarees[4].fabric, price: st001Sarees[4].price, drapeStyle: "Bengali", isFav: true, isWished: false, grad: st001Sarees[4].grad || ["#E6E6FA", "#98FF98"], createdAt: now - 15 * DAY },
+        { sessionId: "SS-10002", storeId: "ST-001", customerId: c1._id, customerPhone: c1.phone, sareeId: st001Sarees[5]._id, sareeName: st001Sarees[5].name, fabric: st001Sarees[5].fabric, price: st001Sarees[5].price, drapeStyle: "Nivi", isFav: false, isWished: false, grad: st001Sarees[5].grad || ["#4169E1", "#F0F8FF"], createdAt: now - 15 * DAY + 300000 },
+      );
+    }
+    // Ananya @ Kanchi
+    if (c1 && st003Sarees.length >= 2) {
+      looks.push(
+        { sessionId: "SS-10003", storeId: "ST-003", customerId: c1._id, customerPhone: c1.phone, sareeId: st003Sarees[0]._id, sareeName: st003Sarees[0].name, fabric: st003Sarees[0].fabric, price: st003Sarees[0].price, drapeStyle: "Nivi", isFav: false, isWished: true, grad: st003Sarees[0].grad || ["#FF0000", "#006400"], createdAt: now - 30 * DAY },
+        { sessionId: "SS-10003", storeId: "ST-003", customerId: c1._id, customerPhone: c1.phone, sareeId: st003Sarees[1]._id, sareeName: st003Sarees[1].name, fabric: st003Sarees[1].fabric, price: st003Sarees[1].price, drapeStyle: "Seedha Pallu", isFav: false, isWished: false, grad: st003Sarees[1].grad || ["#008080", "#FFD700"], createdAt: now - 30 * DAY + 300000 },
+      );
+    }
+    // Deepika @ MAUVE
+    if (c2 && st001Sarees.length >= 8) {
+      looks.push(
+        { sessionId: "SS-10004", storeId: "ST-001", customerId: c2._id, customerPhone: c2.phone, sareeId: st001Sarees[7]._id, sareeName: st001Sarees[7].name, fabric: st001Sarees[7].fabric, price: st001Sarees[7].price, drapeStyle: "Nivi", isFav: true, isWished: false, grad: st001Sarees[7].grad || ["#FF007F", "#000000"], createdAt: now - 5 * DAY },
+        { sessionId: "SS-10004", storeId: "ST-001", customerId: c2._id, customerPhone: c2.phone, sareeId: st001Sarees[9]._id, sareeName: st001Sarees[9].name, fabric: st001Sarees[9].fabric, price: st001Sarees[9].price, drapeStyle: "Nivi", isFav: false, isWished: true, grad: st001Sarees[9].grad || ["#1C1C1C", "#C0C0C0"], createdAt: now - 5 * DAY + 300000 },
+      );
+    }
+    // Lakshmi @ Silk Heritage
+    if (c3 && st002Sarees.length >= 2) {
+      looks.push(
+        { sessionId: "SS-10005", storeId: "ST-002", customerId: c3._id, customerPhone: c3.phone, sareeId: st002Sarees[0]._id, sareeName: st002Sarees[0].name, fabric: st002Sarees[0].fabric, price: st002Sarees[0].price, drapeStyle: "Bengali", isFav: true, isWished: false, grad: st002Sarees[0].grad || ["#DC143C", "#FFD700"], createdAt: now - 8 * DAY },
+        { sessionId: "SS-10005", storeId: "ST-002", customerId: c3._id, customerPhone: c3.phone, sareeId: st002Sarees[1]._id, sareeName: st002Sarees[1].name, fabric: st002Sarees[1].fabric, price: st002Sarees[1].price, drapeStyle: "Nivi", isFav: false, isWished: false, grad: st002Sarees[1].grad || ["#FFFFF0", "#B87333"], createdAt: now - 8 * DAY + 300000 },
+      );
+    }
+    // Prerna @ MAUVE
+    if (c5 && st001Sarees.length >= 9) {
+      looks.push(
+        { sessionId: "SS-10007", storeId: "ST-001", customerId: c5._id, customerPhone: c5.phone, sareeId: st001Sarees[8]._id, sareeName: st001Sarees[8].name, fabric: st001Sarees[8].fabric, price: st001Sarees[8].price, drapeStyle: "Seedha Pallu", isFav: true, isWished: false, grad: st001Sarees[8].grad || ["#800080", "#FFD700"], createdAt: now - 3 * DAY },
+        { sessionId: "SS-10007", storeId: "ST-001", customerId: c5._id, customerPhone: c5.phone, sareeId: st001Sarees[0]._id, sareeName: st001Sarees[0].name, fabric: st001Sarees[0].fabric, price: st001Sarees[0].price, drapeStyle: "Nivi", isFav: false, isWished: true, grad: st001Sarees[0].grad || ["#8B0000", "#FFD700"], createdAt: now - 3 * DAY + 300000 },
+      );
+    }
+
+    for (const l of looks) {
+      await ctx.db.insert("looks", l as any);
+    }
+
+    // ===================== WISHLIST =====================
+    if (c1 && st001Sarees.length >= 2) {
+      await ctx.db.insert("wishlist", { customerId: c1._id, sareeId: st001Sarees[1]._id, storeId: "ST-001", sareeName: st001Sarees[1].name, price: st001Sarees[1].price, addedAt: now - 2 * DAY });
+    }
+    if (c1 && st003Sarees.length >= 1) {
+      await ctx.db.insert("wishlist", { customerId: c1._id, sareeId: st003Sarees[0]._id, storeId: "ST-003", sareeName: st003Sarees[0].name, price: st003Sarees[0].price, addedAt: now - 30 * DAY });
+    }
+    if (c2 && st001Sarees.length >= 10) {
+      await ctx.db.insert("wishlist", { customerId: c2._id, sareeId: st001Sarees[9]._id, storeId: "ST-001", sareeName: st001Sarees[9].name, price: st001Sarees[9].price, addedAt: now - 5 * DAY });
+    }
+    if (c5 && st001Sarees.length >= 1) {
+      await ctx.db.insert("wishlist", { customerId: c5._id, sareeId: st001Sarees[0]._id, storeId: "ST-001", sareeName: st001Sarees[0].name, price: st001Sarees[0].price, addedAt: now - 3 * DAY });
+    }
+
+    // ===================== VISIT HISTORY =====================
+    const visits = [];
+    if (c1) {
+      visits.push(
+        { customerId: c1._id, storeId: "ST-001", storeName: "MAUVE Sarees", sessionId: "SS-10001", date: "Apr 8, 2026", sareesTried: 3, purchased: true, staffName: "Ravi Patil", pointsEarned: 500 },
+        { customerId: c1._id, storeId: "ST-001", storeName: "MAUVE Sarees", sessionId: "SS-10002", date: "Mar 26, 2026", sareesTried: 4, purchased: true, staffName: "Priya Sharma", pointsEarned: 350 },
+        { customerId: c1._id, storeId: "ST-003", storeName: "Kanchi Collections", sessionId: "SS-10003", date: "Mar 11, 2026", sareesTried: 2, purchased: false, staffName: "Lakshmi Devi", pointsEarned: 50 },
+      );
+    }
+    if (c2) {
+      visits.push(
+        { customerId: c2._id, storeId: "ST-001", storeName: "MAUVE Sarees", sessionId: "SS-10004", date: "Apr 5, 2026", sareesTried: 2, purchased: true, staffName: "Amit Verma", pointsEarned: 200 },
+      );
+    }
+    if (c3) {
+      visits.push(
+        { customerId: c3._id, storeId: "ST-002", storeName: "Silk Heritage", sessionId: "SS-10005", date: "Apr 2, 2026", sareesTried: 5, purchased: true, staffName: "Sunita Reddy", pointsEarned: 800 },
+        { customerId: c3._id, storeId: "ST-003", storeName: "Kanchi Collections", sessionId: "SS-10006", date: "Mar 21, 2026", sareesTried: 3, purchased: true, staffName: "Arjun Nair", pointsEarned: 400 },
+      );
+    }
+    if (c5) {
+      visits.push(
+        { customerId: c5._id, storeId: "ST-001", storeName: "MAUVE Sarees", sessionId: "SS-10007", date: "Apr 7, 2026", sareesTried: 4, purchased: true, staffName: "Ravi Patil", pointsEarned: 600 },
+      );
+    }
+    for (const v of visits) {
+      await ctx.db.insert("visitHistory", v as any);
+    }
+
+    // ===================== LOYALTY TRANSACTIONS =====================
+    const loyaltyTx = [];
+    if (c1) {
+      loyaltyTx.push(
+        { customerId: c1._id, storeId: "ST-001", type: "earn", points: 500, reason: "purchase", date: "Apr 8, 2026" },
+        { customerId: c1._id, storeId: "ST-001", type: "earn", points: 350, reason: "purchase", date: "Mar 26, 2026" },
+        { customerId: c1._id, storeId: "ST-003", type: "earn", points: 50, reason: "visit", date: "Mar 11, 2026" },
+        { customerId: c1._id, storeId: "ST-001", type: "earn", points: 200, reason: "referral", date: "Mar 5, 2026" },
+        { customerId: c1._id, storeId: "ST-001", type: "redeem", points: -500, reason: "redemption", date: "Feb 20, 2026" },
+      );
+    }
+    if (c3) {
+      loyaltyTx.push(
+        { customerId: c3._id, storeId: "ST-002", type: "earn", points: 800, reason: "purchase", date: "Apr 2, 2026" },
+        { customerId: c3._id, storeId: "ST-003", type: "earn", points: 400, reason: "purchase", date: "Mar 21, 2026" },
+        { customerId: c3._id, type: "earn", points: 200, reason: "referral", date: "Mar 1, 2026" },
+      );
+    }
+    if (c5) {
+      loyaltyTx.push(
+        { customerId: c5._id, storeId: "ST-001", type: "earn", points: 600, reason: "purchase", date: "Apr 7, 2026" },
+        { customerId: c5._id, type: "earn", points: 1000, reason: "referral", date: "Mar 15, 2026" },
+        { customerId: c5._id, storeId: "ST-001", type: "redeem", points: -2000, reason: "redemption", date: "Feb 10, 2026" },
+      );
+    }
+    for (const tx of loyaltyTx) {
+      await ctx.db.insert("loyaltyTransactions", tx as any);
+    }
+
+    // ===================== CUSTOMER REFERRALS =====================
+    if (c1) {
+      await ctx.db.insert("customerReferrals", { referrerId: c1._id, referrerPhone: c1.phone, referredName: "Sunita Agarwal", referredPhone: "+919900099001", status: "Visited", reward: 500, date: "Mar 5, 2026" });
+      await ctx.db.insert("customerReferrals", { referrerId: c1._id, referrerPhone: c1.phone, referredName: "Kavya Mehta", status: "Pending", reward: 0, date: "Apr 1, 2026" });
+    }
+    if (c5) {
+      await ctx.db.insert("customerReferrals", { referrerId: c5._id, referrerPhone: c5.phone, referredName: "Ritu Sharma", referredPhone: "+919900099002", status: "Rewarded", reward: 500, date: "Mar 15, 2026" });
+      await ctx.db.insert("customerReferrals", { referrerId: c5._id, referrerPhone: c5.phone, referredName: "Neha Gupta", referredPhone: "+919900099003", status: "Visited", reward: 500, date: "Mar 28, 2026" });
+    }
+
+    // ===================== TAILOR REFERRALS =====================
+    const tl1 = tailorById("TL-001");
+    const tl2 = tailorById("TL-002");
+    const tl4 = tailorById("TL-004");
+
+    if (c1 && tl1) {
+      await ctx.db.insert("tailorReferrals", { tailorId: "TL-001", customerId: c1._id, customerName: c1.name, customerPhone: c1.phone, saree: "Royal Banarasi Silk", fabric: "Silk", storeId: "ST-001", storeName: "MAUVE Sarees", occasion: "Wedding", budget: "₹2000-3000", measurementsShared: true, status: "confirmed", date: "Apr 8, 2026", time: "3:30 PM" });
+    }
+    if (c2 && tl2) {
+      await ctx.db.insert("tailorReferrals", { tailorId: "TL-002", customerId: c2._id, customerName: c2.name, customerPhone: c2.phone, saree: "Chiffon Rose Garden", fabric: "Chiffon", storeId: "ST-001", storeName: "MAUVE Sarees", occasion: "Party", status: "new", date: "Apr 5, 2026" });
+    }
+    if (c3 && tl4) {
+      await ctx.db.insert("tailorReferrals", { tailorId: "TL-004", customerId: c3._id, customerName: c3.name, customerPhone: c3.phone, saree: "Pure Kanchipuram Bridal", fabric: "Silk", storeId: "ST-003", storeName: "Kanchi Collections", occasion: "Wedding", measurementsShared: true, status: "completed", date: "Mar 21, 2026" });
+    }
+
+    // ===================== TAILOR ORDERS =====================
+    if (c1) {
+      await ctx.db.insert("tailorOrders", { orderId: "TO-1001", tailorId: "TL-001", tailorName: "Manoj Darji", customerId: c1._id, customerName: c1.name, customerPhone: c1.phone, saree: "Royal Banarasi Silk", fabric: "Silk", storeId: "ST-001", service: "Silk Blouse Stitching", priceQuoted: 1800, depositPaid: 500, status: "stitching", dueDate: "Apr 15, 2026", orderDate: "Apr 8, 2026", note: "Deep V back, matching zari border, full sleeves", tailorWhatsapp: "+919800100001", bust: "36", waist: "30", shoulder: "14.5", armLength: "22", backLength: "15" });
+    }
+    if (c3) {
+      await ctx.db.insert("tailorOrders", { orderId: "TO-1002", tailorId: "TL-004", tailorName: "Geeta Bai", customerId: c3._id, customerName: c3.name, customerPhone: c3.phone, saree: "Pure Kanchipuram Bridal", fabric: "Silk", storeId: "ST-003", service: "Bridal Blouse", priceQuoted: 3500, depositPaid: 1000, status: "delivered", dueDate: "Apr 2, 2026", orderDate: "Mar 21, 2026", note: "Boat neck, elbow sleeves, temple border matching", tailorWhatsapp: "+919800100004", rating: 5, ratingComment: "Beautiful work!" });
+    }
+    if (c5) {
+      await ctx.db.insert("tailorOrders", { orderId: "TO-1003", tailorId: "TL-001", tailorName: "Manoj Darji", customerId: c5._id, customerName: c5.name, customerPhone: c5.phone, saree: "Paithani Heritage", fabric: "Silk", storeId: "ST-001", service: "Designer Embroidery", priceQuoted: 4500, status: "confirmed", dueDate: "Apr 20, 2026", orderDate: "Apr 7, 2026", note: "Halter neck with peacock motif", tailorWhatsapp: "+919800100001" });
+    }
+
+    // ===================== TAILOR COMMISSION =====================
+    await ctx.db.insert("tailorCommission", { tailorId: "TL-001", orderId: "TO-1001", amount: 180, type: "referral", status: "pending", date: "Apr 8, 2026", description: "Referral from MAUVE Sarees" });
+    await ctx.db.insert("tailorCommission", { tailorId: "TL-004", orderId: "TO-1002", amount: 350, type: "order", status: "paid", date: "Apr 2, 2026", description: "Bridal blouse completed" });
+    await ctx.db.insert("tailorCommission", { tailorId: "TL-001", amount: 2500, type: "payout", status: "paid", date: "Apr 1, 2026", description: "Monthly payout" });
+
+    // ===================== FEEDBACK =====================
+    if (c1) {
+      await ctx.db.insert("feedback", { customerId: c1._id, customerPhone: c1.phone, storeId: "ST-001", sessionId: "SS-10001", rating: 5, chips: ["Loved the experience", "Great saree collection", "Try-on was realistic"], comment: "Amazing experience! The virtual try-on was so realistic.", date: "Apr 8, 2026" });
+    }
+    if (c3) {
+      await ctx.db.insert("feedback", { customerId: c3._id, customerPhone: c3.phone, storeId: "ST-002", sessionId: "SS-10005", rating: 5, chips: ["Great saree collection", "Staff was helpful"], date: "Apr 2, 2026" });
+    }
+
+    // ===================== CAMPAIGNS =====================
+    await ctx.db.insert("campaigns", { storeId: "ST-001", name: "Gudi Padwa Festival Sale", template: "WA-003", channel: "whatsapp", segment: "All Customers", scheduledDate: "2026-04-12", status: "scheduled", sent: 0, delivered: 0, opened: 0, clicked: 0, revenue: 0, createdAt: "2026-04-05" });
+    await ctx.db.insert("campaigns", { storeId: "ST-001", name: "March New Arrivals", channel: "whatsapp", segment: "VIP", status: "completed", sent: 45, delivered: 42, opened: 38, clicked: 15, revenue: 85000, createdAt: "2026-03-01" });
+    await ctx.db.insert("campaigns", { storeId: "ST-003", name: "Bridal Collection Launch", template: "WA-003", channel: "whatsapp", segment: "All", status: "sent", sent: 120, delivered: 115, opened: 98, clicked: 42, revenue: 220000, createdAt: "2026-03-15" });
+
+    // ===================== AUDIT LOG =====================
+    await ctx.db.insert("auditLog", { timestamp: "10:15 AM", action: "Store ST-001 plan changed to Professional", user: "admin@wearify.com", category: "billing", details: "Upgraded from Smart to Professional" });
+    await ctx.db.insert("auditLog", { timestamp: "2:30 PM", action: "New tailor TL-001 verified", user: "admin@wearify.com", category: "tailor", details: "Manoj Darji - all KYC docs verified" });
+    await ctx.db.insert("auditLog", { timestamp: "9:00 AM", action: "Feature flag ai_try_on enabled", user: "admin@wearify.com", category: "feature", details: "Virtual try-on enabled globally" });
+
+    // ===================== ROLE EVENTS =====================
+    await ctx.db.insert("roleEvents", { eventId: "RE-001", userName: "Ravi Patil", fromRole: "R05", toRole: "R04", reason: "Promotion", approvedBy: "Smita Kabra", date: "Mar 1, 2026", approved: true });
+    await ctx.db.insert("roleEvents", { eventId: "RE-002", userName: "Karthik Iyer", fromRole: "R05", toRole: "R04", reason: "Manager vacancy", approvedBy: "Raj Kumar", date: "Feb 15, 2026", approved: true });
+
+    // ===================== CUSTOMER SEGMENTS =====================
+    await ctx.db.insert("customerSegments", { storeId: "ST-001", name: "VIP Shoppers", criteria: '{"minVisits":5,"minSpend":50000}', customerCount: 3, createdAt: "2026-03-01" });
+    await ctx.db.insert("customerSegments", { storeId: "ST-001", name: "Wedding Season", criteria: '{"occasion":"Wedding","budgetMin":20000}', customerCount: 8, createdAt: "2026-03-15" });
+    await ctx.db.insert("customerSegments", { storeId: "ST-003", name: "Silk Lovers", criteria: '{"fabric":"Silk"}', customerCount: 15, createdAt: "2026-02-01" });
+
+    return "Relational data seeded successfully";
   },
 });

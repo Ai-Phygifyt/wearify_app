@@ -551,3 +551,92 @@ export const updateNotifPrefs = mutation({
     }
   },
 });
+
+// ============================
+// Offers for customer's stores
+// ============================
+export const listOffersForCustomer = query({
+  args: { customerId: v.id("customers") },
+  handler: async (ctx, args) => {
+    const links = await ctx.db
+      .query("customerStoreLinks")
+      .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+      .take(20);
+    const storeIds = links.map((l) => l.storeId);
+    const allOffers = [];
+    for (const storeId of storeIds) {
+      const offers = await ctx.db
+        .query("offers")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+        .take(10);
+      allOffers.push(...offers);
+    }
+    return allOffers;
+  },
+});
+
+// ============================
+// New arrivals across customer's stores
+// ============================
+export const listNewArrivalsForCustomer = query({
+  args: { customerId: v.id("customers") },
+  handler: async (ctx, args) => {
+    const links = await ctx.db
+      .query("customerStoreLinks")
+      .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+      .take(20);
+    const storeIds = links.map((l) => l.storeId);
+    const result: Record<string, { storeId: string; storeName: string; sarees: unknown[] }> = {};
+    for (const storeId of storeIds) {
+      const sarees = await ctx.db
+        .query("sarees")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+        .order("desc")
+        .take(20);
+      const recent = sarees.filter(
+        (s) => s.status === "active" && (s.daysOld === undefined || s.daysOld <= 30)
+      );
+      if (recent.length > 0) {
+        const link = links.find((l) => l.storeId === storeId);
+        result[storeId] = {
+          storeId,
+          storeName: link?.storeName || storeId,
+          sarees: recent.slice(0, 6),
+        };
+      }
+    }
+    return result;
+  },
+});
+
+// ============================
+// Get enriched store links with store data
+// ============================
+export const listStoreLinksEnriched = query({
+  args: { customerId: v.id("customers") },
+  handler: async (ctx, args) => {
+    const links = await ctx.db
+      .query("customerStoreLinks")
+      .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+      .take(20);
+    const enriched = [];
+    for (const link of links) {
+      const store = await ctx.db
+        .query("stores")
+        .withIndex("by_storeId", (q) => q.eq("storeId", link.storeId))
+        .first();
+      enriched.push({
+        ...link,
+        storeName: store?.name || link.storeName || link.storeId,
+        storeCity: store?.city || "",
+        storeState: store?.state || "",
+        storeAddress: store?.address || "",
+        storeHours: store?.hours || "",
+        storeClosedOn: store?.closedOn || "",
+        storePhone: store?.ownerPhone || "",
+        storeWhatsapp: store?.whatsappNumber || "",
+      });
+    }
+    return enriched;
+  },
+});

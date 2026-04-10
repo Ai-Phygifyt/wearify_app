@@ -1,0 +1,197 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   WEARIFY CUSTOMER PWA — Heirloom Luxury Theme
+   Aesthetic: Regal Indian Femininity · Plum + Gold + Ivory
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Design Tokens ─────────────────────────────────────────────────── */
+:root {
+  --cx-plum: #2D1B4E;
+  --cx-plum-l: #4A2D6E;
+  --cx-plum-d: #1A0A2E;
+  --cx-plum-xd: #0D0418;
+  --cx-plum-ghost: #F4EFF9;
+
+  --cx-gold: #C9941A;
+  --cx-gold-l: #E8C46A;
+  --cx-gold-d: #8B6914;
+  --cx-gold-ghost: #FDF5E4;
+
+  --cx-rose: #C2848A;
+  --cx-rose-l: #F0D0D4;
+  --cx-rose-d: #8B4A52;
+
+  --cx-ivory: #FDF8F0;
+  --cx-blush: #FBF0F4;
+  --cx-cream: #F5EDE4;
+  --cx-linen: #EEE4D8;
+  --cx-white: #FFFFFF;
+
+  --cx-text: #1A0A1E;
+  --cx-text-mid: #4A3558;
+  --cx-text-muted: #8B7EA0;
+  --cx-text-ghost: #B8A8C8;
+  --cx-on-dark: #FDF8F0;
+
+  --cx-success: #1B5E20;
+  --cx-success-bg: #E8F5E9;
+  --cx-error: #B71C1C;
+  --cx-error-bg: #FFEBEE;
+  --cx-amber: #E65100;
+  --cx-amber-bg: #FFF3E0;
+
+  --cx-border: #E8D5E0;
+  --cx-border-gold: #DFC07A;
+  --cx-border-l: #F2E8EE;
+
+  --cx-shadow: 0 2px 14px rgba(45,27,78,.09);
+  --cx-shadow-md: 0 6px 24px rgba(45,27,78,.14);
+  --cx-shadow-lg: 0 16px 56px rgba(45,27,78,.22);
+  --cx-shadow-gold: 0 4px 20px rgba(201,148,26,.28);
+
+  --cx-r: 16px;
+  --cx-r-sm: 10px;
+  --cx-r-md: 12px;
+  --cx-r-lg: 24px;
+  --cx-r-pill: 100px;
+
+  --cx-grad-plum: linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%);
+  --cx-grad-gold: linear-gradient(135deg, #C9941A 0%, #E8C46A 55%, #C9941A 100%);
+  --cx-grad-hero: linear-gradient(155deg, #0D0418 0%, #1A0A2E 25%, #2D1B4E 55%, #6B1D52 80%, #C9941A 100%);
+}
+
+/* ── Fonts ──────────────────────────────────────────────────────────── */
+.cx-serif { font-family: "Cormorant Garamond", Georgia, serif !important; }
+.cx-mono { font-family: "DM Mono", "JetBrains Mono", monospace !important; }
+
+/* ── Animations ────────────────────────────────────────────────────── */
+@keyframes cx-fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes cx-slideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+@keyframes cx-slideDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes cx-scaleIn { from{opacity:0;transform:scale(.9)} to{opacity:1;transform:scale(1)} }
+@keyframes cx-pageIn { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+@keyframes cx-popIn { from{opacity:0;transform:scale(.55)} to{opacity:1;transform:scale(1)} }
+@keyframes cx-shimmerBg { 0%{background-position:-200% center} 100%{background-position:200% center} }
+@keyframes cx-shimmer { 0%{transform:translateX(-130%)rotate(18deg)} 100%{transform:translateX(260%)rotate(18deg)} }
+@keyframes cx-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+@keyframes cx-waveRing { 0%{transform:scale(1);opacity:.55} 100%{transform:scale(2.4);opacity:0} }
+@keyframes cx-heartBeat { 0%,100%{transform:scale(1)} 25%{transform:scale(1.4)} 50%{transform:scale(1.1)} }
+@keyframes cx-dotBlink { 0%,80%,100%{opacity:.2;transform:scale(.65)} 40%{opacity:1;transform:scale(1)} }
+@keyframes cx-barFill { from{width:0} to{width:var(--w)} }
+@keyframes cx-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+
+.cx-fadeIn { animation: cx-fadeIn .4s ease both; }
+.cx-slideUp { animation: cx-slideUp .52s cubic-bezier(.22,1,.36,1) both; }
+.cx-slideDown { animation: cx-slideDown .4s cubic-bezier(.22,1,.36,1) both; }
+.cx-pageIn { animation: cx-pageIn .45s cubic-bezier(.22,1,.36,1) both; }
+.cx-scaleIn { animation: cx-scaleIn .36s cubic-bezier(.22,1,.36,1) both; }
+.cx-popIn { animation: cx-popIn .3s cubic-bezier(.34,1.56,.64,1) both; }
+
+.cx-d1{animation-delay:.05s} .cx-d2{animation-delay:.10s} .cx-d3{animation-delay:.15s}
+.cx-d4{animation-delay:.20s} .cx-d5{animation-delay:.25s} .cx-d6{animation-delay:.30s}
+
+/* ── Press / Hover effects ─────────────────────────────────────────── */
+.cx-press:active { transform:scale(.94)!important; transition:transform .08s ease!important; }
+.cx-hover-lift { transition:transform .2s,box-shadow .2s; }
+.cx-hover-lift:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(45,27,78,.18)!important; }
+
+/* ── Silk shimmer overlay ──────────────────────────────────────────── */
+.cx-silk { position:relative; overflow:hidden; }
+.cx-silk::after {
+  content:''; position:absolute; top:0; left:-100%; width:55%; height:100%;
+  background:linear-gradient(105deg,transparent 20%,rgba(255,255,255,.15) 50%,transparent 80%);
+  animation:cx-shimmer 5.5s ease-in-out infinite; pointer-events:none;
+}
+
+/* ── Gold shimmer text ─────────────────────────────────────────────── */
+.cx-gold-shimmer {
+  background:linear-gradient(90deg,#C9941A 0%,#E8C46A 38%,#fff8d0 50%,#E8C46A 62%,#C9941A 100%);
+  background-size:200% auto;
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:cx-shimmerBg 3.5s linear infinite;
+}
+
+/* ── Zari divider ──────────────────────────────────────────────────── */
+.cx-zari {
+  height:1px;
+  background:linear-gradient(90deg,transparent 0%,rgba(201,148,26,.15) 15%,rgba(201,148,26,.62) 50%,rgba(201,148,26,.15) 85%,transparent 100%);
+}
+
+/* ── Paisley pattern ───────────────────────────────────────────────── */
+.cx-paisley {
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cellipse cx='36' cy='28' rx='9' ry='15' fill='none' stroke='%23C9941A' stroke-width='.55' stroke-opacity='.13'/%3E%3Ccircle cx='36' cy='19' r='2' fill='%23C9941A' fill-opacity='.10'/%3E%3Cpath d='M29 48 Q36 55 43 48' fill='none' stroke='%23C9941A' stroke-width='.45' stroke-opacity='.09'/%3E%3C/svg%3E");
+  background-size:72px 72px;
+}
+
+/* ── Noise texture ─────────────────────────────────────────────────── */
+.cx-noise::before {
+  content:''; position:absolute; inset:-50%; width:200%; height:200%;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  opacity:.025; pointer-events:none; z-index:0; border-radius:inherit;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────── */
+.cx-shell ::-webkit-scrollbar { width:2px; height:2px; }
+.cx-shell ::-webkit-scrollbar-thumb { background:rgba(201,148,26,.22); border-radius:4px; }
+.cx-no-scroll { -ms-overflow-style:none; scrollbar-width:none; }
+.cx-no-scroll::-webkit-scrollbar { display:none; }
+
+/* ── PWA Shell ─────────────────────────────────────────────────────── */
+.cx-shell {
+  width:100%; max-width:430px; min-height:100svh;
+  background:var(--cx-ivory);
+  position:relative; overflow:hidden;
+  display:flex; flex-direction:column;
+  margin:0 auto;
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.cx-shell .cx-screen { flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; }
+
+/* ── Bottom Nav ────────────────────────────────────────────────────── */
+.cx-bottomnav {
+  position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+  width:100%; max-width:430px;
+  background:var(--cx-white);
+  border-top:1px solid var(--cx-border-l);
+  display:flex; justify-content:space-around; align-items:center;
+  padding:6px 0 env(safe-area-inset-bottom,8px);
+  z-index:50;
+}
+.cx-navitem {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:6px 10px; font-size:10px; font-weight:600;
+  color:var(--cx-text-muted); text-decoration:none;
+  transition:color .15s; cursor:pointer;
+  background:none; border:none;
+}
+.cx-navitem.active { color:var(--cx-plum); }
+.cx-navitem .cx-nav-indicator {
+  width:4px; height:4px; border-radius:50%;
+  background:var(--cx-gold); opacity:0;
+  transition:opacity .15s; margin-top:1px;
+}
+.cx-navitem.active .cx-nav-indicator { opacity:1; }
+
+/* ── Loading dots ──────────────────────────────────────────────────── */
+.cx-typing span {
+  display:inline-block; width:7px; height:7px; border-radius:50%;
+  background:var(--cx-gold); margin:0 2px;
+  animation:cx-dotBlink 1.2s ease infinite;
+}
+.cx-typing span:nth-child(2){animation-delay:.2s}
+.cx-typing span:nth-child(3){animation-delay:.4s}
+
+/* ── Star rating ───────────────────────────────────────────────────── */
+.cx-star { font-size:28px; cursor:pointer; transition:transform .15s; user-select:none; }
+.cx-star:hover { transform:scale(1.2); }
+
+/* ── Toggle ────────────────────────────────────────────────────────── */
+.cx-toggle-track {
+  width:46px; height:26px; border-radius:13px;
+  position:relative; transition:background .2s; cursor:pointer;
+}
+.cx-toggle-thumb {
+  position:absolute; top:3px; width:20px; height:20px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.22); transition:left .2s;
+}

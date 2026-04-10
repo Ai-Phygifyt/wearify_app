@@ -153,6 +153,16 @@ export default function KioskPage() {
   // Idle slideshow
   const [slideshowIndex, setSlideshowIndex] = useState(0);
 
+  // UI extras
+  const [showLangDropdown, setShowLangDropdown] = useState(false);
+  const [authStep, setAuthStep] = useState<"consent" | "phone" | "otp">("consent");
+  const [tryOnTab, setTryOnTab] = useState<"STYLE" | "ACCESSORIES">("STYLE");
+  const [showEndSessionModal, setShowEndSessionModal] = useState(false);
+  const [wardrobeLookTab, setWardrobeLookTab] = useState<"Blouse" | "Jewelry" | "Saree">("Blouse");
+  const [orderQuantities, setOrderQuantities] = useState<Record<number, number>>({});
+  const [feedbackText, setFeedbackText] = useState("");
+  const [showTailorSortDropdown, setShowTailorSortDropdown] = useState(false);
+
   // ---------------------------------------------------------------------------
   // Load config
   // ---------------------------------------------------------------------------
@@ -262,6 +272,17 @@ export default function KioskPage() {
     return () => clearInterval(interval);
   }, [currentScreen, tryOnTimer]);
 
+  // Try-on end session warning at 5s
+  useEffect(() => {
+    if (currentScreen === "TRY_ON" && tryOnTimer === 5) {
+      setShowEndSessionModal(true);
+    }
+    if (currentScreen === "TRY_ON" && tryOnTimer <= 0) {
+      setShowEndSessionModal(false);
+      goToScreen("WARDROBE");
+    }
+  }, [currentScreen, tryOnTimer]);
+
   // Order expiry timer
   useEffect(() => {
     if (currentScreen !== "ORDER" || orderExpiry <= 0) return;
@@ -337,6 +358,14 @@ export default function KioskPage() {
     setFeedbackChips([]);
     setShowThankYou(false);
     setEndTimer(10);
+    setAuthStep("consent");
+    setTryOnTab("STYLE");
+    setShowEndSessionModal(false);
+    setWardrobeLookTab("Blouse");
+    setOrderQuantities({});
+    setFeedbackText("");
+    setShowLangDropdown(false);
+    setShowTailorSortDropdown(false);
   }, []);
 
   const goToScreen = useCallback((screen: Screen) => {
@@ -467,11 +496,11 @@ export default function KioskPage() {
 
   const handleCreateOrder = async () => {
     if (!config || wardrobeItems.length === 0) return;
-    const items = wardrobeItems.map((w) => ({
+    const items = wardrobeItems.map((w, idx) => ({
       sareeId: w.sareeId,
       name: w.name,
       price: w.price,
-      quantity: 1,
+      quantity: orderQuantities[idx] || 1,
     }));
     try {
       const oid = await createOrder({
@@ -531,57 +560,65 @@ export default function KioskPage() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const fmt = (n: number) => "\u20B9" + Number(n).toLocaleString("en-IN");
+
   const computeGST = (price: number) => (price < 1000 ? price * 0.05 : price * 0.12);
 
-  const orderSubtotal = wardrobeItems.reduce((sum, w) => sum + w.price, 0);
-  const orderGST = wardrobeItems.reduce((sum, w) => sum + computeGST(w.price), 0);
+  const orderSubtotal = wardrobeItems.reduce((sum, w, idx) => sum + w.price * (orderQuantities[idx] || 1), 0);
+  const orderGST = wardrobeItems.reduce((sum, w, idx) => sum + computeGST(w.price) * (orderQuantities[idx] || 1), 0);
   const orderTotal = Math.round((orderSubtotal + orderGST) * 100) / 100;
 
   if (!config) return null;
 
   // ---------------------------------------------------------------------------
-  // NumPad component
+  // Reusable sub-components
   // ---------------------------------------------------------------------------
+
+  /** NumPad with kiosk theme */
   const NumPad = ({ onKey }: { onKey: (d: string) => void }) => (
-    <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
-      {["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "del"].map(
-        (key) => (
-          <button
-            key={key}
-            onClick={() => onKey(key)}
-            className={`h-16 rounded-2xl text-2xl font-bold cursor-pointer transition-all active:scale-95 ${
-              key === "clear"
-                ? "bg-wf-red/20 text-wf-red"
-                : key === "del"
-                  ? "bg-wf-amber/20 text-wf-amber"
-                  : "bg-wf-card border border-wf-border text-wf-text hover:bg-wf-primary/10"
-            }`}
-          >
-            {key === "del" ? "\u232B" : key === "clear" ? "C" : key}
-          </button>
-        )
+    <div className="k-numpad" style={{ maxWidth: 340, margin: "0 auto" }}>
+      {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"].map(
+        (key) =>
+          key === "" ? (
+            <div key="empty" />
+          ) : (
+            <button
+              key={key}
+              onClick={() => onKey(key)}
+              className={key === "del" ? "k-num-back" : ""}
+            >
+              {key === "del" ? "\u232B" : key}
+            </button>
+          )
       )}
     </div>
   );
 
-  // ---------------------------------------------------------------------------
-  // Gradient placeholder
-  // ---------------------------------------------------------------------------
+  /** Gradient placeholder box */
   const GradientBox = ({
     grad,
+    style: extraStyle,
     className = "",
     children,
   }: {
     grad?: string[];
+    style?: React.CSSProperties;
     className?: string;
     children?: React.ReactNode;
   }) => {
     const g = grad || GRADIENT_PRESETS[0];
     return (
       <div
-        className={`rounded-2xl flex items-center justify-center ${className}`}
+        className={`k-silk ${className}`}
         style={{
           background: `linear-gradient(135deg, ${g[0]}, ${g[1] || g[0]})`,
+          borderRadius: "var(--k-r)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          overflow: "hidden",
+          ...extraStyle,
         }}
       >
         {children}
@@ -589,17 +626,152 @@ export default function KioskPage() {
     );
   };
 
-  // ---------------------------------------------------------------------------
-  // Back button
-  // ---------------------------------------------------------------------------
-  const BackButton = ({ to, label }: { to: Screen; label?: string }) => (
-    <button
-      onClick={() => goToScreen(to)}
-      className="flex items-center gap-2 text-wf-subtext text-lg font-medium cursor-pointer hover:text-wf-text transition-colors"
+  /** Top bar used on most screens */
+  const TopBar = ({ onLogout }: { onLogout?: () => void }) => (
+    <div className="k-topbar">
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="k-topbar-logo">PF</div>
+        <span className="k-brand" style={{ fontSize: 18, color: "var(--k-text)" }}>
+          {config.storeName}
+        </span>
+      </div>
+      {onLogout && (
+        <button
+          onClick={onLogout}
+          className="k-press"
+          style={{
+            background: "none",
+            border: "none",
+            fontSize: 20,
+            cursor: "pointer",
+            color: "var(--k-text-muted)",
+            padding: "6px 10px",
+          }}
+          title="Log out"
+        >
+          ⏻
+        </button>
+      )}
+    </div>
+  );
+
+  /** Sub-header with back + home */
+  const SubHeader = ({ onBack, onHome }: { onBack?: () => void; onHome?: () => void }) => (
+    <div className="k-subheader" style={{ gap: 12 }}>
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="k-press"
+          style={{
+            background: "none",
+            border: "none",
+            fontSize: 20,
+            cursor: "pointer",
+            color: "var(--k-text)",
+            padding: "4px 8px",
+          }}
+        >
+          ←
+        </button>
+      )}
+      {onHome && (
+        <button
+          onClick={onHome}
+          className="k-press"
+          style={{
+            background: "none",
+            border: "none",
+            fontSize: 18,
+            cursor: "pointer",
+            color: "var(--k-text-muted)",
+            padding: "4px 8px",
+          }}
+        >
+          ⌂
+        </button>
+      )}
+    </div>
+  );
+
+  /** Horizontal scroll section with optional arrows */
+  const HScrollSection = ({
+    title,
+    children,
+  }: {
+    title: string;
+    children: React.ReactNode;
+  }) => {
+    const scrollRef = React.useRef<HTMLDivElement>(null);
+    const scroll = (dir: number) => {
+      scrollRef.current?.scrollBy({ left: dir * 220, behavior: "smooth" });
+    };
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", marginBottom: 10 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 700, color: "var(--k-text)", margin: 0 }}>{title}</h3>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => scroll(-1)} className="k-press" style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--k-text)" }}>←</button>
+            <button onClick={() => scroll(1)} className="k-press" style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--k-text)" }}>→</button>
+          </div>
+        </div>
+        <div
+          ref={scrollRef}
+          className="k-no-scroll"
+          style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 18px" }}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  };
+
+  /** Small product card for carousels */
+  const ProductCard = ({
+    saree,
+    onClick,
+  }: {
+    saree: { _id: Id<"sarees">; name: string; fabric?: string; price: number; grad?: string[]; tag?: string; colors?: string[] };
+    onClick: () => void;
+  }) => (
+    <div
+      className="k-product-card k-press"
+      onClick={onClick}
+      style={{ minWidth: 160, maxWidth: 160, cursor: "pointer", flexShrink: 0 }}
     >
-      <span className="text-2xl">&larr;</span>
-      {label || "Back"}
-    </button>
+      <div style={{ position: "relative" }}>
+        <GradientBox
+          grad={saree.grad || GRADIENT_PRESETS[Math.floor(Math.random() * GRADIENT_PRESETS.length)]}
+          style={{ width: "100%", height: 140, borderRadius: "var(--k-r) var(--k-r) 0 0" }}
+        >
+          {saree.tag && (
+            <span style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,.5)", color: "#fff", fontSize: 10, padding: "2px 8px", borderRadius: 100 }}>
+              {saree.tag}
+            </span>
+          )}
+        </GradientBox>
+        <div className="k-heart" style={{ top: 8, right: 8 }}>
+          <span style={{ fontSize: 14, color: "var(--k-text-muted)" }}>♡</span>
+        </div>
+      </div>
+      <div style={{ padding: "10px 12px" }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--k-text)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {saree.name}
+        </p>
+        {saree.fabric && (
+          <p style={{ fontSize: 11, color: "var(--k-text-muted)", margin: "2px 0 0" }}>{saree.fabric}</p>
+        )}
+        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--k-maroon)", margin: "4px 0 0" }}>
+          {fmt(saree.price)}
+        </p>
+        {saree.colors && saree.colors.length > 0 && (
+          <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+            {saree.colors.slice(0, 4).map((c, i) => (
+              <div key={i} className="k-swatch" style={{ width: 14, height: 14, backgroundColor: c }} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 
   // =========================================================================
@@ -608,90 +780,192 @@ export default function KioskPage() {
   if (currentScreen === "IDLE") {
     return (
       <div
-        className="w-full h-full flex flex-col items-center justify-center cursor-pointer relative overflow-hidden"
-        onClick={() => goToScreen("LANG")}
+        style={{
+          position: "relative",
+          width: "100%",
+          flex: 1,
+          overflow: "hidden",
+          cursor: "pointer",
+        }}
+        onClick={() => goToScreen("HOME")}
       >
-        {/* Animated gradient background */}
+        {/* Background gradient slideshow */}
         <div
-          className="absolute inset-0 transition-all duration-[2000ms] ease-in-out"
           style={{
-            background: `linear-gradient(135deg, ${GRADIENT_PRESETS[slideshowIndex][0]}20, ${GRADIENT_PRESETS[slideshowIndex][1]}30, #000)`,
+            position: "absolute",
+            inset: 0,
+            background: `linear-gradient(135deg, ${GRADIENT_PRESETS[slideshowIndex][0]}40, ${GRADIENT_PRESETS[slideshowIndex][1]}50, var(--k-bg))`,
+            transition: "background 2s ease-in-out",
           }}
         />
+        {/* Beige overlay */}
+        <div className="k-idle-bg" />
 
-        {/* Content */}
-        <div className="relative z-10 text-center space-y-8">
-          {/* Logo area */}
-          <div className="mb-4">
-            <h1 className="text-7xl font-extrabold tracking-tight bg-gradient-to-r from-wf-primary to-wf-amber bg-clip-text text-transparent">
-              Wearify
-            </h1>
-            <p className="text-wf-subtext text-xl mt-2">
-              Virtual Try-On Experience
+        {/* Top bar: store name left, lang selector right */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "24px 28px 0",
+          }}
+        >
+          <span
+            className="k-brand"
+            style={{ fontSize: 22, color: "var(--k-text)" }}
+          >
+            {config.storeName}
+          </span>
+
+          {/* Language selector */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLangDropdown((v) => !v);
+              }}
+              className="k-press"
+              style={{
+                background: "var(--k-card)",
+                border: "1px solid var(--k-border)",
+                borderRadius: "var(--k-r-pill)",
+                padding: "6px 16px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                color: "var(--k-text)",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              {LANGUAGES.find((l) => l.code === language)?.name || "Eng"}{" "}
+              <span style={{ fontSize: 10 }}>⌄</span>
+            </button>
+            {showLangDropdown && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="k-scaleIn"
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  marginTop: 4,
+                  background: "var(--k-card)",
+                  border: "1px solid var(--k-border)",
+                  borderRadius: "var(--k-r)",
+                  boxShadow: "var(--k-shadow-md)",
+                  padding: 6,
+                  zIndex: 50,
+                  width: 160,
+                }}
+              >
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLanguage(lang.code);
+                      setShowLangDropdown(false);
+                    }}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "8px 12px",
+                      border: "none",
+                      background: language === lang.code ? "var(--k-maroon)" : "transparent",
+                      color: language === lang.code ? "#fff" : "var(--k-text)",
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {lang.native} <span style={{ color: language === lang.code ? "rgba(255,255,255,.6)" : "var(--k-text-muted)", fontSize: 11 }}>({lang.name})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Centered content */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "calc(100% - 60px)",
+            textAlign: "center",
+            padding: "0 24px",
+          }}
+        >
+          {/* Touch to Start pill */}
+          <div
+            className="k-press k-slideUp"
+            style={{
+              background: "var(--k-maroon)",
+              color: "#fff",
+              borderRadius: "var(--k-r-pill)",
+              padding: "20px 56px",
+              fontSize: 22,
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              boxShadow: "var(--k-shadow-lg)",
+              marginBottom: 48,
+            }}
+          >
+            <span style={{ fontSize: 28 }}>👆</span>
+            Touch to Start
+          </div>
+
+          {/* Bottom text */}
+          <div className="k-slideUp k-d3">
+            <p
+              className="k-brand"
+              style={{
+                fontSize: 28,
+                color: "var(--k-text)",
+                textTransform: "uppercase",
+                letterSpacing: 2,
+                margin: "0 0 8px",
+                fontStyle: "normal",
+                fontWeight: 600,
+              }}
+            >
+              See Yourself In This Beautiful Saree
+            </p>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--k-text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: 1.5,
+                margin: 0,
+              }}
+            >
+              Experience Our Curated Collection With Virtual Try-On
             </p>
           </div>
-
-          {/* Store name */}
-          <div className="text-wf-muted text-lg">
-            {config.storeName}
-          </div>
-
-          {/* Gradient showcase cards */}
-          <div className="flex gap-4 justify-center mt-8">
-            {GRADIENT_PRESETS.map((g, i) => (
-              <div
-                key={i}
-                className={`w-20 h-28 rounded-xl transition-all duration-1000 ${
-                  i === slideshowIndex ? "scale-110 shadow-2xl" : "opacity-50 scale-95"
-                }`}
-                style={{
-                  background: `linear-gradient(135deg, ${g[0]}, ${g[1]})`,
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Touch to begin */}
-          <p className="text-2xl text-wf-primary font-semibold animate-pulse mt-12">
-            Touch to Begin
-          </p>
         </div>
       </div>
     );
   }
 
   // =========================================================================
-  // SCREEN: LANG
+  // SCREEN: LANG (merged into IDLE - redirect to AUTH)
   // =========================================================================
   if (currentScreen === "LANG") {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-8">
-        <h2 className="text-4xl font-bold text-wf-text mb-2">
-          Choose Your Language
-        </h2>
-        <p className="text-wf-subtext text-lg mb-10">
-          Select your preferred language
-        </p>
-
-        <div className="grid grid-cols-3 gap-5 max-w-2xl w-full">
-          {LANGUAGES.map((lang) => (
-            <button
-              key={lang.code}
-              onClick={() => {
-                setLanguage(lang.code);
-                goToScreen("AUTH");
-              }}
-              className="h-24 rounded-2xl bg-wf-card border-2 border-wf-border hover:border-wf-primary text-center cursor-pointer transition-all active:scale-95 flex flex-col items-center justify-center gap-1"
-            >
-              <span className="text-2xl font-bold text-wf-text">
-                {lang.native}
-              </span>
-              <span className="text-sm text-wf-subtext">{lang.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+    goToScreen("AUTH");
+    return null;
   }
 
   // =========================================================================
@@ -699,378 +973,445 @@ export default function KioskPage() {
   // =========================================================================
   if (currentScreen === "AUTH") {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-md mx-auto">
-          <h2 className="text-3xl font-bold text-wf-text text-center mb-1">
-            Welcome to {config.storeName}
-          </h2>
-          <p className="text-wf-subtext text-lg text-center mb-8">
-            {otpSent
-              ? "Enter the OTP sent to your phone"
-              : authMode === "phone"
-                ? "Enter your phone number to continue"
-                : "Enter the store code to continue as guest"}
-          </p>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        <TopBar onLogout={() => goToScreen("IDLE")} />
+        <SubHeader onBack={() => goToScreen("IDLE")} onHome={() => goToScreen("IDLE")} />
 
-          {/* Mode toggle */}
-          {!otpSent && (
-            <div className="flex gap-2 mb-6 justify-center">
-              <button
-                onClick={() => {
-                  setAuthMode("phone");
-                  setAuthError("");
-                }}
-                className={`px-6 py-3 rounded-xl text-base font-semibold cursor-pointer transition-all ${
-                  authMode === "phone"
-                    ? "bg-wf-primary text-white"
-                    : "bg-wf-card text-wf-subtext border border-wf-border"
-                }`}
-              >
-                Phone Number
-              </button>
-              <button
-                onClick={() => {
-                  setAuthMode("code");
-                  setAuthError("");
-                }}
-                className={`px-6 py-3 rounded-xl text-base font-semibold cursor-pointer transition-all ${
-                  authMode === "code"
-                    ? "bg-wf-primary text-white"
-                    : "bg-wf-card text-wf-subtext border border-wf-border"
-                }`}
-              >
-                Store Code
-              </button>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "auto" }}>
+          {/* Step 1: Consent modal */}
+          {authStep === "consent" && (
+            <div className="k-overlay k-fadeIn">
+              <div className="k-modal k-scaleIn">
+                <div style={{ fontSize: 42, marginBottom: 16 }}>👗</div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>
+                  Start your try-on
+                </h2>
+                <p style={{ fontSize: 14, color: "var(--k-text-mid)", lineHeight: 1.5, margin: "0 0 24px" }}>
+                  We need your phone number for verification and updates. Your data is safe and never shared.
+                </p>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => goToScreen("IDLE")}
+                    className="k-press"
+                    style={{
+                      flex: 1,
+                      padding: "14px 0",
+                      borderRadius: "var(--k-r)",
+                      border: "1.5px solid var(--k-border)",
+                      background: "var(--k-card)",
+                      fontSize: 15,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      color: "var(--k-text)",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setAuthStep("phone")}
+                    className="k-press"
+                    style={{
+                      flex: 1,
+                      padding: "14px 0",
+                      borderRadius: "var(--k-r)",
+                      border: "none",
+                      background: "var(--k-maroon)",
+                      color: "#fff",
+                      fontSize: 15,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Allow
+                  </button>
+                </div>
+
+                {/* Guest mode link */}
+                <button
+                  onClick={() => {
+                    setAuthMode("code");
+                    setAuthStep("phone");
+                  }}
+                  style={{
+                    marginTop: 16,
+                    background: "none",
+                    border: "none",
+                    color: "var(--k-text-muted)",
+                    fontSize: 13,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Continue with store code instead
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Phone mode */}
-          {authMode === "phone" && !otpSent && (
-            <>
-              {/* Phone display */}
-              <div className="bg-wf-card border-2 border-wf-border rounded-2xl px-6 py-5 mb-6 text-center">
-                <span className="text-wf-subtext text-xl mr-2">+91</span>
-                <span className="text-3xl font-bold text-wf-text tracking-widest font-mono">
-                  {phoneDigits || "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
-                </span>
-              </div>
+          {/* Step 2: Phone entry */}
+          {authStep === "phone" && authMode === "phone" && (
+            <div className="k-fadeIn" style={{ flex: 1, display: "flex", flexDirection: "column", padding: "24px 18px 0" }}>
+              <div style={{ flex: 1 }}>
+                <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px" }}>Hello!</h2>
+                <p style={{ fontSize: 15, color: "var(--k-text-mid)", margin: "0 0 24px" }}>Enter your mobile number</p>
 
-              <NumPad onKey={handlePhoneKeyPress} />
-
-              {authError && (
-                <p className="text-wf-red text-sm text-center mt-4 font-medium">
-                  {authError}
-                </p>
-              )}
-
-              <button
-                onClick={() => {
-                  if (phoneDigits.length === 10) setShowConfirmPhone(true);
-                  else setAuthError("Please enter a valid 10-digit number");
-                }}
-                disabled={phoneDigits.length !== 10}
-                className="w-full mt-6 py-4 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-wf-primary/90 transition-colors"
-              >
-                Continue
-              </button>
-
-              {/* Confirm phone modal */}
-              {showConfirmPhone && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-                  <div className="bg-wf-bg rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
-                    <h3 className="text-2xl font-bold text-wf-text mb-2 text-center">
-                      Confirm Your Number
-                    </h3>
-                    <p className="text-3xl font-bold text-wf-primary text-center font-mono my-6">
-                      +91 {phoneDigits}
-                    </p>
-                    <p className="text-wf-subtext text-center text-base mb-6">
-                      We will send an OTP to this number
-                    </p>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setShowConfirmPhone(false)}
-                        className="flex-1 py-4 bg-wf-card border border-wf-border rounded-2xl text-lg font-semibold cursor-pointer text-wf-text"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={handleSendOtp}
-                        className="flex-1 py-4 bg-wf-primary text-white rounded-2xl text-lg font-semibold cursor-pointer"
-                      >
-                        Send OTP
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* OTP mode */}
-          {authMode === "phone" && otpSent && (
-            <>
-              <div className="bg-wf-card border-2 border-wf-border rounded-2xl px-6 py-5 mb-4 text-center">
-                <div className="flex justify-center gap-3">
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className={`w-14 h-16 rounded-xl border-2 flex items-center justify-center text-3xl font-bold font-mono ${
-                        otpDigits[i]
-                          ? "border-wf-primary text-wf-text bg-wf-primary/5"
-                          : "border-wf-border text-wf-muted"
-                      }`}
-                    >
-                      {otpDigits[i] || "\u2022"}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="text-center mb-4">
-                {otpTimer > 0 ? (
-                  <span className="text-wf-subtext text-sm">
-                    Resend OTP in {otpTimer}s
+                {/* Phone input */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    background: "var(--k-card)",
+                    border: "1.5px solid var(--k-border)",
+                    borderRadius: "var(--k-r)",
+                    padding: "14px 16px",
+                    marginBottom: 16,
+                  }}
+                >
+                  <span style={{ fontSize: 20 }}>📞</span>
+                  <span style={{ fontSize: 16, color: "var(--k-text-muted)", fontWeight: 600 }}>+91</span>
+                  <span style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", letterSpacing: 3, fontFamily: "'DM Mono', monospace", flex: 1 }}>
+                    {phoneDigits || "••••••••••"}
                   </span>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setOtpTimer(60);
-                      setOtpDigits("");
-                    }}
-                    className="text-wf-primary text-sm font-semibold cursor-pointer"
-                  >
-                    Resend OTP
-                  </button>
+                </div>
+
+                {authError && (
+                  <p style={{ color: "var(--k-red)", fontSize: 13, fontWeight: 500, textAlign: "center", margin: "0 0 10px" }}>
+                    {authError}
+                  </p>
                 )}
+
+                {/* Enter button */}
+                <button
+                  onClick={() => {
+                    if (phoneDigits.length === 10) {
+                      handleSendOtp();
+                      setAuthStep("otp");
+                    } else {
+                      setAuthError("Please enter a valid 10-digit number");
+                    }
+                  }}
+                  className="k-press"
+                  style={{
+                    width: "100%",
+                    padding: "16px 0",
+                    borderRadius: "var(--k-r)",
+                    border: "none",
+                    background: phoneDigits.length === 10 ? "var(--k-maroon)" : "var(--k-border)",
+                    color: phoneDigits.length === 10 ? "#fff" : "var(--k-text-muted)",
+                    fontSize: 17,
+                    fontWeight: 700,
+                    cursor: phoneDigits.length === 10 ? "pointer" : "default",
+                    marginBottom: 16,
+                  }}
+                >
+                  Enter
+                </button>
               </div>
 
-              <NumPad onKey={handleOtpKeyPress} />
-
-              {authError && (
-                <p className="text-wf-red text-sm text-center mt-4 font-medium">
-                  {authError}
-                </p>
-              )}
-
-              <button
-                onClick={handleVerifyOtp}
-                disabled={otpDigits.length !== 6}
-                className="w-full mt-6 py-4 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-wf-primary/90 transition-colors"
-              >
-                Verify OTP
-              </button>
-
-              <button
-                onClick={() => {
-                  setOtpSent(false);
-                  setOtpDigits("");
-                  setAuthError("");
-                }}
-                className="w-full mt-3 py-3 text-wf-subtext text-base font-medium cursor-pointer"
-              >
-                Change Number
-              </button>
-            </>
+              {/* Numpad */}
+              <NumPad onKey={handlePhoneKeyPress} />
+              <div style={{ height: 12 }} />
+            </div>
           )}
 
-          {/* Store code mode */}
-          {authMode === "code" && (
-            <>
-              <div className="bg-wf-card border-2 border-wf-border rounded-2xl px-6 py-5 mb-6 text-center">
-                <div className="flex justify-center gap-3">
+          {/* Step 2b: Store code entry */}
+          {authStep === "phone" && authMode === "code" && (
+            <div className="k-fadeIn" style={{ flex: 1, display: "flex", flexDirection: "column", padding: "24px 18px 0" }}>
+              <div style={{ flex: 1 }}>
+                <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px" }}>Guest Access</h2>
+                <p style={{ fontSize: 15, color: "var(--k-text-mid)", margin: "0 0 24px" }}>Enter the store code</p>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: 10,
+                    marginBottom: 20,
+                  }}
+                >
                   {[0, 1, 2, 3, 4, 5].map((i) => (
                     <div
                       key={i}
-                      className={`w-14 h-16 rounded-xl border-2 flex items-center justify-center text-3xl font-bold font-mono ${
-                        storeCode[i]
-                          ? "border-wf-primary text-wf-text bg-wf-primary/5"
-                          : "border-wf-border text-wf-muted"
-                      }`}
+                      style={{
+                        width: 48,
+                        height: 56,
+                        borderRadius: "var(--k-r-sm)",
+                        border: `2px solid ${storeCode[i] ? "var(--k-maroon)" : "var(--k-border)"}`,
+                        background: storeCode[i] ? "rgba(107,26,26,.05)" : "var(--k-card)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 24,
+                        fontWeight: 700,
+                        color: "var(--k-text)",
+                        fontFamily: "'DM Mono', monospace",
+                      }}
                     >
-                      {storeCode[i] || "\u2022"}
+                      {storeCode[i] || "•"}
                     </div>
                   ))}
                 </div>
+
+                {authError && (
+                  <p style={{ color: "var(--k-red)", fontSize: 13, fontWeight: 500, textAlign: "center", margin: "0 0 10px" }}>
+                    {authError}
+                  </p>
+                )}
+
+                <button
+                  onClick={handleStoreCodeLogin}
+                  className="k-press"
+                  style={{
+                    width: "100%",
+                    padding: "16px 0",
+                    borderRadius: "var(--k-r)",
+                    border: "none",
+                    background: storeCode.length === 6 ? "var(--k-maroon)" : "var(--k-border)",
+                    color: storeCode.length === 6 ? "#fff" : "var(--k-text-muted)",
+                    fontSize: 17,
+                    fontWeight: 700,
+                    cursor: storeCode.length === 6 ? "pointer" : "default",
+                    marginBottom: 16,
+                  }}
+                >
+                  Enter as Guest
+                </button>
+
+                <button
+                  onClick={() => { setAuthMode("phone"); setAuthError(""); }}
+                  style={{ background: "none", border: "none", color: "var(--k-text-muted)", fontSize: 13, cursor: "pointer", textDecoration: "underline", display: "block", margin: "0 auto" }}
+                >
+                  Use phone number instead
+                </button>
               </div>
-
               <NumPad onKey={handleStoreCodeKeyPress} />
-
-              {authError && (
-                <p className="text-wf-red text-sm text-center mt-4 font-medium">
-                  {authError}
-                </p>
-              )}
-
-              <button
-                onClick={handleStoreCodeLogin}
-                disabled={storeCode.length !== 6}
-                className="w-full mt-6 py-4 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-wf-primary/90 transition-colors"
-              >
-                Enter as Guest
-              </button>
-            </>
+              <div style={{ height: 12 }} />
+            </div>
           )}
 
-          {/* Back to language */}
-          <button
-            onClick={() => {
-              goToScreen("LANG");
-              setPhoneDigits("");
-              setOtpSent(false);
-              setOtpDigits("");
-              setStoreCode("");
-              setAuthError("");
-            }}
-            className="w-full mt-4 py-3 text-wf-muted text-sm cursor-pointer"
-          >
-            &larr; Change Language
-          </button>
+          {/* Step 3: OTP entry */}
+          {authStep === "otp" && (
+            <div className="k-fadeIn" style={{ flex: 1, display: "flex", flexDirection: "column", padding: "24px 18px 0" }}>
+              <div style={{ flex: 1 }}>
+                <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px" }}>Hello!</h2>
+                <p style={{ fontSize: 15, color: "var(--k-text-mid)", margin: "0 0 24px" }}>Enter the OTP sent to +91 {phoneDigits}</p>
+
+                {/* OTP boxes */}
+                <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20 }}>
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: 48,
+                        height: 56,
+                        borderRadius: "var(--k-r-sm)",
+                        border: `2px solid ${otpDigits[i] ? "var(--k-maroon)" : "var(--k-border)"}`,
+                        background: otpDigits[i] ? "rgba(107,26,26,.05)" : "var(--k-card)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 24,
+                        fontWeight: 700,
+                        color: "var(--k-text)",
+                        fontFamily: "'DM Mono', monospace",
+                      }}
+                    >
+                      {otpDigits[i] || "•"}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ textAlign: "center", marginBottom: 12 }}>
+                  {otpTimer > 0 ? (
+                    <span style={{ fontSize: 13, color: "var(--k-text-muted)" }}>Resend OTP in {otpTimer}s</span>
+                  ) : (
+                    <button
+                      onClick={() => { setOtpTimer(60); setOtpDigits(""); }}
+                      style={{ background: "none", border: "none", color: "var(--k-maroon)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Resend OTP
+                    </button>
+                  )}
+                </div>
+
+                {authError && (
+                  <p style={{ color: "var(--k-red)", fontSize: 13, fontWeight: 500, textAlign: "center", margin: "0 0 10px" }}>
+                    {authError}
+                  </p>
+                )}
+
+                <button
+                  onClick={handleVerifyOtp}
+                  className="k-press"
+                  style={{
+                    width: "100%",
+                    padding: "16px 0",
+                    borderRadius: "var(--k-r)",
+                    border: "none",
+                    background: otpDigits.length === 6 ? "var(--k-maroon)" : "var(--k-border)",
+                    color: otpDigits.length === 6 ? "#fff" : "var(--k-text-muted)",
+                    fontSize: 17,
+                    fontWeight: 700,
+                    cursor: otpDigits.length === 6 ? "pointer" : "default",
+                    marginBottom: 16,
+                  }}
+                >
+                  Enter
+                </button>
+
+                <button
+                  onClick={() => { setAuthStep("phone"); setOtpSent(false); setOtpDigits(""); setAuthError(""); }}
+                  style={{ background: "none", border: "none", color: "var(--k-text-muted)", fontSize: 13, cursor: "pointer", textDecoration: "underline", display: "block", margin: "0 auto" }}
+                >
+                  Change Number
+                </button>
+              </div>
+              <NumPad onKey={handleOtpKeyPress} />
+              <div style={{ height: 12 }} />
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   // =========================================================================
-  // SCREEN: HOME (Catalog Browse)
+  // SCREEN: HOME
   // =========================================================================
   if (currentScreen === "HOME") {
+    const categoryCards = [
+      { name: "Traditional Style", grad: ["#8B2E2E", "#C0392B"] },
+      { name: "Draping Style", grad: ["#D4A843", "#E67E22"] },
+      { name: "Modern Style", grad: ["#2C5F7C", "#1ABC9C"] },
+      { name: "Contemporary", grad: ["#8E44AD", "#3498DB"] },
+    ];
+
+    const arrivalTypes = [
+      { name: "Banarasi", grad: ["#C0392B", "#8E44AD"] },
+      { name: "Kanchipuram", grad: ["#D4A843", "#E67E22"] },
+      { name: "Paithani", grad: ["#2D8544", "#27AE60"] },
+      { name: "Jamdani", grad: ["#2C5F7C", "#1ABC9C"] },
+    ];
+
     return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 pt-5 pb-4 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-2xl font-bold text-wf-text">
-              {config.storeName}
-            </h2>
-            <p className="text-wf-subtext text-sm">
-              {isGuest ? "Guest Session" : `Welcome, +91 ${phoneDigits}`}
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => goToScreen("WARDROBE")}
-              className="px-5 py-3 bg-wf-card border border-wf-border rounded-xl text-base font-semibold cursor-pointer text-wf-text hover:bg-wf-primary/10 transition-colors"
-            >
-              Wardrobe ({wardrobeItems.length})
-            </button>
-            <button
-              onClick={() => goToScreen("TAILORS")}
-              className="px-5 py-3 bg-wf-card border border-wf-border rounded-xl text-base font-semibold cursor-pointer text-wf-text hover:bg-wf-primary/10 transition-colors"
-            >
-              Tailors
-            </button>
-            <button
-              onClick={() => goToScreen("FEEDBACK")}
-              className="px-5 py-3 bg-wf-card border border-wf-border rounded-xl text-base font-semibold cursor-pointer text-wf-text hover:bg-wf-primary/10 transition-colors"
-            >
-              End Session
-            </button>
-          </div>
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        <TopBar onLogout={() => goToScreen("FEEDBACK")} />
 
         {/* Search bar */}
-        <div className="px-6 pb-4 flex-shrink-0">
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search sarees by name, fabric, or type..."
-                className="w-full px-5 py-4 bg-wf-card border border-wf-border rounded-xl text-lg text-wf-text placeholder:text-wf-muted outline-none focus:border-wf-primary transition-colors"
-              />
-            </div>
-            <button className="w-14 h-14 bg-wf-card border border-wf-border rounded-xl flex items-center justify-center text-wf-subtext text-xl cursor-pointer">
-              &#127908;
-            </button>
-            <button className="w-14 h-14 bg-wf-card border border-wf-border rounded-xl flex items-center justify-center text-wf-subtext text-xl cursor-pointer">
-              &#9783;
-            </button>
-          </div>
-        </div>
-
-        {/* Categories */}
-        <div className="px-6 pb-4 flex gap-4 flex-shrink-0">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.name}
-              onClick={() => {
-                setSelectedCategory(selectedCategory === cat.name ? null : cat.name);
-                setSearchTerm("");
-              }}
-              className={`flex-1 h-20 rounded-2xl flex items-center justify-center gap-3 cursor-pointer transition-all active:scale-95 ${
-                selectedCategory === cat.name
-                  ? "ring-3 ring-wf-primary shadow-lg"
-                  : "opacity-80 hover:opacity-100"
-              }`}
+        <div style={{ padding: "12px 18px", display: "flex", gap: 8 }}>
+          <div style={{ flex: 1, position: "relative" }}>
+            <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "var(--k-text-muted)" }}>🔍</span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search sarees by name, fabric, or type..."
               style={{
-                background: `linear-gradient(135deg, ${cat.grad[0]}, ${cat.grad[1]})`,
+                width: "100%",
+                padding: "12px 14px 12px 40px",
+                borderRadius: "var(--k-r)",
+                border: "1px solid var(--k-border)",
+                background: "var(--k-card)",
+                fontSize: 14,
+                color: "var(--k-text)",
+                outline: "none",
+                fontFamily: "inherit",
               }}
-            >
-              <span className="text-2xl">{cat.icon}</span>
-              <span className="text-white text-xl font-bold">{cat.name}</span>
-            </button>
-          ))}
+            />
+          </div>
+          <button
+            className="k-press"
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: "var(--k-r)",
+              border: "1px solid var(--k-border)",
+              background: "var(--k-card)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 18,
+              cursor: "pointer",
+              color: "var(--k-text)",
+            }}
+          >
+            ⌸
+          </button>
         </div>
 
-        {/* Saree grid */}
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
-          <h3 className="text-xl font-bold text-wf-text mb-4">
-            {selectedCategory
-              ? `${selectedCategory} Collection`
-              : searchTerm
-                ? `Search Results`
-                : "All Sarees"}
-            <span className="text-wf-muted font-normal text-base ml-2">
-              ({displaySarees.length})
-            </span>
-          </h3>
-          <div className="grid grid-cols-4 gap-4">
-            {displaySarees.map((saree) => (
-              <button
+        {/* Scrollable content area */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {/* Trending Now */}
+          <HScrollSection title="Trending Now">
+            {displaySarees.slice(0, 8).map((saree) => (
+              <ProductCard
                 key={saree._id}
+                saree={saree}
                 onClick={() => {
                   setSelectedSareeId(saree._id);
                   setSelectedColor(0);
                   goToScreen("PRODUCT");
                 }}
-                className="bg-wf-card border border-wf-border rounded-2xl overflow-hidden text-left cursor-pointer hover:shadow-lg transition-all active:scale-[0.98]"
+              />
+            ))}
+            {displaySarees.length === 0 && (
+              <div style={{ padding: "20px 0", color: "var(--k-text-muted)", fontSize: 14, width: "100%", textAlign: "center" }}>
+                No sarees found
+              </div>
+            )}
+          </HScrollSection>
+
+          {/* Shop By Categories */}
+          <HScrollSection title="Shop By Categories">
+            {categoryCards.map((cat) => (
+              <div
+                key={cat.name}
+                className="k-press"
+                onClick={() => {
+                  setSelectedCategory(selectedCategory === cat.name ? null : cat.name);
+                  setSearchTerm("");
+                }}
+                style={{ minWidth: 130, cursor: "pointer", textAlign: "center", flexShrink: 0 }}
               >
                 <GradientBox
-                  grad={saree.grad || GRADIENT_PRESETS[Math.floor(Math.random() * GRADIENT_PRESETS.length)]}
-                  className="h-36 w-full"
-                >
-                  {saree.tag && (
-                    <span className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                      {saree.tag}
-                    </span>
-                  )}
-                </GradientBox>
-                <div className="p-3">
-                  <p className="text-base font-semibold text-wf-text truncate">
-                    {saree.name}
-                  </p>
-                  <p className="text-sm text-wf-subtext">{saree.fabric}</p>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-lg font-bold text-wf-primary">
-                      &#8377;{saree.price.toLocaleString()}
-                    </span>
-                    {saree.occasion && (
-                      <span className="text-xs bg-wf-primary/10 text-wf-primary px-2 py-0.5 rounded-full">
-                        {saree.occasion}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
+                  grad={cat.grad}
+                  style={{ width: 130, height: 130, borderRadius: "50%" }}
+                />
+                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--k-text)", marginTop: 8 }}>{cat.name}</p>
+              </div>
             ))}
+          </HScrollSection>
+
+          {/* New Arrivals */}
+          <HScrollSection title="New Arrivals">
+            {arrivalTypes.map((type) => (
+              <div
+                key={type.name}
+                className="k-press"
+                onClick={() => {
+                  setSearchTerm(type.name);
+                }}
+                style={{ minWidth: 140, cursor: "pointer", textAlign: "center", flexShrink: 0 }}
+              >
+                <GradientBox
+                  grad={type.grad}
+                  style={{ width: 140, height: 100, borderRadius: "var(--k-r)" }}
+                />
+                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--k-text)", marginTop: 8 }}>{type.name}</p>
+              </div>
+            ))}
+          </HScrollSection>
+
+          {/* Quick nav pills */}
+          <div style={{ display: "flex", gap: 8, padding: "8px 18px 20px", flexWrap: "wrap" }}>
+            <button onClick={() => goToScreen("WARDROBE")} className="k-press" style={{ padding: "10px 20px", borderRadius: "var(--k-r-pill)", border: "1px solid var(--k-border)", background: "var(--k-card)", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--k-text)" }}>
+              My Wardrobe ({wardrobeItems.length})
+            </button>
+            <button onClick={() => goToScreen("TAILORS")} className="k-press" style={{ padding: "10px 20px", borderRadius: "var(--k-r-pill)", border: "1px solid var(--k-border)", background: "var(--k-card)", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--k-text)" }}>
+              Find Tailor
+            </button>
           </div>
-          {displaySarees.length === 0 && (
-            <div className="text-center py-20 text-wf-muted text-xl">
-              No sarees found
-            </div>
-          )}
         </div>
       </div>
     );
@@ -1081,108 +1422,148 @@ export default function KioskPage() {
   // =========================================================================
   if (currentScreen === "PRODUCT" && selectedSareeId && !selectedSaree) {
     return (
-      <div className="w-full h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin text-5xl mb-4 text-wf-primary">&#9881;</div>
-          <p className="text-xl text-wf-subtext">Loading saree details...</p>
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ fontSize: 36, color: "var(--k-text-muted)", marginBottom: 12 }}>⏳</div>
+        <p style={{ fontSize: 16, color: "var(--k-text-muted)" }}>Loading saree details...</p>
       </div>
     );
   }
 
   if (currentScreen === "PRODUCT" && selectedSaree) {
     const colors = selectedSaree.colors || [];
+    const hasDiscount = selectedSaree.mrp && selectedSaree.mrp > selectedSaree.price;
+    const discountPct = hasDiscount ? Math.round(((selectedSaree.mrp! - selectedSaree.price) / selectedSaree.mrp!) * 100) : 0;
+
     return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
-        {/* Top: Gradient placeholder */}
-        <div className="relative flex-shrink-0">
-          <GradientBox
-            grad={selectedSaree.grad || GRADIENT_PRESETS[0]}
-            className="w-full h-[45vh]"
-          >
-            <span className="text-white/30 text-6xl">&#128091;</span>
-          </GradientBox>
-          <div className="absolute top-5 left-5">
-            <BackButton to="HOME" />
-          </div>
-          <button
-            onClick={() => {
-              // Toggle favorite - in-memory for now
-            }}
-            className="absolute top-5 right-5 w-14 h-14 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-2xl cursor-pointer"
-          >
-            &#9825;
-          </button>
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        <TopBar onLogout={() => goToScreen("FEEDBACK")} />
+        <SubHeader onBack={() => goToScreen("HOME")} onHome={() => goToScreen("HOME")} />
 
-        {/* Details */}
-        <div className="flex-1 overflow-y-auto px-8 py-6">
-          <h1 className="text-3xl font-bold text-wf-text mb-1">
-            {selectedSaree.name}
-          </h1>
-          <p className="text-wf-subtext text-lg mb-4">
-            {selectedSaree.fabric} &middot; {selectedSaree.type}
-          </p>
-
-          <div className="flex items-baseline gap-4 mb-6">
-            <span className="text-4xl font-extrabold text-wf-primary">
-              &#8377;{selectedSaree.price.toLocaleString()}
-            </span>
-            {selectedSaree.mrp && selectedSaree.mrp > selectedSaree.price && (
-              <span className="text-xl text-wf-muted line-through">
-                &#8377;{selectedSaree.mrp.toLocaleString()}
-              </span>
-            )}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {/* Large saree image */}
+          <div style={{ position: "relative" }}>
+            <GradientBox
+              grad={selectedSaree.grad || GRADIENT_PRESETS[0]}
+              style={{ width: "100%", height: "55vh", borderRadius: 0 }}
+            >
+              <span style={{ color: "rgba(255,255,255,.2)", fontSize: 72 }}>👗</span>
+            </GradientBox>
+            <div className="k-heart" style={{ top: 14, right: 14, width: 38, height: 38 }}>
+              <span style={{ fontSize: 18, color: "var(--k-text-muted)" }}>♡</span>
+            </div>
           </div>
 
-          {selectedSaree.description && (
-            <p className="text-wf-subtext text-base mb-6 leading-relaxed">
-              {selectedSaree.description}
+          {/* Info panel */}
+          <div style={{ padding: "18px 18px 0" }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px" }}>
+              {selectedSaree.name}
+            </h1>
+            <p style={{ fontSize: 13, color: "var(--k-text-muted)", margin: "0 0 10px" }}>
+              {selectedSaree.fabric} · Handwoven · {selectedSaree.type || "Varanasi"}
             </p>
-          )}
 
-          {/* Color selector */}
-          {colors.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-wf-text mb-3">
-                Colors
-              </h3>
-              <div className="flex gap-3">
+            {selectedSaree.description && (
+              <p style={{ fontSize: 13, color: "var(--k-text-mid)", lineHeight: 1.6, margin: "0 0 14px" }}>
+                {selectedSaree.description}
+              </p>
+            )}
+
+            {/* Price */}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 16 }}>
+              {hasDiscount && (
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--k-green)" }}>
+                  -{discountPct}%
+                </span>
+              )}
+              <span style={{ fontSize: 22, fontWeight: 800, color: "var(--k-maroon)" }}>
+                {fmt(selectedSaree.price)}
+              </span>
+              {hasDiscount && (
+                <span style={{ fontSize: 14, color: "var(--k-text-muted)", textDecoration: "line-through" }}>
+                  {fmt(selectedSaree.mrp!)}
+                </span>
+              )}
+            </div>
+
+            {/* Color swatches */}
+            {colors.length > 0 && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
                 {colors.map((color, i) => (
-                  <button
+                  <div
                     key={i}
+                    className={`k-swatch ${selectedColor === i ? "active" : ""}`}
                     onClick={() => setSelectedColor(i)}
-                    className={`w-12 h-12 rounded-full cursor-pointer border-3 transition-all ${
-                      selectedColor === i
-                        ? "border-wf-primary scale-110"
-                        : "border-transparent"
-                    }`}
                     style={{ backgroundColor: color }}
                   />
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Actions */}
-          <div className="space-y-3 pb-4">
+            {/* Add Accessories section */}
+            <div style={{ marginBottom: 14 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--k-text)", margin: "0 0 10px" }}>Add Accessories</h3>
+              <div className="k-no-scroll" style={{ display: "flex", gap: 10, overflowX: "auto" }}>
+                {["Traditional", "Draping", "Modern"].map((accType) => (
+                  <div key={accType} style={{ minWidth: 90, textAlign: "center", flexShrink: 0 }}>
+                    <GradientBox
+                      grad={GRADIENT_PRESETS[Math.floor(Math.random() * 3)]}
+                      style={{ width: 90, height: 70, borderRadius: "var(--k-r-sm)" }}
+                    />
+                    <p style={{ fontSize: 11, color: "var(--k-text-mid)", marginTop: 4 }}>{accType}</p>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 11, color: "var(--k-text-light)", fontStyle: "italic", marginTop: 6 }}>
+                Accessories Are For Virtual Try-On Only Not Available For Purchase.
+              </p>
+            </div>
+
+            {/* TRY-ON button */}
             <button
               onClick={() => {
+                if (!customerId && !isGuest) {
+                  goToScreen("AUTH");
+                  return;
+                }
                 setScanPhase("position");
                 setScanCountdown(3);
                 goToScreen("BODY_SCAN");
               }}
-              className="w-full py-5 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer hover:bg-wf-primary/90 transition-colors"
+              className="k-press"
+              style={{
+                width: "100%",
+                padding: "18px 0",
+                borderRadius: "var(--k-r-pill)",
+                border: "none",
+                background: "var(--k-maroon)",
+                color: "#fff",
+                fontSize: 18,
+                fontWeight: 700,
+                cursor: "pointer",
+                marginBottom: 18,
+                letterSpacing: 1,
+              }}
             >
-              Try On
-            </button>
-            <button
-              onClick={handleAddToWardrobe}
-              className="w-full py-4 bg-wf-card border-2 border-wf-primary text-wf-primary rounded-2xl text-lg font-semibold cursor-pointer hover:bg-wf-primary/5 transition-colors"
-            >
-              Add to Wardrobe
+              TRY-ON
             </button>
           </div>
+
+          {/* Similar Categories */}
+          <HScrollSection title="Similar Categories">
+            {displaySarees
+              .filter((s) => s._id !== selectedSaree._id)
+              .slice(0, 6)
+              .map((saree) => (
+                <ProductCard
+                  key={saree._id}
+                  saree={saree}
+                  onClick={() => {
+                    setSelectedSareeId(saree._id);
+                    setSelectedColor(0);
+                  }}
+                />
+              ))}
+          </HScrollSection>
         </div>
       </div>
     );
@@ -1193,87 +1574,135 @@ export default function KioskPage() {
   // =========================================================================
   if (currentScreen === "BODY_SCAN") {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-8">
-        <div className="max-w-lg w-full text-center">
-          {scanPhase === "position" && (
-            <>
-              <h2 className="text-3xl font-bold text-wf-text mb-6">
-                Body Scan
-              </h2>
-              {/* Camera frame placeholder */}
-              <div className="mx-auto w-72 h-96 border-4 border-dashed border-wf-primary/40 rounded-3xl flex items-center justify-center mb-6 bg-wf-card">
-                <div className="text-center">
-                  <span className="text-6xl block mb-4">&#128247;</span>
-                  <p className="text-wf-subtext text-lg">
-                    Position yourself in the frame
-                  </p>
-                </div>
-              </div>
-              <p className="text-wf-muted text-base mb-8">
-                Stand 3 feet away and face the mirror
-              </p>
-              <button
-                onClick={() => setScanPhase("countdown")}
-                className="px-12 py-5 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer hover:bg-wf-primary/90 transition-colors"
-              >
-                Capture
-              </button>
-              <button
-                onClick={() => goToScreen("PRODUCT")}
-                className="block mx-auto mt-4 text-wf-subtext text-base cursor-pointer"
-              >
-                &larr; Back
-              </button>
-            </>
-          )}
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        <TopBar />
 
-          {scanPhase === "countdown" && (
-            <div className="flex flex-col items-center justify-center">
-              <div className="w-72 h-96 border-4 border-wf-primary rounded-3xl flex items-center justify-center bg-wf-card mb-6">
-                <span className="text-9xl font-extrabold text-wf-primary animate-pulse">
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 18px" }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px", textAlign: "center" }}>
+            Create Your Digital Look
+          </h2>
+          <p style={{ fontSize: 14, color: "var(--k-text-mid)", margin: "0 0 20px", textAlign: "center" }}>
+            Stand inside the Frame for a quick scan
+          </p>
+
+          {/* Scan area */}
+          <div
+            className="k-scan-frame"
+            style={{
+              flex: 1,
+              width: "100%",
+              maxWidth: 320,
+              background: "var(--k-bg-warm)",
+              borderRadius: "var(--k-r-lg)",
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+            }}
+          >
+            {/* Body silhouette */}
+            <svg
+              viewBox="0 0 120 240"
+              style={{ width: 100, height: 200, opacity: 0.15 }}
+            >
+              <ellipse cx="60" cy="40" rx="22" ry="28" fill="var(--k-text)" />
+              <rect x="36" y="65" width="48" height="80" rx="12" fill="var(--k-text)" />
+              <rect x="20" y="70" width="16" height="60" rx="8" fill="var(--k-text)" />
+              <rect x="84" y="70" width="16" height="60" rx="8" fill="var(--k-text)" />
+              <rect x="38" y="145" width="18" height="70" rx="9" fill="var(--k-text)" />
+              <rect x="64" y="145" width="18" height="70" rx="9" fill="var(--k-text)" />
+            </svg>
+
+            {/* Corner brackets */}
+            <div className="k-scan-corner tl" />
+            <div className="k-scan-corner tr" />
+            <div className="k-scan-corner bl" />
+            <div className="k-scan-corner br" />
+
+            {/* Scanning line */}
+            {(scanPhase === "countdown" || scanPhase === "scanning") && (
+              <div className="k-scan-line" />
+            )}
+
+            {/* Countdown overlay */}
+            {scanPhase === "countdown" && scanCountdown > 0 && (
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.15)" }}>
+                <span style={{ fontSize: 80, fontWeight: 800, color: "var(--k-maroon)" }}>
                   {scanCountdown}
                 </span>
               </div>
-              <p className="text-wf-subtext text-xl">Hold still...</p>
+            )}
+
+            {/* Scanning indicator */}
+            {scanPhase === "scanning" && (
+              <div style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)" }}>
+                <div className="k-timer" style={{ background: "var(--k-green)", color: "#fff", border: "none" }}>
+                  Scanning...
+                </div>
+              </div>
+            )}
+
+            {/* Done */}
+            {scanPhase === "done" && (
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(45,133,68,.1)" }}>
+                <div style={{ textAlign: "center" }}>
+                  <span style={{ fontSize: 56, color: "var(--k-green)" }}>✓</span>
+                  <p style={{ fontSize: 18, fontWeight: 700, color: "var(--k-green)", marginTop: 8 }}>Scan Complete!</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Timer pill for countdown/scanning */}
+          {(scanPhase === "countdown" || scanPhase === "scanning") && (
+            <div className="k-timer" style={{ marginTop: 16 }}>
+              <span style={{ color: "var(--k-green)" }}>⏱</span>
+              {scanPhase === "countdown" ? `${scanCountdown}s` : "10s"}
             </div>
           )}
 
-          {scanPhase === "scanning" && (
-            <div className="flex flex-col items-center justify-center">
-              <div className="w-72 h-96 border-4 border-wf-amber rounded-3xl flex items-center justify-center bg-wf-card mb-6">
-                <div className="text-center">
-                  <div className="animate-spin text-5xl mb-4">&#9881;</div>
-                  <p className="text-wf-amber text-xl font-semibold">
-                    Scanning...
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {scanPhase === "done" && (
-            <div className="flex flex-col items-center justify-center">
-              <div className="w-72 h-96 border-4 border-wf-green rounded-3xl flex items-center justify-center bg-wf-green/5 mb-6">
-                <div className="text-center">
-                  <span className="text-7xl block mb-4 text-wf-green">
-                    &#10003;
-                  </span>
-                  <p className="text-wf-green text-2xl font-bold">
-                    Scan Complete!
-                  </p>
-                </div>
-              </div>
-              <p className="text-wf-muted text-base mb-8">
-                Body scan valid for 6 months
-              </p>
+          {/* Action buttons */}
+          <div style={{ marginTop: 16, width: "100%", maxWidth: 320 }}>
+            {scanPhase === "position" && (
+              <button
+                onClick={() => setScanPhase("countdown")}
+                className="k-press"
+                style={{
+                  width: "100%",
+                  padding: "16px 0",
+                  borderRadius: "var(--k-r-pill)",
+                  border: "none",
+                  background: "var(--k-maroon)",
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Capture My Look
+              </button>
+            )}
+            {scanPhase === "done" && (
               <button
                 onClick={() => goToScreen("TRY_ON")}
-                className="px-12 py-5 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer hover:bg-wf-primary/90 transition-colors"
+                className="k-press"
+                style={{
+                  width: "100%",
+                  padding: "16px 0",
+                  borderRadius: "var(--k-r-pill)",
+                  border: "none",
+                  background: "var(--k-maroon)",
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
               >
                 Continue to Try-On
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1284,143 +1713,258 @@ export default function KioskPage() {
   // =========================================================================
   if (currentScreen === "TRY_ON") {
     return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
-        {/* Timer bar */}
-        <div className="px-6 pt-4 pb-2 flex items-center justify-between flex-shrink-0">
-          <BackButton to="PRODUCT" />
-          <div className="flex items-center gap-4">
-            <div className="bg-wf-card border border-wf-border rounded-xl px-4 py-2">
-              <span className="text-wf-subtext text-sm mr-2">Time</span>
-              <span className={`text-xl font-bold font-mono ${tryOnTimer < 30 ? "text-wf-red" : "text-wf-text"}`}>
-                {formatTime(tryOnTimer)}
-              </span>
-            </div>
+      <div style={{ position: "relative", width: "100%", flex: 1, overflow: "hidden" }}>
+        {/* Full-screen try-on result */}
+        <GradientBox
+          grad={selectedSaree?.grad || GRADIENT_PRESETS[0]}
+          style={{ position: "absolute", inset: 0, borderRadius: 0 }}
+        >
+          <div style={{ textAlign: "center", color: "rgba(255,255,255,.35)" }}>
+            <span style={{ fontSize: 72, display: "block", marginBottom: 8 }}>👗</span>
+            <p style={{ fontSize: 18, fontWeight: 600 }}>Your Try-On Look</p>
+            <p style={{ fontSize: 13, marginTop: 4 }}>{selectedSaree?.name} · {drapeStyle} Style</p>
+          </div>
+        </GradientBox>
+
+        {/* Top: back + timer */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px" }}>
+          <button
+            onClick={() => goToScreen("PRODUCT")}
+            className="k-press"
+            style={{ background: "rgba(255,255,255,.85)", border: "none", borderRadius: "var(--k-r-pill)", padding: "8px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--k-text)", boxShadow: "var(--k-shadow)" }}
+          >
+            ← Back
+          </button>
+          <div className="k-timer" style={{ background: tryOnTimer <= 30 ? "var(--k-red)" : "var(--k-card)", color: tryOnTimer <= 30 ? "#fff" : "var(--k-text)" }}>
+            ⏱ {formatTime(tryOnTimer)}
+          </div>
+        </div>
+
+        {/* Left panel: Style / Accessories tabs */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 60,
+            bottom: 80,
+            width: 80,
+            zIndex: 10,
+            display: "flex",
+            flexDirection: "column",
+            padding: "8px 6px",
+            gap: 6,
+          }}
+        >
+          {/* Tab pills */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
             <button
-              onClick={() => setTryOnTimer((t) => t + 30)}
-              className="px-4 py-2 bg-wf-primary/10 text-wf-primary rounded-xl text-sm font-semibold cursor-pointer"
+              onClick={() => setTryOnTab("STYLE")}
+              className="k-press"
+              style={{
+                padding: "6px 4px",
+                borderRadius: "var(--k-r-pill)",
+                border: "none",
+                background: tryOnTab === "STYLE" ? "var(--k-maroon)" : "rgba(255,255,255,.85)",
+                color: tryOnTab === "STYLE" ? "#fff" : "var(--k-text)",
+                fontSize: 9,
+                fontWeight: 700,
+                cursor: "pointer",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
             >
-              +30s
+              Style
+            </button>
+            <button
+              onClick={() => setTryOnTab("ACCESSORIES")}
+              className="k-press"
+              style={{
+                padding: "6px 4px",
+                borderRadius: "var(--k-r-pill)",
+                border: "none",
+                background: tryOnTab === "ACCESSORIES" ? "var(--k-maroon)" : "rgba(255,255,255,.85)",
+                color: tryOnTab === "ACCESSORIES" ? "#fff" : "var(--k-text)",
+                fontSize: 9,
+                fontWeight: 700,
+                cursor: "pointer",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
+              Acc.
             </button>
           </div>
-        </div>
 
-        {/* Split view */}
-        <div className="flex-1 flex overflow-hidden p-6 gap-6">
-          {/* Left: Try-on preview */}
-          <div className="flex-1">
-            <GradientBox
-              grad={selectedSaree?.grad || GRADIENT_PRESETS[0]}
-              className="w-full h-full"
-            >
-              <div className="text-center text-white/50">
-                <span className="text-8xl block mb-4">&#128091;</span>
-                <p className="text-2xl font-semibold">Your Try-On Look</p>
-                <p className="text-base mt-2">
-                  {selectedSaree?.name} &middot; {drapeStyle} Style
-                </p>
-              </div>
-            </GradientBox>
-          </div>
-
-          {/* Right: Controls */}
-          <div className="w-80 flex-shrink-0 overflow-y-auto space-y-5">
-            {/* Draping styles */}
-            <div>
-              <h3 className="text-lg font-bold text-wf-text mb-3">
-                Draping Style
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {DRAPING_STYLES.map((style) => (
-                  <button
-                    key={style}
-                    onClick={() => setDrapeStyle(style)}
-                    className={`py-3 rounded-xl text-base font-semibold cursor-pointer transition-all ${
-                      drapeStyle === style
-                        ? "bg-wf-primary text-white"
-                        : "bg-wf-card border border-wf-border text-wf-text hover:bg-wf-primary/10"
-                    }`}
-                  >
-                    {style}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Accessories */}
-            <div>
-              <h3 className="text-lg font-bold text-wf-text mb-3">
-                Accessories
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {ACCESSORIES.map((acc) => (
-                  <button
-                    key={acc}
-                    onClick={() =>
-                      setActiveAccessories((prev) =>
-                        prev.includes(acc)
-                          ? prev.filter((a) => a !== acc)
-                          : [...prev, acc]
-                      )
-                    }
-                    className={`py-3 rounded-xl text-base font-semibold cursor-pointer transition-all ${
-                      activeAccessories.includes(acc)
-                        ? "bg-wf-amber text-white"
-                        : "bg-wf-card border border-wf-border text-wf-text hover:bg-wf-amber/10"
-                    }`}
-                  >
+          {/* Scrollable list */}
+          <div className="k-no-scroll" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+            {tryOnTab === "STYLE" &&
+              DRAPING_STYLES.map((style) => (
+                <div
+                  key={style}
+                  className="k-press"
+                  onClick={() => setDrapeStyle(style)}
+                  style={{
+                    cursor: "pointer",
+                    textAlign: "center",
+                    opacity: drapeStyle === style ? 1 : 0.7,
+                  }}
+                >
+                  <GradientBox
+                    grad={GRADIENT_PRESETS[DRAPING_STYLES.indexOf(style) % GRADIENT_PRESETS.length]}
+                    style={{ width: 60, height: 60, borderRadius: "var(--k-r-sm)", margin: "0 auto", border: drapeStyle === style ? "2px solid var(--k-maroon)" : "2px solid transparent" }}
+                  />
+                  <p style={{ fontSize: 8, fontWeight: 600, color: "#fff", marginTop: 3, textShadow: "0 1px 4px rgba(0,0,0,.5)" }}>
+                    {style.split(" ")[0]}
+                  </p>
+                </div>
+              ))}
+            {tryOnTab === "ACCESSORIES" &&
+              ACCESSORIES.map((acc) => (
+                <div
+                  key={acc}
+                  className="k-press"
+                  onClick={() =>
+                    setActiveAccessories((prev) =>
+                      prev.includes(acc) ? prev.filter((a) => a !== acc) : [...prev, acc]
+                    )
+                  }
+                  style={{
+                    cursor: "pointer",
+                    textAlign: "center",
+                    opacity: activeAccessories.includes(acc) ? 1 : 0.6,
+                  }}
+                >
+                  <GradientBox
+                    grad={GRADIENT_PRESETS[(ACCESSORIES.indexOf(acc) + 2) % GRADIENT_PRESETS.length]}
+                    style={{ width: 60, height: 60, borderRadius: "var(--k-r-sm)", margin: "0 auto", border: activeAccessories.includes(acc) ? "2px solid var(--k-gold)" : "2px solid transparent" }}
+                  />
+                  <p style={{ fontSize: 8, fontWeight: 600, color: "#fff", marginTop: 3, textShadow: "0 1px 4px rgba(0,0,0,.5)" }}>
                     {acc}
-                  </button>
-                ))}
-              </div>
-            </div>
+                  </p>
+                </div>
+              ))}
+          </div>
+        </div>
 
-            {/* Necklines */}
-            <div>
-              <h3 className="text-lg font-bold text-wf-text mb-3">
-                Neckline
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {NECKLINES.map((nl) => (
-                  <button
-                    key={nl}
-                    onClick={() => setNeckline(nl)}
-                    className={`py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all ${
-                      neckline === nl
-                        ? "bg-wf-blue text-white"
-                        : "bg-wf-card border border-wf-border text-wf-text hover:bg-wf-blue/10"
-                    }`}
-                  >
-                    {nl}
-                  </button>
-                ))}
-              </div>
-            </div>
+        {/* Right panel: floating info card */}
+        <div
+          className="k-slideIn"
+          style={{
+            position: "absolute",
+            right: 8,
+            top: 60,
+            width: 170,
+            zIndex: 10,
+            background: "rgba(255,255,255,.92)",
+            borderRadius: "var(--k-r)",
+            padding: 12,
+            boxShadow: "var(--k-shadow-md)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--k-text)", margin: "0 0 2px" }}>
+            {selectedSaree?.name || "Saree"}
+          </h4>
+          <p style={{ fontSize: 15, fontWeight: 800, color: "var(--k-maroon)", margin: "0 0 6px" }}>
+            {fmt(selectedSaree?.price || 0)}
+          </p>
+          <p style={{ fontSize: 10, color: "var(--k-text-mid)", lineHeight: 1.4, margin: "0 0 8px" }}>
+            {selectedSaree?.fabric} · {drapeStyle}
+          </p>
 
-            {/* Action buttons */}
-            <div className="space-y-3 pt-2">
-              <button
-                onClick={handleAddToWardrobe}
-                className="w-full py-4 bg-wf-primary text-white rounded-2xl text-lg font-bold cursor-pointer hover:bg-wf-primary/90 transition-colors"
-              >
-                Save to Wardrobe
-              </button>
-              <button
+          {/* Similar mini-cards */}
+          <div className="k-no-scroll" style={{ display: "flex", gap: 4, overflowX: "auto", marginBottom: 8 }}>
+            {displaySarees.slice(0, 3).map((s) => (
+              <div
+                key={s._id}
+                className="k-press"
                 onClick={() => {
-                  goToScreen("HOME");
+                  setSelectedSareeId(s._id);
+                  setSelectedColor(0);
                 }}
-                className="w-full py-3 bg-wf-card border border-wf-border text-wf-text rounded-2xl text-base font-semibold cursor-pointer hover:bg-wf-primary/10 transition-colors"
+                style={{ width: 40, height: 40, borderRadius: 6, overflow: "hidden", flexShrink: 0, cursor: "pointer" }}
               >
-                Next Saree
-              </button>
-              <button
-                onClick={() => goToScreen("WARDROBE")}
-                className="w-full py-3 bg-wf-green text-white rounded-2xl text-base font-semibold cursor-pointer hover:bg-wf-green/90 transition-colors"
-              >
-                Done &rarr; Wardrobe
-              </button>
+                <GradientBox grad={s.grad || GRADIENT_PRESETS[0]} style={{ width: 40, height: 40, borderRadius: 6 }} />
+              </div>
+            ))}
+          </div>
+
+          {/* Color swatches */}
+          {selectedSaree?.colors && selectedSaree.colors.length > 0 && (
+            <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+              {selectedSaree.colors.slice(0, 4).map((c, i) => (
+                <div key={i} className={`k-swatch ${selectedColor === i ? "active" : ""}`} onClick={() => setSelectedColor(i)} style={{ width: 16, height: 16, backgroundColor: c }} />
+              ))}
+            </div>
+          )}
+
+          {/* Small icon buttons */}
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => goToScreen("HOME")} className="k-press" style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 12, color: "var(--k-text)" }}>⌂</button>
+            <button onClick={() => goToScreen("WARDROBE")} className="k-press" style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 12, color: "var(--k-text)" }}>👤</button>
+          </div>
+        </div>
+
+        {/* Bottom: action buttons */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 10, padding: "12px 18px", display: "flex", gap: 10 }}>
+          <div
+            className="k-action-btn k-press"
+            onClick={handleAddToWardrobe}
+            style={{ flex: 1 }}
+          >
+            <span>Add to Wardrobe</span>
+            <div className="k-action-arrow">
+              <span style={{ color: "#fff", fontSize: 14 }}>→</span>
+            </div>
+          </div>
+          <div
+            className="k-action-btn k-press"
+            onClick={() => goToScreen("WARDROBE")}
+            style={{ flex: 1 }}
+          >
+            <span>Go to Wardrobe</span>
+            <div className="k-action-arrow">
+              <span style={{ color: "#fff", fontSize: 14 }}>→</span>
             </div>
           </div>
         </div>
+
+        {/* End session modal */}
+        {showEndSessionModal && (
+          <div className="k-overlay k-fadeIn">
+            <div className="k-modal k-scaleIn">
+              <h3 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>
+                End Session?
+              </h3>
+              <p style={{ fontSize: 14, color: "var(--k-text-mid)", margin: "0 0 20px" }}>
+                Your try-on time is almost up. Would you like to extend or save your look?
+              </p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => {
+                    setTryOnTimer((t) => t + 30);
+                    setShowEndSessionModal(false);
+                  }}
+                  className="k-press"
+                  style={{ flex: 1, padding: "14px 0", borderRadius: "var(--k-r)", border: "1.5px solid var(--k-border)", background: "var(--k-card)", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--k-text)" }}
+                >
+                  +30 Seconds
+                </button>
+                <button
+                  onClick={() => {
+                    handleAddToWardrobe();
+                    setShowEndSessionModal(false);
+                    goToScreen("WARDROBE");
+                  }}
+                  className="k-press"
+                  style={{ flex: 1, padding: "14px 0", borderRadius: "var(--k-r)", border: "none", background: "var(--k-maroon)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Save & Exit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1430,161 +1974,213 @@ export default function KioskPage() {
   // =========================================================================
   if (currentScreen === "WARDROBE") {
     return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 pt-5 pb-4 flex items-center justify-between flex-shrink-0">
-          <BackButton to="HOME" label="Back to Catalog" />
-          <h2 className="text-2xl font-bold text-wf-text">My Wardrobe</h2>
-          <div className="flex gap-3">
-            <button
-              onClick={() => goToScreen("TAILORS")}
-              className="px-5 py-3 bg-wf-card border border-wf-border rounded-xl text-base font-semibold cursor-pointer text-wf-text"
-            >
-              Find Tailor
-            </button>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        <TopBar onLogout={() => goToScreen("FEEDBACK")} />
+
+        {/* Header pill */}
+        <div style={{ padding: "12px 18px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <button onClick={() => goToScreen("HOME")} className="k-press" style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--k-text)" }}>←</button>
+          <div style={{ background: "var(--k-card)", border: "1px solid var(--k-border)", borderRadius: "var(--k-r-pill)", padding: "8px 20px", fontSize: 16, fontWeight: 700, color: "var(--k-text)", boxShadow: "var(--k-shadow)" }}>
+            My Wardrobe ♥
           </div>
+          <div style={{ width: 30 }} />
         </div>
 
-        {/* 3-column layout */}
-        <div className="flex-1 flex overflow-hidden px-6 pb-6 gap-6">
-          {/* Left: Sarees list */}
-          <div className="flex-1 overflow-y-auto space-y-3">
-            <h3 className="text-lg font-semibold text-wf-text mb-2">
-              Saved Looks ({wardrobeItems.length}/10)
-            </h3>
+        {/* Three-column layout */}
+        <div style={{ flex: 1, display: "flex", overflow: "hidden", padding: "12px 8px", gap: 8 }}>
+          {/* Left: saved sarees */}
+          <div className="k-no-scroll" style={{ width: "28%", overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
             {wardrobeItems.length === 0 && (
-              <div className="text-center py-16 text-wf-muted text-lg">
-                <p>No sarees in your wardrobe yet.</p>
-                <button
-                  onClick={() => goToScreen("HOME")}
-                  className="mt-4 text-wf-primary font-semibold cursor-pointer"
-                >
-                  Browse Sarees
-                </button>
+              <div style={{ textAlign: "center", padding: "40px 8px", color: "var(--k-text-muted)", fontSize: 13 }}>
+                <p>No sarees yet.</p>
+                <button onClick={() => goToScreen("HOME")} style={{ marginTop: 8, color: "var(--k-maroon)", fontWeight: 600, background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>Browse Sarees</button>
               </div>
             )}
             {wardrobeItems.map((item, idx) => (
-              <div
-                key={idx}
-                className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${
-                  item.selected
-                    ? "border-wf-primary bg-wf-primary/5"
-                    : "border-wf-border bg-wf-card hover:border-wf-primary/50"
-                }`}
-                onClick={() =>
-                  setWardrobeItems((prev) =>
-                    prev.map((w, i) =>
-                      i === idx ? { ...w, selected: !w.selected } : w
-                    )
-                  )
-                }
-              >
-                <GradientBox
-                  grad={item.grad}
-                  className="w-16 h-20 flex-shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-base font-semibold text-wf-text truncate">
-                    {item.name}
-                  </p>
-                  <p className="text-sm text-wf-subtext">
-                    {item.drapeStyle} &middot; {item.neckline}
-                  </p>
-                  <p className="text-lg font-bold text-wf-primary">
-                    &#8377;{item.price.toLocaleString()}
-                  </p>
-                </div>
-                <div
-                  className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center ${
-                    item.selected
-                      ? "bg-wf-primary border-wf-primary text-white"
-                      : "border-wf-border"
-                  }`}
-                >
-                  {item.selected && <span>&#10003;</span>}
+              <div key={idx} className="k-shelf-item">
+                <GradientBox grad={item.grad} style={{ width: "100%", height: 80, borderRadius: "var(--k-r-sm)", marginBottom: 6 }} />
+                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--k-text)", margin: "0 0 2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: "var(--k-maroon)", margin: "0 0 6px" }}>{fmt(item.price)}</p>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button
+                    onClick={() => {
+                      setSelectedSareeId(item.sareeId);
+                      setDrapeStyle(item.drapeStyle);
+                      setActiveAccessories(item.accessories);
+                      setNeckline(item.neckline);
+                      setScanPhase("position");
+                      setScanCountdown(3);
+                      goToScreen("BODY_SCAN");
+                    }}
+                    className="k-press"
+                    style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: "none", background: "var(--k-maroon)", color: "#fff", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Try-On
+                  </button>
+                  <button
+                    onClick={() => setWardrobeItems((prev) => prev.filter((_, i) => i !== idx))}
+                    className="k-press"
+                    style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: "1px solid var(--k-border)", background: "var(--k-card)", color: "var(--k-text-muted)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Center: Model placeholder */}
-          <div className="w-64 flex-shrink-0">
+          {/* Center: model view */}
+          <div style={{ flex: 1 }}>
             <GradientBox
               grad={["#1A1A1A", "#333333"]}
-              className="w-full h-full"
+              style={{ width: "100%", height: "100%", borderRadius: "var(--k-r)" }}
             >
-              <div className="text-center text-white/30">
-                <span className="text-7xl block mb-3">&#128100;</span>
-                <p className="text-base">Your Look</p>
+              <div style={{ textAlign: "center", color: "rgba(255,255,255,.25)" }}>
+                <span style={{ fontSize: 56, display: "block", marginBottom: 6 }}>👤</span>
+                <p style={{ fontSize: 14 }}>Your Look</p>
               </div>
             </GradientBox>
           </div>
 
-          {/* Right: Accessories & Actions */}
-          <div className="w-64 flex-shrink-0 flex flex-col gap-4">
-            <div className="bg-wf-card border border-wf-border rounded-2xl p-4">
-              <h3 className="text-base font-semibold text-wf-text mb-2">
-                Accessories
-              </h3>
-              <div className="space-y-2">
-                {ACCESSORIES.map((acc) => (
-                  <div
-                    key={acc}
-                    className="flex items-center justify-between py-2 px-3 bg-wf-bg rounded-lg"
-                  >
-                    <span className="text-sm text-wf-text">{acc}</span>
-                    <span className="text-xs text-wf-muted">+</span>
-                  </div>
-                ))}
+          {/* Right: accessories */}
+          <div className="k-no-scroll" style={{ width: "22%", overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            {ACCESSORIES.map((acc) => (
+              <div key={acc} className="k-shelf-item">
+                <GradientBox grad={GRADIENT_PRESETS[(ACCESSORIES.indexOf(acc) + 2) % GRADIENT_PRESETS.length]} style={{ width: "100%", height: 60, borderRadius: "var(--k-r-sm)", marginBottom: 4 }} />
+                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text)", margin: "0 0 4px" }}>{acc}</p>
+                <button
+                  onClick={() =>
+                    setActiveAccessories((prev) =>
+                      prev.includes(acc) ? prev.filter((a) => a !== acc) : [...prev, acc]
+                    )
+                  }
+                  className="k-press"
+                  style={{
+                    width: "100%",
+                    padding: "5px 0",
+                    borderRadius: 6,
+                    border: "none",
+                    background: activeAccessories.includes(acc) ? "var(--k-gold)" : "var(--k-maroon)",
+                    color: "#fff",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {activeAccessories.includes(acc) ? "Remove" : "Try-On"}
+                </button>
               </div>
-            </div>
-
-            <div className="flex-1" />
-
-            {/* Share on WhatsApp */}
-            <button
-              onClick={() => {
-                if (whatsappShareCount >= 5) return;
-                setShowWhatsappConsent(true);
-              }}
-              disabled={
-                wardrobeItems.filter((w) => w.selected).length === 0 ||
-                whatsappShareCount >= 5
-              }
-              className="w-full py-4 bg-wf-green text-white rounded-2xl text-base font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-wf-green/90 transition-colors"
-            >
-              Share on WhatsApp ({whatsappShareCount}/5)
-            </button>
-
-            {/* Checkout */}
-            <button
-              onClick={handleCreateOrder}
-              disabled={wardrobeItems.length === 0}
-              className="w-full py-4 bg-wf-primary text-white rounded-2xl text-lg font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-wf-primary/90 transition-colors"
-            >
-              Checkout
-            </button>
+            ))}
           </div>
+        </div>
+
+        {/* Complete The Look section */}
+        <div style={{ borderTop: "1px solid var(--k-border-l)", background: "var(--k-card)", padding: "10px 18px 0" }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>Complete The Look</p>
+          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--k-border-l)", marginBottom: 10 }}>
+            {(["Blouse", "Jewelry", "Saree"] as const).map((tab) => (
+              <div
+                key={tab}
+                className={`k-look-tab ${wardrobeLookTab === tab ? "active" : ""}`}
+                onClick={() => setWardrobeLookTab(tab)}
+              >
+                <span style={{ fontSize: 16 }}>{tab === "Blouse" ? "👗" : tab === "Jewelry" ? "💍" : "🧣"}</span>
+                <span>{tab}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Tab content: horizontal scroll of options */}
+          <div className="k-no-scroll" style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 10 }}>
+            {wardrobeLookTab === "Blouse" &&
+              NECKLINES.slice(0, 3).map((nl) => (
+                <div key={nl} className="k-shelf-item" style={{ minWidth: 100, flexShrink: 0 }}>
+                  <GradientBox grad={GRADIENT_PRESETS[NECKLINES.indexOf(nl) % GRADIENT_PRESETS.length]} style={{ width: "100%", height: 60, borderRadius: "var(--k-r-sm)", marginBottom: 4 }} />
+                  <p style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text)", margin: "0 0 4px" }}>{nl}</p>
+                  <button
+                    onClick={() => setNeckline(nl)}
+                    className="k-press"
+                    style={{ width: "100%", padding: "5px 0", borderRadius: 6, border: "none", background: neckline === nl ? "var(--k-maroon)" : "var(--k-border)", color: neckline === nl ? "#fff" : "var(--k-text)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Try-On
+                  </button>
+                </div>
+              ))}
+            {wardrobeLookTab === "Jewelry" &&
+              ACCESSORIES.slice(0, 3).map((acc) => (
+                <div key={acc} className="k-shelf-item" style={{ minWidth: 100, flexShrink: 0 }}>
+                  <GradientBox grad={GRADIENT_PRESETS[(ACCESSORIES.indexOf(acc) + 1) % GRADIENT_PRESETS.length]} style={{ width: "100%", height: 60, borderRadius: "var(--k-r-sm)", marginBottom: 4 }} />
+                  <p style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text)", margin: "0 0 4px" }}>{acc}</p>
+                  <button
+                    onClick={() =>
+                      setActiveAccessories((prev) =>
+                        prev.includes(acc) ? prev.filter((a) => a !== acc) : [...prev, acc]
+                      )
+                    }
+                    className="k-press"
+                    style={{ width: "100%", padding: "5px 0", borderRadius: 6, border: "none", background: activeAccessories.includes(acc) ? "var(--k-gold)" : "var(--k-border)", color: activeAccessories.includes(acc) ? "#fff" : "var(--k-text)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Try-On
+                  </button>
+                </div>
+              ))}
+            {wardrobeLookTab === "Saree" &&
+              displaySarees.slice(0, 4).map((s) => (
+                <div key={s._id} className="k-shelf-item" style={{ minWidth: 100, flexShrink: 0 }}>
+                  <GradientBox grad={s.grad || GRADIENT_PRESETS[0]} style={{ width: "100%", height: 60, borderRadius: "var(--k-r-sm)", marginBottom: 4 }} />
+                  <p style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text)", margin: "0 0 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</p>
+                  <button
+                    onClick={() => {
+                      setSelectedSareeId(s._id);
+                      setSelectedColor(0);
+                      goToScreen("PRODUCT");
+                    }}
+                    className="k-press"
+                    style={{ width: "100%", padding: "5px 0", borderRadius: 6, border: "none", background: "var(--k-maroon)", color: "#fff", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Try-On
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        {/* Move to Cart button */}
+        <div style={{ padding: "8px 18px 12px" }}>
+          <button
+            onClick={handleCreateOrder}
+            disabled={wardrobeItems.length === 0}
+            className="k-press"
+            style={{
+              width: "100%",
+              padding: "16px 0",
+              borderRadius: "var(--k-r-pill)",
+              border: "none",
+              background: wardrobeItems.length > 0 ? "var(--k-maroon)" : "var(--k-border)",
+              color: wardrobeItems.length > 0 ? "#fff" : "var(--k-text-muted)",
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: wardrobeItems.length > 0 ? "pointer" : "default",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <span>🛒</span> Move to Cart
+          </button>
         </div>
 
         {/* WhatsApp consent overlay */}
         {showWhatsappConsent && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div className="bg-wf-bg rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
-              <h3 className="text-2xl font-bold text-wf-text mb-4 text-center">
-                Share via WhatsApp
-              </h3>
-              <p className="text-wf-subtext text-base text-center mb-6">
-                By sharing, you consent to sending selected look details to your
-                WhatsApp number. Your privacy is important to us.
+          <div className="k-overlay k-fadeIn">
+            <div className="k-modal k-scaleIn">
+              <h3 style={{ fontSize: 20, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>Share via WhatsApp</h3>
+              <p style={{ fontSize: 14, color: "var(--k-text-mid)", margin: "0 0 20px" }}>
+                By sharing, you consent to sending selected look details to your WhatsApp number.
               </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowWhatsappConsent(false)}
-                  className="flex-1 py-4 bg-wf-card border border-wf-border rounded-2xl text-lg font-semibold cursor-pointer text-wf-text"
-                >
-                  Cancel
-                </button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setShowWhatsappConsent(false)} className="k-press" style={{ flex: 1, padding: "14px 0", borderRadius: "var(--k-r)", border: "1.5px solid var(--k-border)", background: "var(--k-card)", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--k-text)" }}>Cancel</button>
                 <button
                   onClick={() => {
                     setWhatsappShareCount((c) => c + 1);
@@ -1594,12 +2190,10 @@ export default function KioskPage() {
                       `Check out my Wearify looks from ${config.storeName}! ${selected.map((s) => s.name).join(", ")}`
                     );
                     const phone = customerPhone.replace("+", "");
-                    window.open(
-                      `https://wa.me/${phone || "91"}?text=${text}`,
-                      "_blank"
-                    );
+                    window.open(`https://wa.me/${phone || "91"}?text=${text}`, "_blank");
                   }}
-                  className="flex-1 py-4 bg-wf-green text-white rounded-2xl text-lg font-semibold cursor-pointer"
+                  className="k-press"
+                  style={{ flex: 1, padding: "14px 0", borderRadius: "var(--k-r)", border: "none", background: "var(--k-green)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
                 >
                   Share
                 </button>
@@ -1612,97 +2206,180 @@ export default function KioskPage() {
   }
 
   // =========================================================================
-  // SCREEN: ORDER
+  // SCREEN: ORDER / CHECKOUT
   // =========================================================================
   if (currentScreen === "ORDER") {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-8">
-        <div className="max-w-xl w-full">
-          <h2 className="text-3xl font-bold text-wf-text text-center mb-6">
-            Order Summary
-          </h2>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        <TopBar onLogout={() => goToScreen("FEEDBACK")} />
+        <SubHeader onBack={() => goToScreen("WARDROBE")} onHome={() => goToScreen("HOME")} />
 
-          {/* Items table */}
-          <div className="bg-wf-card border border-wf-border rounded-2xl overflow-hidden mb-6">
-            <div className="px-5 py-3 border-b border-wf-border flex justify-between text-sm font-semibold text-wf-subtext">
-              <span>Item</span>
-              <span>Price</span>
-            </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 18px" }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "16px 0 4px" }}>Checkout</h2>
+          <p style={{ fontSize: 13, color: "var(--k-text-muted)", margin: "0 0 16px" }}>{wardrobeItems.length} Items In Your Checklist</p>
+
+          {/* Item list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
             {wardrobeItems.map((item, idx) => (
               <div
                 key={idx}
-                className="px-5 py-3 border-b border-wf-border flex justify-between items-center"
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  background: "var(--k-card)",
+                  borderRadius: "var(--k-r)",
+                  padding: 12,
+                  border: "1px solid var(--k-border-l)",
+                  alignItems: "center",
+                }}
               >
-                <span className="text-base text-wf-text">{item.name}</span>
-                <span className="text-base font-semibold text-wf-text">
-                  &#8377;{item.price.toLocaleString()}
-                </span>
+                <GradientBox grad={item.grad} style={{ width: 70, height: 80, borderRadius: "var(--k-r-sm)", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: "var(--k-text)", margin: "0 0 2px" }}>{item.name}</p>
+                  <p style={{ fontSize: 11, color: "var(--k-text-muted)", margin: "0 0 4px" }}>
+                    {item.drapeStyle} · {item.neckline}
+                  </p>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                    {item.grad.map((c, i) => (
+                      <div key={i} style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: c }} />
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: "var(--k-maroon)", margin: 0 }}>{fmt(item.price)}</p>
+                </div>
+
+                {/* Quantity */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    onClick={() => setOrderQuantities((prev) => ({ ...prev, [idx]: Math.max(1, (prev[idx] || 1) - 1) }))}
+                    className="k-press"
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "var(--k-text)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    -
+                  </button>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "var(--k-text)", minWidth: 20, textAlign: "center" }}>{orderQuantities[idx] || 1}</span>
+                  <button
+                    onClick={() => setOrderQuantities((prev) => ({ ...prev, [idx]: (prev[idx] || 1) + 1 }))}
+                    className="k-press"
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "var(--k-text)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Delete */}
+                <button
+                  onClick={() => {
+                    setWardrobeItems((prev) => prev.filter((_, i) => i !== idx));
+                    setOrderQuantities((prev) => {
+                      const next = { ...prev };
+                      delete next[idx];
+                      return next;
+                    });
+                  }}
+                  className="k-press"
+                  style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--k-text-muted)", padding: 4 }}
+                >
+                  ×
+                </button>
               </div>
             ))}
-            <div className="px-5 py-3 border-b border-wf-border flex justify-between">
-              <span className="text-sm text-wf-subtext">Subtotal</span>
-              <span className="text-base font-semibold text-wf-text">
-                &#8377;{orderSubtotal.toLocaleString()}
-              </span>
+          </div>
+
+          {/* Order Summary card */}
+          <div style={{ background: "var(--k-card)", borderRadius: "var(--k-r)", padding: 16, border: "1px solid var(--k-border-l)", marginBottom: 18 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--k-text)", margin: "0 0 12px" }}>Order Summary</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: "var(--k-text-mid)" }}>Subtotal</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--k-text)" }}>{fmt(orderSubtotal)}</span>
             </div>
-            <div className="px-5 py-3 border-b border-wf-border flex justify-between">
-              <span className="text-sm text-wf-subtext">
-                GST (5% under &#8377;1000, 12% above)
-              </span>
-              <span className="text-base font-semibold text-wf-text">
-                &#8377;{orderGST.toFixed(2)}
-              </span>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: "var(--k-text-mid)" }}>GST (18%)</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--k-text)" }}>{fmt(Math.round(orderGST * 100) / 100)}</span>
             </div>
-            <div className="px-5 py-4 flex justify-between bg-wf-primary/5">
-              <span className="text-lg font-bold text-wf-text">Total</span>
-              <span className="text-2xl font-extrabold text-wf-primary">
-                &#8377;{orderTotal.toLocaleString()}
-              </span>
+            <div className="k-receipt-divider" />
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "var(--k-text)" }}>Total</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: "var(--k-maroon)" }}>{fmt(orderTotal)}</span>
             </div>
           </div>
 
-          {/* QR Code placeholder */}
-          <div className="bg-wf-card border border-wf-border rounded-2xl p-8 text-center mb-6">
-            <div className="w-48 h-48 mx-auto border-2 border-dashed border-wf-border rounded-2xl flex items-center justify-center mb-4 bg-white">
-              <div className="text-center">
-                <span className="text-4xl block mb-2">&#9783;</span>
-                <p className="text-sm font-mono font-bold text-wf-text">
-                  {orderId || "------"}
-                </p>
-              </div>
-            </div>
-            <p className="text-xl font-semibold text-wf-text mb-1">
-              Scan QR to Pay
-            </p>
-            <p className="text-wf-subtext text-base">
-              Order ID: <span className="font-mono font-bold">{orderId}</span>
-            </p>
-          </div>
+          {/* Find Tailor button */}
+          <button
+            onClick={() => goToScreen("TAILORS")}
+            className="k-press"
+            style={{
+              width: "100%",
+              padding: "14px 0",
+              borderRadius: "var(--k-r-pill)",
+              border: "1.5px solid var(--k-border)",
+              background: "var(--k-card)",
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: "pointer",
+              color: "var(--k-text)",
+              marginBottom: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            🪡 Find Tailor →
+          </button>
 
-          {/* Timer */}
-          <div className="text-center mb-6">
-            <p className={`text-lg font-semibold ${orderExpiry < 60 ? "text-wf-red" : "text-wf-subtext"}`}>
-              Expires in {formatTime(orderExpiry)}
-            </p>
-          </div>
-
-          {/* Done */}
+          {/* Proceed to Checkout button */}
           <button
             onClick={() => goToScreen("FEEDBACK")}
-            className="w-full py-4 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer hover:bg-wf-primary/90 transition-colors"
+            className="k-press"
+            style={{
+              width: "100%",
+              padding: "16px 0",
+              borderRadius: "var(--k-r-pill)",
+              border: "none",
+              background: "var(--k-maroon)",
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: "pointer",
+              marginBottom: 20,
+            }}
           >
-            Done
+            Proceed To Checkout
           </button>
-          <button
-            onClick={() => goToScreen("WARDROBE")}
-            className="w-full mt-3 py-3 text-wf-subtext text-base font-medium cursor-pointer text-center"
-          >
-            &larr; Back to Wardrobe
-          </button>
+
+          {/* Designer Blouse carousel */}
+          <HScrollSection title="Designer Blouse">
+            {NECKLINES.map((nl) => (
+              <div key={nl} style={{ minWidth: 120, textAlign: "center", flexShrink: 0 }}>
+                <GradientBox grad={GRADIENT_PRESETS[NECKLINES.indexOf(nl) % GRADIENT_PRESETS.length]} style={{ width: 120, height: 90, borderRadius: "var(--k-r-sm)" }} />
+                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text)", marginTop: 6 }}>{nl}</p>
+              </div>
+            ))}
+          </HScrollSection>
+
+          {/* Recently Viewed */}
+          <HScrollSection title="Recently Viewed Products">
+            {displaySarees.slice(0, 6).map((saree) => (
+              <ProductCard
+                key={saree._id}
+                saree={saree}
+                onClick={() => {
+                  setSelectedSareeId(saree._id);
+                  setSelectedColor(0);
+                  goToScreen("PRODUCT");
+                }}
+              />
+            ))}
+          </HScrollSection>
         </div>
       </div>
     );
   }
+
+  // =========================================================================
+  // SCREEN: BILL GENERATED
+  // (Triggered after order -- currently navigated to via FEEDBACK -> DATA_SAVE flow)
+  // =========================================================================
 
   // =========================================================================
   // SCREEN: TAILORS
@@ -1710,80 +2387,251 @@ export default function KioskPage() {
   if (currentScreen === "TAILORS" && !selectedTailorId) {
     const sortedTailors = [...(tailors || [])].sort((a, b) => {
       if (tailorSort === "Top Rated") return b.rating - a.rating;
-      if (tailorSort === "Nearby") return 0; // No real distance data
-      return b.rating - a.rating; // default recommended
+      if (tailorSort === "Nearby") return 0;
+      return b.rating - a.rating;
     });
 
     return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
-        <div className="px-6 pt-5 pb-4 flex items-center justify-between flex-shrink-0">
-          <BackButton to="HOME" label="Back to Catalog" />
-          <h2 className="text-2xl font-bold text-wf-text">Find a Tailor</h2>
-          <div className="flex gap-2">
-            {["Recommended", "Nearby", "Top Rated"].map((sort) => (
-              <button
-                key={sort}
-                onClick={() => setTailorSort(sort)}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer transition-all ${
-                  tailorSort === sort
-                    ? "bg-wf-primary text-white"
-                    : "bg-wf-card border border-wf-border text-wf-subtext"
-                }`}
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        <TopBar onLogout={() => goToScreen("FEEDBACK")} />
+        <SubHeader onBack={() => goToScreen("HOME")} onHome={() => goToScreen("HOME")} />
+
+        <div style={{ padding: "16px 18px 0" }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px" }}>Choose From Our Recommended Expert Tailors</h2>
+          <p style={{ fontSize: 13, color: "var(--k-text-muted)", margin: "0 0 14px" }}>Verified & Trusted Professionals</p>
+
+          {/* Sort dropdown */}
+          <div style={{ position: "relative", display: "inline-block", marginBottom: 14 }}>
+            <button
+              onClick={() => setShowTailorSortDropdown((v) => !v)}
+              className="k-press"
+              style={{
+                padding: "8px 16px",
+                borderRadius: "var(--k-r-pill)",
+                border: "1px solid var(--k-border)",
+                background: "var(--k-card)",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                color: "var(--k-text)",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              Sort By: {tailorSort} <span style={{ fontSize: 10 }}>⌄</span>
+            </button>
+            {showTailorSortDropdown && (
+              <div
+                className="k-scaleIn"
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  marginTop: 4,
+                  background: "var(--k-card)",
+                  border: "1px solid var(--k-border)",
+                  borderRadius: "var(--k-r)",
+                  boxShadow: "var(--k-shadow-md)",
+                  padding: 6,
+                  zIndex: 50,
+                  width: 180,
+                }}
               >
-                {sort}
-              </button>
-            ))}
+                {["Recommended", "Nearby", "Top Rated"].map((sort) => (
+                  <button
+                    key={sort}
+                    onClick={() => {
+                      setTailorSort(sort);
+                      setShowTailorSortDropdown(false);
+                    }}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "8px 12px",
+                      border: "none",
+                      background: tailorSort === sort ? "var(--k-maroon)" : "transparent",
+                      color: tailorSort === sort ? "#fff" : "var(--k-text)",
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {sort}
+                  </button>
+                ))}
+                <div style={{ display: "flex", gap: 6, padding: "6px 4px 2px" }}>
+                  <button
+                    onClick={() => { setTailorSort("Recommended"); setShowTailorSortDropdown(false); }}
+                    style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: "1px solid var(--k-border)", background: "var(--k-card)", fontSize: 11, fontWeight: 600, cursor: "pointer", color: "var(--k-text-muted)" }}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => setShowTailorSortDropdown(false)}
+                    style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: "none", background: "var(--k-maroon)", fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#fff" }}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 18px 18px" }}>
           {sortedTailors.length === 0 && (
-            <div className="text-center py-20 text-wf-muted text-xl">
+            <div style={{ textAlign: "center", padding: "40px 0", color: "var(--k-text-muted)", fontSize: 15 }}>
               No tailors found in {store?.city || "your area"}
             </div>
           )}
           {sortedTailors.map((tailor) => (
-            <button
-              key={tailor._id}
-              onClick={() => {
-                setSelectedTailorId(tailor.tailorId);
-                goToScreen("TAILOR_DETAIL");
-              }}
-              className="w-full flex items-center gap-5 p-5 bg-wf-card border border-wf-border rounded-2xl cursor-pointer hover:shadow-lg transition-all active:scale-[0.99] text-left"
-            >
-              <div className="w-16 h-16 bg-wf-primary/10 rounded-full flex items-center justify-center text-2xl text-wf-primary flex-shrink-0">
-                &#9986;
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-xl font-bold text-wf-text truncate">
-                    {tailor.name}
-                  </h3>
-                  {tailor.badge && (
-                    <span className="text-xs bg-wf-green/10 text-wf-green px-2 py-0.5 rounded-full font-semibold">
-                      {tailor.badge}
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-wf-subtext">
-                  {tailor.specialties?.join(", ") || "General tailoring"}
-                </p>
-                <div className="flex items-center gap-4 mt-1">
-                  <span className="text-sm text-wf-amber font-semibold">
-                    {"&#9733;".repeat(0)} {tailor.rating.toFixed(1)}
-                  </span>
-                  <span className="text-sm text-wf-muted">
-                    {tailor.reviewCount || 0} reviews
-                  </span>
-                  <span className="text-sm text-wf-muted">
-                    {tailor.area || tailor.city}
-                  </span>
+            <div key={tailor._id} className="k-tailor-card k-slideUp">
+              <div style={{ display: "flex", gap: 12 }}>
+                {/* Photo placeholder */}
+                <GradientBox
+                  grad={GRADIENT_PRESETS[Math.floor(Math.random() * GRADIENT_PRESETS.length)]}
+                  style={{ width: 60, height: 60, borderRadius: "50%", flexShrink: 0 }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--k-text)", margin: "0 0 2px" }}>{tailor.name}</h3>
+                  <p style={{ fontSize: 12, color: "var(--k-text-muted)", margin: "0 0 6px" }}>
+                    {tailor.specialties?.join(", ") || "General tailoring"}
+                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    {/* Avatar group */}
+                    <div style={{ display: "flex" }}>
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} style={{ width: 18, height: 18, borderRadius: "50%", background: GRADIENT_PRESETS[i][0], border: "1.5px solid var(--k-card)", marginLeft: i > 0 ? -6 : 0 }} />
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--k-text-muted)" }}>×84 Happy Clients</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "var(--k-text-muted)" }}>📍 {tailor.area || tailor.city}</span>
+                    <span style={{ fontSize: 11, color: "var(--k-text-light)" }}>· 2.5 km</span>
+                  </div>
                 </div>
               </div>
-              <span className="text-wf-muted text-2xl">&rarr;</span>
-            </button>
+
+              {/* Buttons */}
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button
+                  onClick={() => {
+                    setSelectedTailorId(tailor.tailorId);
+                    goToScreen("TAILOR_DETAIL");
+                  }}
+                  className="k-press"
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: "var(--k-r-pill)",
+                    border: "none",
+                    background: "var(--k-maroon)",
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  View Portfolio →
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedTailorId(tailor.tailorId);
+                    setShowTailorConsent(true);
+                  }}
+                  className="k-press"
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: "var(--k-r-pill)",
+                    border: "1.5px solid var(--k-border)",
+                    background: "var(--k-card)",
+                    color: "var(--k-text)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Connect With {tailor.name.split(" ")[0]}
+                </button>
+              </div>
+            </div>
           ))}
+
+          {/* Why Choose Our Tailors */}
+          <div style={{ marginTop: 20, padding: "16px 0" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--k-text)", margin: "0 0 12px", textAlign: "center" }}>Why Choose Our Tailors?</h3>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              {[
+                { icon: "✓", label: "Verified Professionals" },
+                { icon: "🚚", label: "2-3 Day Delivery" },
+                { icon: "⭐", label: "Quality Guaranteed" },
+              ].map((badge) => (
+                <div
+                  key={badge.label}
+                  style={{
+                    flex: 1,
+                    textAlign: "center",
+                    background: "var(--k-card)",
+                    borderRadius: "var(--k-r)",
+                    padding: "14px 8px",
+                    border: "1px solid var(--k-border-l)",
+                    boxShadow: "var(--k-shadow)",
+                  }}
+                >
+                  <span style={{ fontSize: 22, display: "block", marginBottom: 6 }}>{badge.icon}</span>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text)", margin: 0 }}>{badge.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+
+        {/* Tailor consent overlay (shared) */}
+        {showTailorConsent && selectedTailorId && (
+          <div className="k-overlay k-fadeIn">
+            <div className="k-modal k-scaleIn">
+              <h3 style={{ fontSize: 20, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>
+                Connect with Tailor
+              </h3>
+              <p style={{ fontSize: 14, color: "var(--k-text-mid)", margin: "0 0 20px" }}>
+                You will be redirected to WhatsApp with a reference code. Your phone number may be shared with the tailor for follow-up.
+              </p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => { setShowTailorConsent(false); setSelectedTailorId(null); }}
+                  className="k-press"
+                  style={{ flex: 1, padding: "14px 0", borderRadius: "var(--k-r)", border: "1.5px solid var(--k-border)", background: "var(--k-card)", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--k-text)" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowTailorConsent(false);
+                    const refCode = `WF-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+                    const tailorData = tailors?.find((t) => t.tailorId === selectedTailorId);
+                    if (tailorData) {
+                      const text = encodeURIComponent(
+                        `Hi ${tailorData.name}, I found you on Wearify at ${config.storeName}. Reference: ${refCode}`
+                      );
+                      const phone = tailorData.phone.replace("+", "");
+                      window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
+                    }
+                    setSelectedTailorId(null);
+                  }}
+                  className="k-press"
+                  style={{ flex: 1, padding: "14px 0", borderRadius: "var(--k-r)", border: "none", background: "var(--k-green)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Open WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1793,119 +2641,123 @@ export default function KioskPage() {
   // =========================================================================
   if (currentScreen === "TAILOR_DETAIL" && selectedTailorId && !selectedTailor) {
     return (
-      <div className="w-full h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin text-5xl mb-4 text-wf-primary">&#9881;</div>
-          <p className="text-xl text-wf-subtext">Loading tailor details...</p>
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ fontSize: 36, color: "var(--k-text-muted)", marginBottom: 12 }}>⏳</div>
+        <p style={{ fontSize: 16, color: "var(--k-text-muted)" }}>Loading tailor details...</p>
       </div>
     );
   }
 
   if (currentScreen === "TAILOR_DETAIL" && selectedTailor) {
     return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
-        <div className="px-6 pt-5 pb-4 flex-shrink-0">
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        {/* Sub-header only: back + home */}
+        <div className="k-subheader" style={{ gap: 12 }}>
           <button
-            onClick={() => {
-              setSelectedTailorId(null);
-              goToScreen("TAILORS");
-            }}
-            className="flex items-center gap-2 text-wf-subtext text-lg font-medium cursor-pointer hover:text-wf-text transition-colors"
+            onClick={() => { setSelectedTailorId(null); goToScreen("TAILORS"); }}
+            className="k-press"
+            style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--k-text)", padding: "4px 8px" }}
           >
-            <span className="text-2xl">&larr;</span>
-            Back to Tailors
+            ←
+          </button>
+          <button
+            onClick={() => goToScreen("HOME")}
+            className="k-press"
+            style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--k-text-muted)", padding: "4px 8px" }}
+          >
+            ⌂
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
-          {/* Tailor info */}
-          <div className="flex items-center gap-6 mb-6">
-            <div className="w-24 h-24 bg-wf-primary/10 rounded-full flex items-center justify-center text-4xl text-wf-primary">
-              &#9986;
-            </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 18px 18px" }}>
+          {/* Tailor photo + info card */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18, marginTop: 16 }}>
+            <GradientBox
+              grad={GRADIENT_PRESETS[2]}
+              style={{ width: 80, height: 80, borderRadius: "50%", flexShrink: 0 }}
+            />
             <div>
-              <h2 className="text-3xl font-bold text-wf-text">
-                {selectedTailor.name}
-              </h2>
-              <p className="text-lg text-wf-subtext">
-                {selectedTailor.area || selectedTailor.city}
+              <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 2px" }}>{selectedTailor.name}</h2>
+              <p style={{ fontSize: 13, color: "var(--k-text-muted)", margin: "0 0 4px" }}>
+                {selectedTailor.specialties?.join(", ") || "General tailoring"}
               </p>
-              <div className="flex items-center gap-4 mt-1">
-                <span className="text-lg text-wf-amber font-semibold">
-                  {selectedTailor.rating.toFixed(1)} stars
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 13, color: "var(--k-gold)", fontWeight: 600 }}>
+                  {"\u2605".repeat(Math.round(selectedTailor.rating))} {selectedTailor.rating.toFixed(1)}
                 </span>
-                <span className="text-base text-wf-muted">
-                  {selectedTailor.reviewCount || 0} reviews
-                </span>
+                <span style={{ fontSize: 12, color: "var(--k-text-muted)" }}>📍 {selectedTailor.area || selectedTailor.city}</span>
               </div>
+              {selectedTailor.experience && (
+                <p style={{ fontSize: 12, color: "var(--k-text-mid)", marginTop: 4 }}>{selectedTailor.experience} years experience</p>
+              )}
             </div>
           </div>
 
           {selectedTailor.bio && (
-            <p className="text-wf-subtext text-base mb-6 leading-relaxed">
+            <p style={{ fontSize: 13, color: "var(--k-text-mid)", lineHeight: 1.6, margin: "0 0 18px" }}>
               {selectedTailor.bio}
             </p>
           )}
 
-          <div className="flex gap-3 mb-6">
-            {selectedTailor.specialties?.map((spec) => (
-              <span
-                key={spec}
-                className="px-4 py-2 bg-wf-primary/10 text-wf-primary rounded-xl text-sm font-semibold"
-              >
-                {spec}
-              </span>
-            ))}
-          </div>
+          {/* Connect button */}
+          <button
+            onClick={() => setShowTailorConsent(true)}
+            className="k-press"
+            style={{
+              width: "100%",
+              padding: "16px 0",
+              borderRadius: "var(--k-r-pill)",
+              border: "none",
+              background: "var(--k-maroon)",
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: "pointer",
+              marginBottom: 24,
+            }}
+          >
+            Connect With {selectedTailor.name.split(" ")[0]}
+          </button>
 
-          {/* Portfolio grid */}
-          <h3 className="text-xl font-bold text-wf-text mb-4">Portfolio</h3>
-          <div className="grid grid-cols-4 gap-4 mb-8">
+          {/* Portfolio */}
+          <h3 style={{ fontSize: 17, fontWeight: 700, color: "var(--k-text)", margin: "0 0 12px" }}>Portfolio</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 18 }}>
             {(tailorPortfolio || []).map((item) => (
               <GradientBox
                 key={item._id}
                 grad={item.grad || GRADIENT_PRESETS[Math.floor(Math.random() * GRADIENT_PRESETS.length)]}
-                className="h-32 w-full"
+                style={{ width: "100%", height: 120, borderRadius: "var(--k-r-sm)" }}
               >
                 {item.tag && (
-                  <span className="text-white text-xs bg-black/40 px-2 py-1 rounded-full">
+                  <span style={{ position: "absolute", bottom: 6, left: 6, background: "rgba(0,0,0,.4)", color: "#fff", fontSize: 10, padding: "2px 8px", borderRadius: 100 }}>
                     {item.tag}
                   </span>
                 )}
               </GradientBox>
             ))}
             {(!tailorPortfolio || tailorPortfolio.length === 0) && (
-              <div className="col-span-4 text-center py-10 text-wf-muted">
+              <div style={{ gridColumn: "span 3", textAlign: "center", padding: "30px 0", color: "var(--k-text-muted)", fontSize: 14 }}>
                 No portfolio items yet
               </div>
             )}
           </div>
-
-          {/* Connect button */}
-          <button
-            onClick={() => setShowTailorConsent(true)}
-            className="w-full max-w-md mx-auto block py-5 bg-wf-green text-white rounded-2xl text-xl font-bold cursor-pointer hover:bg-wf-green/90 transition-colors"
-          >
-            Connect via WhatsApp
-          </button>
         </div>
 
-        {/* WhatsApp consent for tailor */}
+        {/* Tailor WhatsApp consent */}
         {showTailorConsent && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div className="bg-wf-bg rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
-              <h3 className="text-2xl font-bold text-wf-text mb-4 text-center">
+          <div className="k-overlay k-fadeIn">
+            <div className="k-modal k-scaleIn">
+              <h3 style={{ fontSize: 20, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>
                 Connect with {selectedTailor.name}
               </h3>
-              <p className="text-wf-subtext text-base text-center mb-6">
-                You will be redirected to WhatsApp with a reference code. Your
-                phone number may be shared with the tailor for follow-up.
+              <p style={{ fontSize: 14, color: "var(--k-text-mid)", margin: "0 0 20px" }}>
+                You will be redirected to WhatsApp with a reference code. Your phone number may be shared with the tailor for follow-up.
               </p>
-              <div className="flex gap-3">
+              <div style={{ display: "flex", gap: 10 }}>
                 <button
                   onClick={() => setShowTailorConsent(false)}
-                  className="flex-1 py-4 bg-wf-card border border-wf-border rounded-2xl text-lg font-semibold cursor-pointer text-wf-text"
+                  className="k-press"
+                  style={{ flex: 1, padding: "14px 0", borderRadius: "var(--k-r)", border: "1.5px solid var(--k-border)", background: "var(--k-card)", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--k-text)" }}
                 >
                   Cancel
                 </button>
@@ -1917,12 +2769,10 @@ export default function KioskPage() {
                       `Hi ${selectedTailor.name}, I found you on Wearify at ${config.storeName}. Reference: ${refCode}`
                     );
                     const phone = selectedTailor.phone.replace("+", "");
-                    window.open(
-                      `https://wa.me/${phone}?text=${text}`,
-                      "_blank"
-                    );
+                    window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
                   }}
-                  className="flex-1 py-4 bg-wf-green text-white rounded-2xl text-lg font-semibold cursor-pointer"
+                  className="k-press"
+                  style={{ flex: 1, padding: "14px 0", borderRadius: "var(--k-r)", border: "none", background: "var(--k-green)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
                 >
                   Open WhatsApp
                 </button>
@@ -1940,87 +2790,135 @@ export default function KioskPage() {
   if (currentScreen === "FEEDBACK") {
     if (showThankYou) {
       return (
-        <div className="w-full h-full flex items-center justify-center">
-          <div className="text-center">
-            <span className="text-8xl block mb-6 text-wf-green">
-              &#10003;
-            </span>
-            <h2 className="text-4xl font-bold text-wf-text mb-2">
-              Thank You!
-            </h2>
-            <p className="text-xl text-wf-subtext">
-              Your feedback helps us improve
-            </p>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center" }}>
+          <div className="k-popIn" style={{ textAlign: "center" }}>
+            <span style={{ fontSize: 64, color: "var(--k-green)", display: "block", marginBottom: 12 }}>✓</span>
+            <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>Thank You!</h2>
+            <p style={{ fontSize: 15, color: "var(--k-text-muted)" }}>Your feedback helps us improve</p>
           </div>
         </div>
       );
     }
 
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-8">
-        <div className="max-w-lg w-full text-center">
-          <h2 className="text-3xl font-bold text-wf-text mb-2">
-            How was your experience?
+      <div className="k-overlay k-fadeIn">
+        <div className="k-modal k-scaleIn" style={{ maxWidth: 420 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px" }}>
+            Try-on Feedback
           </h2>
-          <p className="text-wf-subtext text-lg mb-8">
-            Rate your session at {config.storeName}
+          <p style={{ fontSize: 13, color: "var(--k-text-muted)", margin: "0 0 20px" }}>
+            Please rate your experience below
           </p>
 
-          {/* Stars */}
-          <div className="flex justify-center gap-4 mb-8">
+          {/* Star rating */}
+          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 6 }}>
             {[1, 2, 3, 4, 5].map((star) => (
-              <button
+              <span
                 key={star}
+                className="k-star"
                 onClick={() => setFeedbackRating(star)}
-                className={`w-20 h-20 rounded-2xl text-4xl cursor-pointer transition-all active:scale-90 ${
-                  feedbackRating >= star
-                    ? "bg-wf-amber text-white scale-105"
-                    : "bg-wf-card border border-wf-border text-wf-muted"
-                }`}
+                style={{
+                  color: feedbackRating >= star ? "var(--k-gold)" : "var(--k-border)",
+                }}
               >
-                &#9733;
-              </button>
+                {feedbackRating >= star ? "\u2605" : "\u2606"}
+              </span>
             ))}
           </div>
+          <p style={{ fontSize: 12, color: "var(--k-text-muted)", textAlign: "center", margin: "0 0 18px" }}>
+            {feedbackRating}/5 stars
+          </p>
 
-          {/* Quick chips */}
-          <div className="flex flex-wrap gap-3 justify-center mb-8">
-            {FEEDBACK_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                onClick={() =>
-                  setFeedbackChips((prev) =>
-                    prev.includes(chip)
-                      ? prev.filter((c) => c !== chip)
-                      : [...prev, chip]
-                  )
-                }
-                className={`px-5 py-3 rounded-xl text-base font-medium cursor-pointer transition-all ${
-                  feedbackChips.includes(chip)
-                    ? "bg-wf-primary text-white"
-                    : "bg-wf-card border border-wf-border text-wf-text hover:bg-wf-primary/10"
-                }`}
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
+          {/* Additional feedback textarea */}
+          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--k-text)", marginBottom: 6, textAlign: "left" }}>
+            Additional feedback
+          </label>
+          <textarea
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            placeholder="Tell us more about your experience..."
+            style={{
+              width: "100%",
+              minHeight: 80,
+              padding: "10px 12px",
+              borderRadius: "var(--k-r-sm)",
+              border: "1px solid var(--k-border)",
+              background: "var(--k-bg)",
+              fontSize: 13,
+              color: "var(--k-text)",
+              fontFamily: "inherit",
+              resize: "vertical",
+              outline: "none",
+              marginBottom: 16,
+              boxSizing: "border-box",
+            }}
+          />
 
-          {/* Submit */}
+          {/* Submit button */}
           <button
             onClick={handleSubmitFeedback}
             disabled={feedbackRating === 0}
-            className="w-full max-w-sm mx-auto py-4 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-wf-primary/90 transition-colors"
+            className="k-press"
+            style={{
+              width: "100%",
+              padding: "14px 0",
+              borderRadius: "var(--k-r-pill)",
+              border: "none",
+              background: feedbackRating > 0 ? "var(--k-maroon)" : "var(--k-border)",
+              color: feedbackRating > 0 ? "#fff" : "var(--k-text-muted)",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: feedbackRating > 0 ? "pointer" : "default",
+              marginBottom: 16,
+            }}
           >
-            Submit Feedback
+            Submit feedback
           </button>
 
-          <button
-            onClick={() => goToScreen("DATA_SAVE")}
-            className="block mx-auto mt-4 text-wf-muted text-base cursor-pointer"
-          >
-            Skip
-          </button>
+          {/* OR divider */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <div style={{ flex: 1, height: 1, background: "var(--k-border)" }} />
+            <span style={{ fontSize: 12, color: "var(--k-text-muted)", fontWeight: 600 }}>OR</span>
+            <div style={{ flex: 1, height: 1, background: "var(--k-border)" }} />
+          </div>
+
+          {/* Home & Logout buttons */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={() => goToScreen("HOME")}
+              className="k-press"
+              style={{
+                flex: 1,
+                padding: "12px 0",
+                borderRadius: "var(--k-r-pill)",
+                border: "1.5px solid var(--k-border)",
+                background: "var(--k-card)",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                color: "var(--k-text)",
+              }}
+            >
+              ⌂ Home
+            </button>
+            <button
+              onClick={() => goToScreen("DATA_SAVE")}
+              className="k-press"
+              style={{
+                flex: 1,
+                padding: "12px 0",
+                borderRadius: "var(--k-r-pill)",
+                border: "1.5px solid var(--k-border)",
+                background: "var(--k-card)",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                color: "var(--k-text)",
+              }}
+            >
+              ↪ Log out
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -2031,35 +2929,54 @@ export default function KioskPage() {
   // =========================================================================
   if (currentScreen === "DATA_SAVE") {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-8">
-        <div className="max-w-lg w-full text-center">
-          <h2 className="text-3xl font-bold text-wf-text mb-2">
-            Save Your Session?
+      <div className="k-overlay k-fadeIn">
+        <div className="k-modal k-scaleIn">
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 20px" }}>
+            Do you want to save your data?
           </h2>
-          <p className="text-wf-subtext text-lg mb-10">
-            Choose what happens with your session data
-          </p>
-
-          {!isGuest && customerPhone && (
-            <button
-              onClick={handleEndSessionClean}
-              className="w-full py-5 bg-wf-primary text-white rounded-2xl text-xl font-bold cursor-pointer hover:bg-wf-primary/90 transition-colors mb-4"
-            >
-              Save to My Account
-              <span className="block text-sm font-normal text-white/70 mt-1">
-                {customerPhone}
-              </span>
-            </button>
-          )}
 
           <button
-            onClick={handleEndSessionClean}
-            className="w-full py-5 bg-wf-red text-white rounded-2xl text-xl font-bold cursor-pointer hover:bg-wf-red/90 transition-colors"
+            onClick={() => handleEndSessionClean()}
+            className="k-press"
+            style={{
+              width: "100%",
+              padding: "16px 0",
+              borderRadius: "var(--k-r-pill)",
+              border: "none",
+              background: "var(--k-maroon)",
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: "pointer",
+              marginBottom: 14,
+            }}
           >
-            Delete Everything
-            <span className="block text-sm font-normal text-white/70 mt-1">
-              All session data will be permanently erased
-            </span>
+            Save
+          </button>
+
+          {/* OR */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div style={{ flex: 1, height: 1, background: "var(--k-border)" }} />
+            <span style={{ fontSize: 12, color: "var(--k-text-muted)", fontWeight: 600 }}>OR</span>
+            <div style={{ flex: 1, height: 1, background: "var(--k-border)" }} />
+          </div>
+
+          <button
+            onClick={() => handleEndSessionClean()}
+            className="k-press"
+            style={{
+              width: "100%",
+              padding: "16px 0",
+              borderRadius: "var(--k-r-pill)",
+              border: "1.5px solid var(--k-border)",
+              background: "var(--k-card)",
+              color: "var(--k-text)",
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Delete
           </button>
         </div>
       </div>
@@ -2071,28 +2988,33 @@ export default function KioskPage() {
   // =========================================================================
   if (currentScreen === "SESSION_END") {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-8">
-        <div className="max-w-lg w-full text-center space-y-6">
-          <span className="text-7xl block text-wf-green">&#10003;</span>
-          <h2 className="text-4xl font-bold text-wf-text">
-            Your Session Has Ended
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div className="k-scaleIn" style={{ textAlign: "center", maxWidth: 400 }}>
+          <span style={{ fontSize: 56, color: "var(--k-green)", display: "block", marginBottom: 16 }}>✓</span>
+          <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>
+            Session Ended
           </h2>
-          <div className="space-y-2">
-            <p className="text-lg text-wf-subtext">
-              All camera data has been cleared
-            </p>
-            <p className="text-base text-wf-muted">
-              Your privacy is protected. No images or personal data are stored
-              on this device after your session ends.
-            </p>
-          </div>
-          <p className="text-wf-muted text-base">
+          <p style={{ fontSize: 14, color: "var(--k-text-mid)", lineHeight: 1.5, margin: "0 0 6px" }}>
+            All camera data has been cleared. Your privacy is protected.
+          </p>
+          <p style={{ fontSize: 14, color: "var(--k-text-muted)", margin: "0 0 24px" }}>
             Returning to home screen in{" "}
-            <span className="font-bold text-wf-text">{endTimer}s</span>
+            <span style={{ fontWeight: 700, color: "var(--k-text)" }}>{endTimer}s</span>
           </p>
           <button
             onClick={resetSession}
-            className="mt-4 px-8 py-4 bg-wf-card border border-wf-border rounded-2xl text-lg font-semibold cursor-pointer text-wf-text"
+            className="k-press"
+            style={{
+              padding: "14px 36px",
+              borderRadius: "var(--k-r-pill)",
+              border: "1.5px solid var(--k-border)",
+              background: "var(--k-card)",
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+              color: "var(--k-text)",
+              boxShadow: "var(--k-shadow)",
+            }}
           >
             Return Now
           </button>
@@ -2101,20 +3023,30 @@ export default function KioskPage() {
     );
   }
 
+  // =========================================================================
   // Fallback
+  // =========================================================================
   return (
-    <div className="w-full h-full flex items-center justify-center">
-      <div className="text-center">
-        <p className="text-2xl text-wf-text mb-4">
-          Screen: {currentScreen}
-        </p>
-        <button
-          onClick={() => goToScreen("IDLE")}
-          className="px-6 py-3 bg-wf-primary text-white rounded-xl cursor-pointer"
-        >
-          Return to Start
-        </button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center" }}>
+      <p style={{ fontSize: 18, color: "var(--k-text)", marginBottom: 12 }}>
+        Screen: {currentScreen}
+      </p>
+      <button
+        onClick={() => goToScreen("IDLE")}
+        className="k-press"
+        style={{
+          padding: "12px 28px",
+          borderRadius: "var(--k-r-pill)",
+          border: "none",
+          background: "var(--k-maroon)",
+          color: "#fff",
+          fontSize: 15,
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        Return to Start
+      </button>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import "./kiosk-theme.css";
 
 interface KioskConfig {
   storeId: string;
@@ -28,7 +29,6 @@ export default function KioskLayout({
     setChecked(true);
   }, []);
 
-  // Listen for config updates from setup page
   useEffect(() => {
     const handler = () => {
       const stored = localStorage.getItem("wearify_kiosk_store");
@@ -46,24 +46,38 @@ export default function KioskLayout({
 
   if (!checked) {
     return (
-      <div className="w-screen h-screen overflow-hidden bg-black flex items-center justify-center">
-        <div className="text-white/40 text-lg">Loading...</div>
+      <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: "var(--k-text-muted)", fontSize: 14 }}>Loading...</div>
       </div>
     );
   }
 
-  // Not configured -> show setup
   if (!config) {
     return (
-      <div className="w-screen h-screen overflow-hidden bg-black">
+      <div className="k-shell" style={{ background: "#1A0A0A" }}>
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
         {children}
       </div>
     );
   }
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-wf-bg">
-      {children}
-    </div>
+    <>
+      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+      <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+        rel="stylesheet"
+      />
+      <div className="k-shell">
+        {children}
+        <div className="k-footer">
+          © Copyright PHYGIFY TECHNO SERVICES PVT. LTD.
+        </div>
+      </div>
+    </>
   );
 }
