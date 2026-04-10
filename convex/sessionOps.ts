@@ -61,6 +61,23 @@ export const listActiveSessions = query({
   },
 });
 
+// Find active session for a specific staff member in a store
+// Used by kiosk to link to the tablet's session
+export const getActiveSessionForStaff = query({
+  args: { storeId: v.string(), staffId: v.id("staff") },
+  handler: async (ctx, args) => {
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_staffId", (q) => q.eq("staffId", args.staffId))
+      .order("desc")
+      .take(10);
+    // Return the most recent active session for this staff in this store
+    return sessions.find(
+      (s) => s.status === "active" && s.storeId === args.storeId
+    ) ?? null;
+  },
+});
+
 export const listSessionsByStore = query({
   args: { storeId: v.string() },
   handler: async (ctx, args) => {

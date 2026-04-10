@@ -10,6 +10,8 @@ import { Id } from "@/convex/_generated/dataModel";
 // ---------------------------------------------------------------------------
 type Screen =
   | "IDLE"
+  | "MODE_SELECT"
+  | "STAFF_LOGIN"
   | "LANG"
   | "AUTH"
   | "HOME"
@@ -104,6 +106,7 @@ export default function KioskPage() {
 
   // Auth state
   const [authMode, setAuthMode] = useState<"phone" | "code">("phone");
+  const [loginMode, setLoginMode] = useState<"staff" | "customer" | null>(null);
   const [phoneDigits, setPhoneDigits] = useState("");
   const [showConfirmPhone, setShowConfirmPhone] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
@@ -111,6 +114,12 @@ export default function KioskPage() {
   const [otpTimer, setOtpTimer] = useState(60);
   const [storeCode, setStoreCode] = useState("");
   const [authError, setAuthError] = useState("");
+
+  // Staff login state
+  const [staffPin, setStaffPin] = useState("");
+  const [staffId, setStaffId] = useState<Id<"staff"> | null>(null);
+  const [staffName, setStaffName] = useState("");
+  const [linkedFromTablet, setLinkedFromTablet] = useState(false);
 
   // Catalog state
   const [searchTerm, setSearchTerm] = useState("");
@@ -227,11 +236,30 @@ export default function KioskPage() {
   );
 
   const loginWithOtp = useMutation(api.phoneAuth.loginWithOtp);
+  const staffPinLogin = useMutation(api.phoneAuth.staffPinLogin);
   const createSession = useMutation(api.sessionOps.createSession);
   const endSession = useMutation(api.sessionOps.endSession);
   const submitFeedback = useMutation(api.customers.submitFeedback);
   const addToWardrobe = useMutation(api.sessionOps.addToWardrobe);
   const createOrder = useMutation(api.sessionOps.createOrder);
+
+  // Staff session link — find active tablet session for this staff
+  const tabletSession = useQuery(
+    api.sessionOps.getActiveSessionForStaff,
+    staffId && config ? { storeId: config.storeId, staffId } : "skip"
+  );
+
+  // Shortlist subscription — real-time from tablet
+  const shortlistItems = useQuery(
+    api.sessionOps.getShortlist,
+    sessionId ? { sessionId } : "skip"
+  );
+
+  // Items sent to mirror (real-time)
+  const mirrorQueue = shortlistItems?.filter((item) => item.sentToMirror) ?? [];
+  const pendingMirrorItem = mirrorQueue.find(
+    (item) => item.sareeId !== selectedSareeId
+  );
 
   // ---------------------------------------------------------------------------
   // Derived data
@@ -241,6 +269,54 @@ export default function KioskPage() {
     : selectedCategory
       ? occasionSarees ?? []
       : allSarees ?? [];
+
+  // ---------------------------------------------------------------------------
+  // Staff session linking — when tabletSession resolves, use its sessionId
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!staffId || !tabletSession) return;
+    if (tabletSession && tabletSession.sessionId && !sessionId) {
+      setSessionId(tabletSession.sessionId);
+      setLinkedFromTablet(true);
+      if (tabletSession.customerId) {
+        setCustomerId(tabletSession.customerId);
+      }
+      if (tabletSession.customerPhone) {
+        setCustomerPhone(tabletSession.customerPhone);
+      }
+    }
+  }, [staffId, tabletSession, sessionId]);
+
+  // ---------------------------------------------------------------------------
+  // Fallback: create standalone session if staff logged in but no tablet session
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!staffId || sessionId || !config) return;
+    // tabletSession is null (not undefined=loading) means no active tablet session
+    if (tabletSession === null) {
+      createSession({
+        storeId: config.storeId,
+        storeName: config.storeName,
+        staffName: staffName || "Staff",
+      }).then((sid) => {
+        setSessionId(sid);
+      });
+    }
+  }, [staffId, tabletSession, sessionId, config, createSession, staffName]);
+
+  // ---------------------------------------------------------------------------
+  // Auto-load saree sent to mirror from tablet
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!linkedFromTablet || !pendingMirrorItem) return;
+    if (currentScreen === "HOME" || currentScreen === "PRODUCT") {
+      // A new saree was sent to mirror — auto-navigate to try it on
+      setSelectedSareeId(pendingMirrorItem.sareeId);
+      setScanPhase("position");
+      setScanCountdown(3);
+      setCurrentScreen("BODY_SCAN");
+    }
+  }, [pendingMirrorItem, linkedFromTablet, currentScreen]);
 
   // ---------------------------------------------------------------------------
   // Timers
@@ -328,6 +404,7 @@ export default function KioskPage() {
     setCustomerId(null);
     setIsGuest(false);
     setSessionId("");
+    setLoginMode(null);
     setAuthMode("phone");
     setPhoneDigits("");
     setShowConfirmPhone(false);
@@ -336,6 +413,10 @@ export default function KioskPage() {
     setOtpTimer(60);
     setStoreCode("");
     setAuthError("");
+    setStaffPin("");
+    setStaffId(null);
+    setStaffName("");
+    setLinkedFromTablet(false);
     setSearchTerm("");
     setSelectedCategory(null);
     setSelectedSareeId(null);
@@ -458,6 +539,42 @@ export default function KioskPage() {
       goToScreen("HOME");
     } else {
       setAuthError("Invalid store code");
+    }
+  };
+
+  // Staff PIN keypress handler
+  const handleStaffPinKeyPress = (digit: string) => {
+    if (digit === "del") {
+      setStaffPin((d) => d.slice(0, -1));
+    } else if (digit === "clear") {
+      setStaffPin("");
+    } else if (staffPin.length < 4) {
+      setStaffPin((d) => d + digit);
+    }
+  };
+
+  // Staff PIN login
+  const handleStaffPinLogin = async () => {
+    if (!config || staffPin.length < 4) {
+      setAuthError("Enter your staff PIN (4-6 digits)");
+      return;
+    }
+    try {
+      const result = await staffPinLogin({
+        storeId: config.storeId,
+        pin: staffPin,
+      });
+      if (result.success && result.staffId) {
+        setStaffId(result.staffId as Id<"staff">);
+        setStaffName(result.name || "Staff");
+        // Navigate to HOME — the tabletSession effect will link when it resolves
+        // If no tablet session found, we'll create a standalone one via the fallback effect
+        goToScreen("HOME");
+      } else {
+        setAuthError("Invalid PIN. Please try again.");
+      }
+    } catch {
+      setAuthError("Login failed. Please try again.");
     }
   };
 
@@ -787,7 +904,7 @@ export default function KioskPage() {
           overflow: "hidden",
           cursor: "pointer",
         }}
-        onClick={() => goToScreen("HOME")}
+        onClick={() => goToScreen("MODE_SELECT")}
       >
         {/* Background gradient slideshow */}
         <div
@@ -955,16 +1072,239 @@ export default function KioskPage() {
               Experience Our Curated Collection With Virtual Try-On
             </p>
           </div>
+
+          {/* Reconfigure link (for technicians) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              localStorage.removeItem("wearify_kiosk_store");
+              window.location.href = "/kiosk/setup";
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--k-text-light)",
+              fontSize: 11,
+              cursor: "pointer",
+              marginTop: 24,
+              opacity: 0.5,
+            }}
+          >
+            Reconfigure Kiosk
+          </button>
         </div>
       </div>
     );
   }
 
   // =========================================================================
-  // SCREEN: LANG (merged into IDLE - redirect to AUTH)
+  // =========================================================================
+  // SCREEN: MODE_SELECT — Choose Staff or Customer login
+  // =========================================================================
+  if (currentScreen === "MODE_SELECT") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <TopBar />
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", maxWidth: 400, gap: 16 }}>
+          {/* Heading */}
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <h2 className="k-brand" style={{ fontSize: 24, color: "var(--k-text)", margin: "0 0 8px" }}>
+              {config.storeName}
+            </h2>
+            <p style={{ fontSize: 14, color: "var(--k-text-muted)", margin: 0 }}>
+              How would you like to start?
+            </p>
+          </div>
+
+          {/* Staff Login Card */}
+          <button
+            className="k-press k-slideUp"
+            onClick={() => {
+              setLoginMode("staff");
+              setAuthError("");
+              setStaffPin("");
+              goToScreen("STAFF_LOGIN");
+            }}
+            style={{
+              width: "100%",
+              padding: "24px 20px",
+              borderRadius: "var(--k-r-lg)",
+              background: "var(--k-card)",
+              border: "2px solid var(--k-border)",
+              boxShadow: "var(--k-shadow-md)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              textAlign: "left",
+            }}
+          >
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: "var(--k-maroon)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                <circle cx="12" cy="7" r="4" stroke="#fff" strokeWidth="2" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: "var(--k-text)", marginBottom: 4 }}>Staff Login</div>
+              <div style={{ fontSize: 13, color: "var(--k-text-muted)", lineHeight: 1.4 }}>
+                Enter your staff PIN to connect with the tablet session
+              </div>
+            </div>
+          </button>
+
+          {/* Customer Login Card */}
+          <button
+            className="k-press k-slideUp k-d2"
+            onClick={() => {
+              setLoginMode("customer");
+              setAuthError("");
+              setAuthStep("consent");
+              setPhoneDigits("");
+              setOtpDigits("");
+              goToScreen("AUTH");
+            }}
+            style={{
+              width: "100%",
+              padding: "24px 20px",
+              borderRadius: "var(--k-r-lg)",
+              background: "var(--k-card)",
+              border: "2px solid var(--k-border)",
+              boxShadow: "var(--k-shadow-md)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              textAlign: "left",
+            }}
+          >
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: "var(--k-gold)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                <rect x="5" y="2" width="14" height="20" rx="2" stroke="#fff" strokeWidth="2" />
+                <line x1="12" y1="18" x2="12" y2="18" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: "var(--k-text)", marginBottom: 4 }}>Customer Walk-in</div>
+              <div style={{ fontSize: 13, color: "var(--k-text-muted)", lineHeight: 1.4 }}>
+                Enter your mobile number to start a virtual try-on
+              </div>
+            </div>
+          </button>
+
+          {/* Back to idle */}
+          <button
+            onClick={() => goToScreen("IDLE")}
+            style={{ background: "none", border: "none", color: "var(--k-text-muted)", fontSize: 13, cursor: "pointer", marginTop: 8 }}
+          >
+            ← Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // SCREEN: STAFF_LOGIN — PIN entry for staff
+  // =========================================================================
+  if (currentScreen === "STAFF_LOGIN") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
+        <TopBar onLogout={() => goToScreen("IDLE")} />
+        <SubHeader onBack={() => goToScreen("MODE_SELECT")} onHome={() => goToScreen("IDLE")} />
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px" }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 6px", textAlign: "center" }}>
+            Staff Login
+          </h2>
+          <p style={{ fontSize: 14, color: "var(--k-text-muted)", margin: "0 0 28px", textAlign: "center" }}>
+            Enter your staff PIN to connect with your tablet session
+          </p>
+
+          {/* PIN display — 4 digits */}
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 20 }}>
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                style={{
+                  width: 56,
+                  height: 64,
+                  borderRadius: 14,
+                  background: "var(--k-card)",
+                  border: `2px solid ${staffPin[i] ? "var(--k-maroon)" : "var(--k-border)"}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 26,
+                  fontWeight: 700,
+                  color: "var(--k-text)",
+                  transition: "border-color .2s",
+                }}
+              >
+                {staffPin[i] ? "•" : ""}
+              </div>
+            ))}
+          </div>
+
+          {/* Error */}
+          {authError && (
+            <p style={{ fontSize: 13, color: "var(--k-red)", textAlign: "center", margin: "0 0 12px" }}>
+              {authError}
+            </p>
+          )}
+
+          {/* Enter button */}
+          <button
+            className="k-press"
+            onClick={handleStaffPinLogin}
+            disabled={staffPin.length < 4}
+            style={{
+              width: "100%",
+              maxWidth: 340,
+              padding: "14px 0",
+              borderRadius: "var(--k-r)",
+              background: staffPin.length >= 4 ? "var(--k-maroon)" : "var(--k-border)",
+              color: staffPin.length >= 4 ? "#fff" : "var(--k-text-muted)",
+              fontSize: 17,
+              fontWeight: 700,
+              border: "none",
+              cursor: staffPin.length >= 4 ? "pointer" : "not-allowed",
+              transition: "all .2s",
+              marginBottom: 8,
+            }}
+          >
+            Enter
+          </button>
+
+          <div style={{ flex: 1 }} />
+        </div>
+
+        {/* Numpad */}
+        <div className="k-numpad">
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"].map(
+            (key) =>
+              key === "" ? (
+                <div key="empty" />
+              ) : (
+                <button
+                  key={key}
+                  onClick={() => handleStaffPinKeyPress(key)}
+                  className={key === "del" ? "k-num-back" : ""}
+                >
+                  {key === "del" ? "⌫" : key}
+                </button>
+              )
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // SCREEN: LANG (merged into IDLE - redirect to MODE_SELECT)
   // =========================================================================
   if (currentScreen === "LANG") {
-    goToScreen("AUTH");
+    goToScreen("MODE_SELECT");
     return null;
   }
 
@@ -975,7 +1315,7 @@ export default function KioskPage() {
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)" }}>
         <TopBar onLogout={() => goToScreen("IDLE")} />
-        <SubHeader onBack={() => goToScreen("IDLE")} onHome={() => goToScreen("IDLE")} />
+        <SubHeader onBack={() => goToScreen("MODE_SELECT")} onHome={() => goToScreen("IDLE")} />
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "auto" }}>
           {/* Step 1: Consent modal */}
@@ -1342,6 +1682,75 @@ export default function KioskPage() {
 
         {/* Scrollable content area */}
         <div style={{ flex: 1, overflowY: "auto" }}>
+
+          {/* ── FROM TABLET queue (only for staff login with linked session) ── */}
+          {linkedFromTablet && mirrorQueue.length > 0 && (
+            <div style={{ padding: "12px 18px 0" }}>
+              <div style={{
+                background: "linear-gradient(135deg, var(--k-maroon), #8B2E2E)",
+                borderRadius: "var(--k-r)",
+                padding: "14px 16px",
+                marginBottom: 12,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ADE80", animation: "k-pulse 1.5s ease infinite" }} />
+                  <span style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>From Tablet — {mirrorQueue.length} sent to mirror</span>
+                  <span style={{ color: "rgba(255,255,255,.5)", fontSize: 12, marginLeft: "auto" }}>Staff: {staffName}</span>
+                </div>
+                <div className="k-no-scroll" style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                  {mirrorQueue.map((item) => {
+                    const saree = allSarees?.find((s) => s._id === item.sareeId);
+                    if (!saree) return null;
+                    return (
+                      <button
+                        key={item._id}
+                        className="k-press"
+                        onClick={() => {
+                          setSelectedSareeId(item.sareeId);
+                          setScanPhase("position");
+                          setScanCountdown(3);
+                          goToScreen("BODY_SCAN");
+                        }}
+                        style={{
+                          flexShrink: 0,
+                          width: 130,
+                          background: "rgba(255,255,255,.12)",
+                          border: "1px solid rgba(255,255,255,.2)",
+                          borderRadius: 12,
+                          padding: 10,
+                          cursor: "pointer",
+                          textAlign: "left",
+                        }}
+                      >
+                        <GradientBox
+                          grad={saree.grad || GRADIENT_PRESETS[0]}
+                          style={{ width: "100%", height: 70, borderRadius: 8, marginBottom: 6 }}
+                        />
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {saree.name}
+                        </div>
+                        <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", marginTop: 2 }}>
+                          Tap to try on →
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Staff info bar */}
+          {staffName && (
+            <div style={{ padding: "0 18px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: linkedFromTablet ? "var(--k-green)" : "var(--k-gold)" }} />
+              <span style={{ fontSize: 12, color: "var(--k-text-muted)" }}>
+                Logged in as <strong style={{ color: "var(--k-text)" }}>{staffName}</strong>
+                {linkedFromTablet ? " · Linked to tablet session" : " · Standalone session"}
+              </span>
+            </div>
+          )}
+
           {/* Trending Now */}
           <HScrollSection title="Trending Now">
             {displaySarees.slice(0, 8).map((saree) => (

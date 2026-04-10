@@ -105,15 +105,19 @@ export default function CustomerLoginPage() {
           role: "customer",
           name: "Customer",
         });
-        if (result.success) {
-          setToken(result.token!);
+        if (result.success && result.token) {
+          // Clear any stale data first, then set fresh token
+          localStorage.removeItem("wearify_auth_token");
+          localStorage.removeItem("wearify_auth_user");
+          setToken(result.token);
           setStoredUser({
             phone: fullPhone(phoneDigits),
-            name: "Customer",
+            name: result.customerId ? "Customer" : "Customer",
             role: "customer",
             customerId: result.customerId as string,
           });
-          router.replace("/c");
+          // Use window.location for a clean navigation (avoids stale state)
+          window.location.href = "/c";
         } else {
           setError(result.error || "Invalid OTP");
           setOtpDigits(["", "", "", "", "", ""]);
@@ -599,6 +603,32 @@ export default function CustomerLoginPage() {
                     Verifying...
                   </p>
                 </div>
+              )}
+
+              {/* Manual verify button */}
+              {!loading && (
+                <button
+                  className="cx-press"
+                  onClick={() => submitOtp(otpDigits)}
+                  disabled={otpDigits.some((d) => !d)}
+                  style={{
+                    width: "100%",
+                    padding: "13px 0",
+                    borderRadius: 100,
+                    border: "none",
+                    background: otpDigits.every((d) => d)
+                      ? "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)"
+                      : "rgba(45,27,78,.18)",
+                    color: otpDigits.every((d) => d) ? "#FDF8F0" : "#8B7EA0",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: otpDigits.every((d) => d) ? "pointer" : "not-allowed",
+                    transition: "all .25s",
+                    marginBottom: 14,
+                  }}
+                >
+                  Verify OTP
+                </button>
               )}
 
               {/* Demo OTP hint pill */}

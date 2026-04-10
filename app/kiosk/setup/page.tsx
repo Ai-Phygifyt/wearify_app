@@ -25,7 +25,6 @@ export default function KioskSetupPage() {
     setValidatedStoreId(storeIdInput.trim());
   };
 
-  // When store data arrives, move to code step
   React.useEffect(() => {
     if (validatedStoreId && store === null) {
       setError("Store not found. Check the Store ID.");
@@ -54,21 +53,38 @@ export default function KioskSetupPage() {
 
   if (step === "done") {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-black">
-        <div className="text-center space-y-6">
-          <div className="text-6xl">&#10003;</div>
-          <h1 className="text-3xl font-bold text-white">Kiosk Configured</h1>
-          <p className="text-white/60 text-lg">
-            Store: {store?.name}
+      <div style={{
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 32,
+      }}>
+        <div style={{ textAlign: "center", width: "100%", maxWidth: 440 }}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "var(--k-green-bg)", border: "2px solid rgba(45,133,68,.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32, color: "var(--k-green)" }}>
+            ✓
+          </div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>Kiosk Configured</h1>
+          <p style={{ fontSize: 15, color: "var(--k-text-muted)", margin: "0 0 6px" }}>
+            Store: <strong style={{ color: "var(--k-text)" }}>{store?.name}</strong>
           </p>
-          <p className="text-white/40 text-base">
-            Redirecting to kiosk...
+          <p style={{ fontSize: 13, color: "var(--k-text-light)", margin: "0 0 28px" }}>
+            {store?.city} · {store?.storeId}
           </p>
           <button
             onClick={() => (window.location.href = "/kiosk")}
-            className="mt-4 px-8 py-4 bg-wf-primary text-white rounded-2xl text-lg font-semibold cursor-pointer"
+            style={{
+              padding: "14px 40px",
+              borderRadius: 14,
+              background: "var(--k-maroon)",
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: 600,
+              border: "none",
+              cursor: "pointer",
+            }}
           >
-            Launch Kiosk
+            Launch Kiosk →
           </button>
         </div>
       </div>
@@ -76,43 +92,71 @@ export default function KioskSetupPage() {
   }
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-black">
-      <div className="w-full max-w-lg mx-auto px-8">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-white tracking-tight mb-2">
-            Wearify Kiosk Setup
+    <div style={{
+      flex: 1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+    }}>
+      <div style={{ width: "100%", maxWidth: 440 }}>
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(107,26,26,.1)", border: "1.5px solid rgba(107,26,26,.25)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+            <span style={{ fontSize: 20, fontWeight: 800, color: "var(--k-gold)", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>W</span>
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--k-text)", margin: "0 0 6px", letterSpacing: -0.5 }}>
+            Kiosk Setup
           </h1>
-          <p className="text-white/50 text-lg">
+          <p style={{ fontSize: 14, color: "var(--k-text-muted)", margin: 0 }}>
             One-time configuration by technician
           </p>
         </div>
 
         {step === "store" && (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-white/70 text-sm font-medium mb-2">
-                Store ID
-              </label>
-              <input
-                type="text"
-                value={storeIdInput}
-                onChange={(e) => {
-                  setStoreIdInput(e.target.value);
-                  setError("");
-                }}
-                onKeyDown={(e) => e.key === "Enter" && handleValidateStore()}
-                placeholder="e.g. ST-001"
-                className="w-full px-5 py-4 bg-white/10 border border-white/20 rounded-xl text-white text-lg placeholder:text-white/30 outline-none focus:border-wf-primary transition-colors"
-              />
-            </div>
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--k-text-mid)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+              Store ID
+            </label>
+            <input
+              type="text"
+              value={storeIdInput}
+              onChange={(e) => { setStoreIdInput(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handleValidateStore()}
+              placeholder="e.g. ST-001"
+              style={{
+                width: "100%",
+                padding: "14px 18px",
+                borderRadius: 12,
+                background: "var(--k-card)",
+                border: "1.5px solid var(--k-border)",
+                color: "var(--k-text)",
+                fontSize: 16,
+                fontFamily: "'DM Mono', monospace",
+                letterSpacing: 1,
+                outline: "none",
+                boxSizing: "border-box",
+                marginBottom: 16,
+              }}
+            />
 
             {error && (
-              <p className="text-wf-red text-sm font-medium">{error}</p>
+              <p style={{ fontSize: 13, color: "var(--k-red)", margin: "0 0 12px", textAlign: "center" }}>{error}</p>
             )}
 
             <button
               onClick={handleValidateStore}
-              className="w-full py-4 bg-wf-primary text-white rounded-xl text-lg font-semibold cursor-pointer hover:bg-wf-primary/90 transition-colors"
+              style={{
+                width: "100%",
+                padding: "14px 0",
+                borderRadius: 12,
+                background: "var(--k-maroon)",
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: 600,
+                border: "none",
+                cursor: "pointer",
+              }}
             >
               Validate Store
             </button>
@@ -120,60 +164,89 @@ export default function KioskSetupPage() {
         )}
 
         {step === "code" && (
-          <div className="space-y-6">
-            <div className="bg-white/5 rounded-xl px-5 py-4 border border-white/10">
-              <div className="text-white/50 text-xs uppercase tracking-wide mb-1">
-                Store Verified
+          <div>
+            {/* Verified store info */}
+            <div style={{
+              padding: "14px 18px",
+              borderRadius: 12,
+              background: "var(--k-green-bg)",
+              border: "1px solid rgba(45,133,68,.2)",
+              marginBottom: 20,
+            }}>
+              <div style={{ fontSize: 11, color: "var(--k-green)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, fontWeight: 600 }}>
+                ✓ Store Verified
               </div>
-              <div className="text-white text-lg font-semibold">
-                {store?.name}
-              </div>
-              <div className="text-white/40 text-sm">
-                {store?.city} &middot; {store?.storeId}
+              <div style={{ fontSize: 17, fontWeight: 700, color: "var(--k-text)" }}>{store?.name}</div>
+              <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 2 }}>
+                {store?.city} · {store?.storeId}
               </div>
             </div>
 
-            <div>
-              <label className="block text-white/70 text-sm font-medium mb-2">
-                Tablet Code (6 digits)
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={tabletCode}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                  setTabletCode(val);
-                  setError("");
-                }}
-                className="w-full px-5 py-4 bg-white/10 border border-white/20 rounded-xl text-white text-2xl text-center tracking-[0.5em] font-mono outline-none focus:border-wf-primary transition-colors"
-              />
-              <p className="text-white/30 text-xs mt-2">
-                Walk-in guests use this code to start a session without a phone number
-              </p>
-            </div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--k-text-mid)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+              Tablet Code (6 digits)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={tabletCode}
+              onChange={(e) => { setTabletCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+              style={{
+                width: "100%",
+                padding: "14px 18px",
+                borderRadius: 12,
+                background: "var(--k-card)",
+                border: "1.5px solid var(--k-border)",
+                color: "var(--k-text)",
+                fontSize: 24,
+                fontFamily: "'DM Mono', monospace",
+                textAlign: "center",
+                letterSpacing: 8,
+                outline: "none",
+                boxSizing: "border-box",
+                marginBottom: 6,
+              }}
+            />
+            <p style={{ fontSize: 12, color: "var(--k-text-light)", margin: "0 0 16px", textAlign: "center" }}>
+              Default: 123456
+            </p>
 
             {error && (
-              <p className="text-wf-red text-sm font-medium">{error}</p>
+              <p style={{ fontSize: 13, color: "var(--k-red)", margin: "0 0 12px", textAlign: "center" }}>{error}</p>
             )}
 
             <button
               onClick={handleSaveConfig}
-              className="w-full py-4 bg-wf-primary text-white rounded-xl text-lg font-semibold cursor-pointer hover:bg-wf-primary/90 transition-colors"
+              style={{
+                width: "100%",
+                padding: "14px 0",
+                borderRadius: 12,
+                background: "var(--k-maroon)",
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: 600,
+                border: "none",
+                cursor: "pointer",
+                marginBottom: 10,
+              }}
             >
-              Save &amp; Launch Kiosk
+              Save & Launch Kiosk
             </button>
 
             <button
-              onClick={() => {
-                setStep("store");
-                setValidatedStoreId("");
-                setError("");
+              onClick={() => { setStep("store"); setValidatedStoreId(""); setError(""); }}
+              style={{
+                width: "100%",
+                padding: "12px 0",
+                borderRadius: 12,
+                background: "transparent",
+                color: "var(--k-text-muted)",
+                border: "1px solid var(--k-border)",
+                fontSize: 14,
+                cursor: "pointer",
               }}
-              className="w-full py-3 bg-transparent text-white/50 border border-white/20 rounded-xl text-sm font-medium cursor-pointer hover:bg-white/5 transition-colors"
             >
-              Back
+              ← Back
             </button>
           </div>
         )}
