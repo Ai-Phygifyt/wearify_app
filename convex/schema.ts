@@ -17,6 +17,7 @@ export default defineSchema({
     lastLogin: v.optional(v.number()),
   })
     .index("by_phone", ["phone"])
+    .index("by_phone_and_role", ["phone", "role"])
     .index("by_sessionToken", ["sessionToken"])
     .index("by_role", ["role"]),
 
