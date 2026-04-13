@@ -1,705 +1,709 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { useQuery } from "convex/react";
+import React, { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
-/** Thumbnail that shows a Convex-stored image or gradient+emoji fallback */
-function SareeThumbnail({ fileId, emoji, grad, size }: {
-  fileId?: Id<"_storage">;
-  emoji: string;
-  grad: string[];
-  size: number;
-}) {
+function SareeImage({ fileId, fallbackEmoji, fallbackGrad }: { fileId?: Id<"_storage">; fallbackEmoji: string; fallbackGrad: string[] }) {
   const url = useQuery(api.files.getUrl, fileId ? { fileId } : "skip");
   if (fileId && url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      <img src={url} alt="Saree" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
     );
   }
   return (
     <div style={{
       width: "100%", height: "100%",
-      background: `linear-gradient(135deg, ${grad[0] ?? "#0A1628"}, ${grad[1] ?? "#1A4A65"})`,
+      background: `linear-gradient(135deg, ${fallbackGrad[0]}, ${fallbackGrad[1] || fallbackGrad[0]})`,
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <span style={{ fontSize: size }}>{emoji}</span>
+      <span style={{ fontSize: 100 }}>{fallbackEmoji}</span>
     </div>
   );
 }
 
-const FILTER_PILLS = ["All", "In Stock", "Low Stock", "Aging", "Pending"] as const;
-type Filter = (typeof FILTER_PILLS)[number];
+const PHOTO_TABS = ["Front View", "Back View", "Pallu Detail", "Border Detail"];
+const FABRICS = ["Silk", "Pure Silk", "Cotton", "Georgette", "Crepe", "Chiffon", "Linen", "Cotton-Silk", "Organza", "Tissue"];
 
-function stockDotColor(status: string): string {
-  if (status === "active") return "var(--rt-success)";
-  if (status === "low_stock") return "var(--rt-amber)";
-  return "var(--rt-alert)";
-}
-
-function defaultGrad(type: string): string[] {
-  const map: Record<string, string[]> = {
-    Banarasi: ["#C9941A", "#E65100"],
-    Kanjeevaram: ["#1A4A65", "#0A1628"],
-    Chanderi: ["#1A4A65", "#2A6A85"],
-    Tussar: ["#C9941A", "#E8B84A"],
-    Organza: ["#E8B84A", "#C9941A"],
-    Chiffon: ["#2A6A85", "#1A4A65"],
-    Georgette: ["#1B5E20", "#1A4A65"],
-    Cotton: ["#0A1628", "#1A4A65"],
-    Linen: ["#1B5E20", "#2A6A85"],
-  };
-  return map[type] ?? ["#0A1628", "#1A4A65"];
-}
-
-function tagBadgeStyle(tag: string): React.CSSProperties {
-  const map: Record<string, { bg: string; color: string }> = {
-    Premium: { bg: "rgba(201,148,26,0.2)", color: "#C9941A" },
-    Trending: { bg: "rgba(26,74,101,0.2)", color: "#1A4A65" },
-    New: { bg: "rgba(27,94,32,0.2)", color: "#1B5E20" },
-    "Fast Moving": { bg: "rgba(27,94,32,0.2)", color: "#1B5E20" },
-    Aging: { bg: "rgba(183,28,28,0.2)", color: "#B71C1C" },
-  };
-  const colors = map[tag] ?? { bg: "rgba(122,110,138,0.15)", color: "#7A6E8A" };
-  return {
-    padding: "2px 8px",
-    borderRadius: "var(--rt-radius-pill)",
-    fontSize: 10,
-    fontWeight: 700,
-    background: colors.bg,
-    color: colors.color,
-    backdropFilter: "blur(4px)",
-  };
-}
-
-/* -------- Loading Spinner -------- */
-function LoadingState() {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: "linear-gradient(135deg, var(--rt-navy), var(--rt-teal))",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            animation: "pulse 2s infinite",
-          }}
-        >
-          <span
-            className="rt-serif"
-            style={{ color: "var(--rt-gold)", fontSize: 14, fontWeight: 800, fontStyle: "italic" }}
-          >
-            W
-          </span>
-        </div>
-        <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>Loading catalogue...</span>
-      </div>
-    </div>
-  );
-}
-
-export default function InventoryPage() {
+export default function SareeDetailPage() {
+  const params = useParams();
   const router = useRouter();
-  const [storeId, setStoreId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("All");
-  const [search, setSearch] = useState("");
-  const [view, setView] = useState<"grid" | "list">("grid");
+  const sareeId = params.id as Id<"sarees">;
 
-  useEffect(() => {
+  const saree = useQuery(api.sarees.getById, { id: sareeId });
+  const updateSaree = useMutation(api.sarees.update);
+  const updateStock = useMutation(api.sarees.updateStock);
+  const deleteSaree = useMutation(api.sarees.remove);
+
+  const [editing, setEditing] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [stockInput, setStockInput] = useState("");
+  const [editForm, setEditForm] = useState<Record<string, string | number>>({});
+  const [saving, setSaving] = useState(false);
+  const [photoTab, setPhotoTab] = useState(0);
+  const [resubmitting, setResubmitting] = useState(false);
+
+  if (saree === undefined) {
+    return (
+      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: "linear-gradient(135deg, var(--rt-navy), var(--rt-teal))",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            animation: "pulse 2s infinite",
+          }}>
+            <span style={{ color: "var(--rt-gold)", fontSize: 14, fontWeight: 800, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>W</span>
+          </div>
+          <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>Loading saree...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (saree === null) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <BackBtn onClick={() => router.back()} />
+        <div className="rt-card" style={{ textAlign: "center", padding: "40px 16px" }}>
+          <p style={{ fontSize: 14, color: "var(--rt-muted)" }}>Saree not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  const isPending = saree.approvalStatus === "pending";
+  const isCorrections = saree.approvalStatus === "corrections";
+
+  async function handleResubmit() {
+    setResubmitting(true);
     try {
-      const u = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
-      if (u.storeId) setStoreId(u.storeId);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+      await updateSaree({ id: sareeId, approvalStatus: "pending" });
+    } catch { /* */ } finally { setResubmitting(false); }
+  }
 
-  const sarees = useQuery(api.sarees.listByStore, storeId ? { storeId } : "skip");
-
-  const filtered = useMemo(() => {
-    if (!sarees) return [];
-    return sarees.filter((s) => {
-      if (search) {
-        const t = search.toLowerCase();
-        if (
-          !s.name.toLowerCase().includes(t) &&
-          !s.type.toLowerCase().includes(t) &&
-          !s.fabric.toLowerCase().includes(t)
-        )
-          return false;
-      }
-      if (filter === "In Stock") return s.status === "active";
-      if (filter === "Low Stock") return s.status === "low_stock";
-      if (filter === "Aging") return (s.daysOld ?? 0) >= 60;
-      if (filter === "Pending") return s.approvalStatus === "pending" || s.approvalStatus === "corrections";
-      return true;
+  function startEditing() {
+    setEditing(true);
+    setEditForm({
+      name: saree!.name,
+      price: saree!.price,
+      fabric: saree!.fabric,
+      description: saree!.description || "",
+      region: saree!.region || "",
+      weave: saree!.weave || "",
+      careInstructions: saree!.careInstructions || "",
     });
-  }, [sarees, search, filter]);
+  }
 
-  // Stats
-  const totalSKUs = sarees?.length ?? 0;
-  const activeCount = sarees?.filter((s) => s.status === "active").length ?? 0;
-  const lowCount = sarees?.filter((s) => s.status === "low_stock").length ?? 0;
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await updateSaree({
+        id: sareeId,
+        name: editForm.name as string || undefined,
+        price: editForm.price ? Number(editForm.price) : undefined,
+        fabric: editForm.fabric as string || undefined,
+        description: editForm.description as string || undefined,
+        region: editForm.region as string || undefined,
+        weave: editForm.weave as string || undefined,
+        careInstructions: editForm.careInstructions as string || undefined,
+      });
+      setEditing(false);
+    } catch { /* */ } finally { setSaving(false); }
+  }
 
-  if (!storeId) return <LoadingState />;
+  async function handleStockUpdate() {
+    const n = parseInt(stockInput);
+    if (isNaN(n) || n < 0) return;
+    await updateStock({ id: sareeId, stock: n });
+    setStockInput("");
+  }
+
+  async function handleDelete() {
+    await deleteSaree({ id: sareeId });
+    router.push("/store/inventory");
+  }
+
+  const discount = saree.mrp && saree.mrp > saree.price
+    ? Math.round(((saree.mrp - saree.price) / saree.mrp) * 100)
+    : 0;
+  const grad = saree.grad || ["#ddd", "#eee"];
+  const stockLabel = saree.stock <= 0 ? "Out of Stock" : saree.stock <= 5 ? `${saree.stock} left` : `${saree.stock} in stock`;
+  const stockBadgeClass = saree.stock <= 0 ? "rt-badge rt-badge-alert" : saree.stock <= 5 ? "rt-badge rt-badge-amber" : "rt-badge rt-badge-success";
+  const tryOnRate = (saree.views ?? 0) > 0 ? Math.round(((saree.tryOns ?? 0) / (saree.views ?? 1)) * 100) : 0;
+  const conversionRate = (saree.tryOns ?? 0) > 0 ? Math.round(((saree.conversions ?? 0) / Math.max(saree.tryOns ?? 1, 1)) * 100) : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* ── Header ── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h1
-          className="rt-serif"
-          style={{
-            fontSize: 20,
-            fontWeight: 700,
-            fontStyle: "italic",
-            color: "var(--rt-navy)",
-            margin: 0,
-          }}
-        >
-          Catalogue
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <BackBtn onClick={() => router.back()} />
+        <h1 style={{
+          flex: 1,
+          fontSize: 18,
+          fontWeight: 700,
+          color: "var(--rt-text)",
+          margin: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>
+          {saree.name}
         </h1>
-        <button
-          className="rt-btn rt-btn-gold rt-btn-sm"
-          onClick={() => router.push("/store/inventory/add")}
-        >
-          + Add Saree
-        </button>
+        {!editing && !isPending && (
+          <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={startEditing}>
+            Edit
+          </button>
+        )}
       </div>
 
-      {/* ── Search ── */}
-      <div style={{ position: "relative" }}>
-        <span
-          style={{
-            position: "absolute",
-            left: 14,
-            top: "50%",
-            transform: "translateY(-50%)",
-            fontSize: 16,
-            lineHeight: 1,
-            pointerEvents: "none",
-          }}
-        >
-          {"\uD83D\uDD0D"}
-        </span>
-        <input
-          type="text"
-          className="rt-input"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search sarees..."
-          style={{
-            paddingLeft: 40,
-            borderRadius: 20,
-            background: "var(--rt-cream)",
-          }}
-        />
-      </div>
-
-      {/* ── Filter Pills ── */}
-      <div
-        style={{
+      {/* Approval Status Banners */}
+      {isPending && (
+        <div style={{
+          padding: "12px 16px",
+          borderRadius: "var(--rt-radius-lg)",
+          background: "rgba(10, 22, 40, 0.06)",
+          border: "1.5px solid rgba(10, 22, 40, 0.12)",
           display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>{"\u23F3"}</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--rt-navy)" }}>
+              Pending Admin Approval
+            </div>
+            <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
+              This saree is awaiting admin review. Editing is not available until approved.
+            </div>
+          </div>
+        </div>
+      )}
+      {isCorrections && (
+        <div style={{
+          padding: "12px 16px",
+          borderRadius: "var(--rt-radius-lg)",
+          background: "rgba(245, 166, 35, 0.08)",
+          border: "1.5px solid rgba(245, 166, 35, 0.25)",
+          display: "flex",
+          flexDirection: "column",
           gap: 8,
-          overflowX: "auto",
-          paddingBottom: 2,
-          msOverflowStyle: "none",
-          scrollbarWidth: "none",
-        }}
-      >
-        {FILTER_PILLS.map((pill) => (
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 18 }}>{"\u270F\uFE0F"}</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#B8860B" }}>
+                Corrections Requested
+              </div>
+              <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
+                Admin has requested changes. Please edit and resubmit.
+              </div>
+            </div>
+          </div>
+          {saree.correctionNote && (
+            <div style={{
+              padding: "8px 12px",
+              borderRadius: "var(--rt-radius-sm)",
+              background: "rgba(245, 166, 35, 0.06)",
+              border: "1px solid rgba(245, 166, 35, 0.15)",
+              fontSize: 13,
+              color: "var(--rt-text-mid)",
+              lineHeight: 1.5,
+            }}>
+              <span style={{ fontWeight: 700, color: "#B8860B", fontSize: 11, display: "block", marginBottom: 2 }}>
+                Admin Note:
+              </span>
+              {saree.correctionNote}
+            </div>
+          )}
           <button
-            key={pill}
-            className={`rt-pill${filter === pill ? " active" : ""}`}
-            onClick={() => setFilter(pill)}
+            className="rt-btn rt-btn-primary rt-btn-sm"
+            onClick={handleResubmit}
+            disabled={resubmitting}
+            style={{ alignSelf: "flex-start" }}
           >
-            {pill}
+            {resubmitting ? "Resubmitting..." : "Resubmit for Approval"}
+          </button>
+        </div>
+      )}
+
+      {/* Hero */}
+      <div style={{
+        width: "100%",
+        height: 220,
+        borderRadius: "var(--rt-radius-lg)",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        <SareeImage
+          fileId={saree.imageIds?.[photoTab]}
+          fallbackEmoji={saree.emoji || "\uD83D\uDC57"}
+          fallbackGrad={grad}
+        />
+
+        {/* Tag badge top-left */}
+        {saree.tag && (
+          <span style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            padding: "4px 12px",
+            borderRadius: 100,
+            background: "rgba(0,0,0,0.45)",
+            color: "white",
+            fontSize: 11,
+            fontWeight: 700,
+            backdropFilter: "blur(6px)",
+          }}>
+            {saree.tag}
+          </span>
+        )}
+
+        {/* Low Stock badge bottom-right */}
+        {saree.stock > 0 && saree.stock <= 5 && (
+          <span style={{
+            position: "absolute",
+            bottom: 12,
+            right: 12,
+            padding: "4px 12px",
+            borderRadius: 100,
+            background: "var(--rt-alert)",
+            color: "white",
+            fontSize: 11,
+            fontWeight: 700,
+          }}>
+            Low Stock
+          </span>
+        )}
+      </div>
+
+      {/* Photo Tabs */}
+      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+        {PHOTO_TABS.map((tab, i) => (
+          <button
+            key={tab}
+            onClick={() => setPhotoTab(i)}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 100,
+              fontSize: 12,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              cursor: "pointer",
+              border: `1.5px solid ${photoTab === i ? "var(--rt-teal)" : "var(--rt-border)"}`,
+              background: photoTab === i ? "rgba(26, 74, 101, 0.08)" : "transparent",
+              color: photoTab === i ? "var(--rt-teal)" : "var(--rt-muted)",
+              transition: "all 0.15s",
+            }}
+          >
+            {tab}
           </button>
         ))}
       </div>
 
-      {/* ── Summary Stats ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-        <div className="rt-card" style={{ textAlign: "center", padding: "10px 8px" }}>
-          <div
-            className="rt-mono"
-            style={{ fontSize: 18, fontWeight: 700, color: "var(--rt-navy)" }}
-          >
-            {totalSKUs}
+      {/* Core Info */}
+      <div className="rt-card">
+        {editing ? (
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Name</label>
+            <input
+              type="text"
+              value={editForm.name as string}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              className="rt-input"
+            />
           </div>
-          <div style={{ fontSize: 11, color: "var(--rt-muted)", marginTop: 2 }}>Total SKUs</div>
-        </div>
-        <div className="rt-card" style={{ textAlign: "center", padding: "10px 8px" }}>
-          <div
-            className="rt-mono"
-            style={{ fontSize: 18, fontWeight: 700, color: "var(--rt-teal)" }}
-          >
-            {activeCount}
+        ) : (
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--rt-text)", marginBottom: 4 }}>
+            {saree.name}
           </div>
-          <div style={{ fontSize: 11, color: "var(--rt-muted)", marginTop: 2 }}>Active</div>
-        </div>
-        <div className="rt-card" style={{ textAlign: "center", padding: "10px 8px" }}>
-          <div
-            className="rt-mono"
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: lowCount > 0 ? "var(--rt-amber)" : "var(--rt-muted)",
-            }}
-          >
-            {lowCount}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--rt-muted)", marginTop: 2 }}>Low Stock</div>
-        </div>
-      </div>
+        )}
 
-      {/* ── View Toggle ── */}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 4 }}>
-        <button
-          onClick={() => setView("grid")}
-          style={{
-            padding: 6,
-            borderRadius: "var(--rt-radius-sm)",
-            cursor: "pointer",
-            border: "none",
-            background: view === "grid" ? "rgba(26,74,101,0.1)" : "transparent",
-            color: view === "grid" ? "var(--rt-teal)" : "var(--rt-muted)",
-            transition: "all 0.15s",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="3" y="3" width="7" height="7" rx="1.5" />
-            <rect x="14" y="3" width="7" height="7" rx="1.5" />
-            <rect x="3" y="14" width="7" height="7" rx="1.5" />
-            <rect x="14" y="14" width="7" height="7" rx="1.5" />
-          </svg>
-        </button>
-        <button
-          onClick={() => setView("list")}
-          style={{
-            padding: 6,
-            borderRadius: "var(--rt-radius-sm)",
-            cursor: "pointer",
-            border: "none",
-            background: view === "list" ? "rgba(26,74,101,0.1)" : "transparent",
-            color: view === "list" ? "var(--rt-teal)" : "var(--rt-muted)",
-            transition: "all 0.15s",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="3" y="4" width="18" height="3" rx="1" />
-            <rect x="3" y="10.5" width="18" height="3" rx="1" />
-            <rect x="3" y="17" width="18" height="3" rx="1" />
-          </svg>
-        </button>
-      </div>
+        <div style={{ fontSize: 13, color: "var(--rt-muted)", marginBottom: 12 }}>
+          {saree.fabric} {saree.region ? ` \u00B7 ${saree.region}` : ""} {" \u00B7 "}SKU {saree._id.slice(-6).toUpperCase()}
+        </div>
 
-      {/* ── Content ── */}
-      {sarees === undefined ? (
-        <LoadingState />
-      ) : filtered.length === 0 ? (
-        /* ── Empty State ── */
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            padding: "48px 0",
-            gap: 12,
-          }}
-        >
-          <span style={{ fontSize: 48 }}>{sarees.length === 0 ? "\uD83E\uDDF5" : "\uD83D\uDD0D"}</span>
-          <p
-            className="rt-serif"
-            style={{
-              fontSize: 16,
-              fontStyle: "italic",
-              color: "var(--rt-muted)",
-              margin: 0,
-              textAlign: "center",
-            }}
-          >
-            {sarees.length === 0
-              ? "No sarees yet"
-              : "No sarees match your search"}
+        {/* Price */}
+        {editing ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+            <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>{"\u20B9"}</span>
+            <input
+              type="number"
+              value={editForm.price}
+              onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+              className="rt-input rt-mono"
+              style={{ width: 120 }}
+            />
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+            <span className="rt-mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--rt-success)" }}>
+              {"\u20B9"}{saree.price.toLocaleString("en-IN")}
+            </span>
+            {discount > 0 && saree.mrp && (
+              <>
+                <span style={{ fontSize: 14, color: "var(--rt-muted)", textDecoration: "line-through" }}>
+                  {"\u20B9"}{saree.mrp.toLocaleString("en-IN")}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--rt-success)" }}>
+                  {discount}% off
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Description */}
+        {editing ? (
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Description</label>
+            <textarea
+              value={editForm.description as string}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              rows={3}
+              className="rt-input"
+              style={{ resize: "none", fontFamily: "inherit" }}
+            />
+          </div>
+        ) : saree.description ? (
+          <p style={{ fontSize: 14, color: "var(--rt-text-mid)", lineHeight: 1.6, marginBottom: 12 }}>
+            {saree.description}
           </p>
-          {sarees.length === 0 && (
-            <>
-              <p style={{ fontSize: 13, color: "var(--rt-muted)", margin: 0 }}>
-                Add your first saree to get started
-              </p>
-              <button
-                className="rt-btn rt-btn-gold"
-                onClick={() => router.push("/store/inventory/add")}
-                style={{ marginTop: 8 }}
-              >
-                + Add Saree
-              </button>
-            </>
+        ) : null}
+
+        {/* Attribute Chips */}
+        {!editing && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {saree.colorName && <AttrChip label={saree.colorName} />}
+            <AttrChip label={saree.occasion} />
+            {saree.weave && <AttrChip label={saree.weave} />}
+            {saree.weight && <AttrChip label={saree.weight} />}
+          </div>
+        )}
+
+        {/* Status badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+          <span className={stockBadgeClass}>{stockLabel}</span>
+          {saree.approvalStatus && (
+            <span className={`rt-badge ${saree.approvalStatus === "approved" ? "rt-badge-success"
+                : saree.approvalStatus === "rejected" ? "rt-badge-alert"
+                  : "rt-badge-gold"
+              }`}>
+              {saree.approvalStatus}
+            </span>
           )}
         </div>
-      ) : view === "grid" ? (
-        /* ── Grid View (2-col) ── */
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {filtered.map((saree) => {
-            const grad = saree.grad ?? defaultGrad(saree.type);
-            const isPending = saree.approvalStatus === "pending";
-            const isCorrections = saree.approvalStatus === "corrections";
-            return (
-              <button
-                key={saree._id}
-                onClick={() => {
-                  if (isPending) return;
-                  router.push(`/store/inventory/${saree._id}`);
-                }}
-                className="rt-card"
-                style={{
-                  padding: 0,
-                  overflow: "hidden",
-                  cursor: isPending ? "default" : "pointer",
-                  textAlign: "left",
-                  width: "100%",
-                  opacity: isPending ? 0.75 : 1,
-                  transition: "border-color 0.2s, box-shadow 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isPending) {
-                    e.currentTarget.style.borderColor = "var(--rt-gold)";
-                    e.currentTarget.style.boxShadow = "0 4px 16px rgba(201,148,26,0.12)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--rt-border)";
-                  e.currentTarget.style.boxShadow = "var(--rt-shadow)";
-                }}
+      </div>
+
+      {/* Edit: additional fields */}
+      {editing && (
+        <div className="rt-card">
+          <div className="rt-card-title">Edit Details</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Fabric</label>
+              <select
+                value={editForm.fabric as string}
+                onChange={(e) => setEditForm({ ...editForm, fabric: e.target.value })}
+                className="rt-select"
               >
-                {/* Image / Gradient header */}
-                <div
-                  style={{
-                    height: 100,
-                    position: "relative",
-                    overflow: "hidden",
-                  }}
-                >
-                  <SareeThumbnail
-                    fileId={saree.imageIds?.[0]}
-                    emoji={saree.emoji || "\uD83E\uDDE3"}
-                    grad={grad}
-                    size={48}
-                  />
-                  {/* Pending overlay */}
-                  {isPending && (
-                    <div style={{
-                      position: "absolute",
-                      inset: 0,
-                      background: "rgba(10, 22, 40, 0.55)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}>
-                      <span style={{
-                        padding: "4px 10px",
-                        borderRadius: "var(--rt-radius-pill)",
-                        background: "rgba(255,255,255,0.9)",
-                        color: "var(--rt-navy)",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        backdropFilter: "blur(4px)",
-                      }}>
-                        Waiting for Approval
-                      </span>
-                    </div>
-                  )}
-                  {/* Corrections badge */}
-                  {isCorrections && (
-                    <span style={{
-                      position: "absolute",
-                      top: 8,
-                      right: 8,
-                      padding: "3px 8px",
-                      borderRadius: "var(--rt-radius-pill)",
-                      background: "rgba(245,166,35,0.2)",
-                      color: "#B8860B",
-                      fontSize: 10,
-                      fontWeight: 700,
-                      backdropFilter: "blur(4px)",
-                    }}>
-                      Corrections Needed
-                    </span>
-                  )}
-                  {saree.tag && !isPending && (
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: 8,
-                        left: 8,
-                        ...tagBadgeStyle(saree.tag),
-                      }}
-                    >
-                      {saree.tag}
-                    </span>
-                  )}
-                </div>
-
-                {/* Details */}
-                <div style={{ padding: 10 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--rt-text)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {saree.name}
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
-                    {saree.fabric}
-                  </div>
-                  {isCorrections && saree.correctionNote && (
-                    <div style={{
-                      fontSize: 11,
-                      color: "#B8860B",
-                      marginTop: 4,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}>
-                      {saree.correctionNote}
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginTop: 8,
-                    }}
-                  >
-                    <span
-                      className="rt-mono"
-                      style={{ fontSize: 14, fontWeight: 700, color: "var(--rt-navy)" }}
-                    >
-                      {"\u20B9"}{saree.price.toLocaleString("en-IN")}
-                    </span>
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        background: stockDotColor(saree.status),
-                        display: "inline-block",
-                      }}
-                    />
-                  </div>
-                </div>
+                {FABRICS.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Region</label>
+                <input
+                  type="text"
+                  value={editForm.region as string}
+                  onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
+                  className="rt-input"
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Weave</label>
+                <input
+                  type="text"
+                  value={editForm.weave as string}
+                  onChange={(e) => setEditForm({ ...editForm, weave: e.target.value })}
+                  className="rt-input"
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Care Instructions</label>
+              <input
+                type="text"
+                value={editForm.careInstructions as string}
+                onChange={(e) => setEditForm({ ...editForm, careInstructions: e.target.value })}
+                className="rt-input"
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
+              <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setEditing(false)}>
+                Cancel
               </button>
-            );
-          })}
-        </div>
-      ) : (
-        /* ── List View ── */
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {filtered.map((saree) => {
-            const grad = saree.grad ?? defaultGrad(saree.type);
-            const isPending = saree.approvalStatus === "pending";
-            const isCorrections = saree.approvalStatus === "corrections";
-            return (
-              <button
-                key={saree._id}
-                onClick={() => {
-                  if (isPending) return;
-                  router.push(`/store/inventory/${saree._id}`);
-                }}
-                className="rt-card"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px 12px",
-                  cursor: isPending ? "default" : "pointer",
-                  textAlign: "left",
-                  width: "100%",
-                  opacity: isPending ? 0.75 : 1,
-                  transition: "border-color 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isPending) {
-                    e.currentTarget.style.borderColor = "var(--rt-gold)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--rt-border)";
-                }}
-              >
-                {/* Image / Emoji container */}
-                <div
-                  style={{
-                    width: 48,
-                    height: 56,
-                    borderRadius: "var(--rt-radius-sm)",
-                    overflow: "hidden",
-                    flexShrink: 0,
-                    position: "relative",
-                  }}
-                >
-                  <SareeThumbnail
-                    fileId={saree.imageIds?.[0]}
-                    emoji={saree.emoji || "\uD83E\uDDE3"}
-                    grad={grad}
-                    size={28}
-                  />
-                  {isPending && (
-                    <div style={{
-                      position: "absolute",
-                      inset: 0,
-                      background: "rgba(10, 22, 40, 0.5)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}>
-                      <span style={{ fontSize: 14 }}>{"\u23F3"}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 700,
-                        color: "var(--rt-text)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {saree.name}
-                    </div>
-                    {isPending && (
-                      <span style={{
-                        padding: "1px 6px",
-                        borderRadius: "var(--rt-radius-pill)",
-                        background: "rgba(10, 22, 40, 0.08)",
-                        color: "var(--rt-muted)",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}>
-                        Pending
-                      </span>
-                    )}
-                    {isCorrections && (
-                      <span style={{
-                        padding: "1px 6px",
-                        borderRadius: "var(--rt-radius-pill)",
-                        background: "rgba(245,166,35,0.15)",
-                        color: "#B8860B",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}>
-                        Corrections
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
-                    {saree.fabric} &middot; {saree.type}
-                  </div>
-                  {isCorrections && saree.correctionNote && (
-                    <div style={{
-                      fontSize: 11,
-                      color: "#B8860B",
-                      marginTop: 2,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}>
-                      {saree.correctionNote}
-                    </div>
-                  )}
-                </div>
-
-                {/* Price + stock badge */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                    gap: 4,
-                    flexShrink: 0,
-                  }}
-                >
-                  <span
-                    className="rt-mono"
-                    style={{ fontSize: 14, fontWeight: 700, color: "var(--rt-navy)" }}
-                  >
-                    {"\u20B9"}{saree.price.toLocaleString("en-IN")}
-                  </span>
-                  {isPending ? (
-                    <span style={{
-                      padding: "2px 8px",
-                      borderRadius: "var(--rt-radius-pill)",
-                      background: "rgba(10, 22, 40, 0.06)",
-                      color: "var(--rt-muted)",
-                      fontSize: 10,
-                      fontWeight: 600,
-                    }}>
-                      Awaiting Review
-                    </span>
-                  ) : (
-                    <span
-                      className={`rt-badge ${
-                        saree.status === "active"
-                          ? "rt-badge-success"
-                          : saree.status === "low_stock"
-                            ? "rt-badge-amber"
-                            : "rt-badge-alert"
-                      }`}
-                    >
-                      {saree.status === "active"
-                        ? "In Stock"
-                        : saree.status === "low_stock"
-                          ? `${saree.stock} left`
-                          : "Out"}
-                    </span>
-                  )}
-                </div>
-
-                {/* Chevron */}
-                {!isPending && (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="var(--rt-muted)"
-                    strokeWidth="2"
-                    style={{ flexShrink: 0 }}
-                  >
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                )}
+              <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
               </button>
-            );
-          })}
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Performance */}
+      <div className="rt-card">
+        <div className="rt-card-title">Performance This Month</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 14 }}>
+          <StatBox emoji={"\uD83D\uDC41"} value={saree.views ?? 0} label="Views" />
+          <StatBox emoji={"\uD83E\uDE9E"} value={saree.tryOns ?? 0} label="Sessions" />
+          <StatBox emoji={"\u2728"} value={saree.tryOns ?? 0} label="Try-Ons" />
+          <StatBox emoji={"\uD83D\uDCB0"} value={saree.conversions ?? 0} label="Sales" />
+        </div>
+
+        {(saree.tryOns ?? 0) > 0 && (saree.views ?? 0) > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 10 }}>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                <span style={{ color: "var(--rt-text-mid)" }}>Try-On Rate</span>
+                <span className="rt-mono" style={{ fontWeight: 700, color: "var(--rt-text)" }}>{tryOnRate}%</span>
+              </div>
+              <div className="rt-progress">
+                <div
+                  className="rt-progress-fill"
+                  style={{ width: `${Math.min(tryOnRate, 100)}%`, background: "linear-gradient(90deg, var(--rt-teal), var(--rt-teal-light))" }}
+                />
+              </div>
+            </div>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                <span style={{ color: "var(--rt-text-mid)" }}>Conversion Rate</span>
+                <span className="rt-mono" style={{ fontWeight: 700, color: "var(--rt-text)" }}>{conversionRate}%</span>
+              </div>
+              <div className="rt-progress">
+                <div
+                  className="rt-progress-fill"
+                  style={{ width: `${Math.min(conversionRate, 100)}%`, background: "linear-gradient(90deg, var(--rt-gold), var(--rt-gold-light))" }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Days old */}
+        <div style={{
+          fontSize: 12,
+          color: "var(--rt-muted)",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          paddingTop: 4,
+          borderTop: "1px solid var(--rt-border)",
+          marginTop: 6,
+        }}>
+          <span>{"\uD83D\uDCC5"}</span>
+          <span>{saree.daysOld ?? 0} days in catalogue</span>
+        </div>
+      </div>
+
+      {/* AI Tags */}
+      {saree.aiTags && saree.aiTags.length > 0 && (
+        <div className="rt-card">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 16 }}>{"\uD83E\uDD16"}</span>
+            <span className="rt-card-title" style={{ marginBottom: 0 }}>AI Tags</span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {saree.aiTags.map((t) => (
+              <span
+                key={t}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 100,
+                  background: "rgba(26, 74, 101, 0.1)",
+                  color: "var(--rt-teal)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Stock Update */}
+      {!isPending && (
+        <div className="rt-card">
+          <div className="rt-card-title">Update Stock</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>
+                New stock quantity
+              </label>
+              <input
+                type="number"
+                value={stockInput}
+                onChange={(e) => setStockInput(e.target.value)}
+                placeholder={String(saree.stock)}
+                className="rt-input rt-mono"
+              />
+            </div>
+            <button
+              className="rt-btn rt-btn-primary rt-btn-sm"
+              onClick={handleStockUpdate}
+              style={{ marginBottom: 1 }}
+            >
+              Update
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      {!isPending && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <button
+            className="rt-btn rt-btn-primary"
+            onClick={startEditing}
+          >
+            Edit Details
+          </button>
+          <button
+            className="rt-btn rt-btn-ghost"
+            onClick={() => {
+              const msg = encodeURIComponent(
+                `Check out ${saree.name} (${saree.fabric}) at \u20B9${saree.price.toLocaleString("en-IN")} on Wearify!`
+              );
+              window.open(`https://wa.me/?text=${msg}`, "_blank");
+            }}
+          >
+            Share on WhatsApp
+          </button>
+        </div>
+      )}
+
+      {/* Delete */}
+      {!isPending && (
+        <button
+          className="rt-btn rt-btn-danger"
+          style={{ width: "100%" }}
+          onClick={() => setShowDelete(true)}
+        >
+          Delete Saree
+        </button>
+      )}
+
+      {/* Delete Modal */}
+      {showDelete && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={() => setShowDelete(false)}
+        >
+          <div
+            style={{
+              background: "var(--rt-white)",
+              borderRadius: "var(--rt-radius-lg)",
+              padding: 24,
+              maxWidth: 380,
+              width: "100%",
+              boxShadow: "0 20px 60px rgba(10, 22, 40, 0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--rt-text)", marginBottom: 8 }}>
+              Delete Saree?
+            </h3>
+            <p style={{ fontSize: 14, color: "var(--rt-text-mid)", marginBottom: 20, lineHeight: 1.5 }}>
+              This will permanently remove &ldquo;{saree.name}&rdquo; from your catalogue.
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="rt-btn rt-btn-ghost"
+                style={{ flex: 1 }}
+                onClick={() => setShowDelete(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="rt-btn rt-btn-danger"
+                style={{ flex: 1 }}
+                onClick={handleDelete}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom spacing */}
+      <div style={{ height: 16 }} />
+    </div>
+  );
+}
+
+/* ---- Helper Components ---- */
+
+function BackBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: "50%",
+        border: "1.5px solid var(--rt-border)",
+        background: "var(--rt-white)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        flexShrink: 0,
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--rt-text)" strokeWidth="2">
+        <polyline points="15 18 9 12 15 6" />
+      </svg>
+    </button>
+  );
+}
+
+function AttrChip({ label }: { label: string }) {
+  return (
+    <span style={{
+      padding: "4px 14px",
+      borderRadius: 100,
+      border: "1.5px solid var(--rt-border)",
+      background: "var(--rt-white)",
+      fontSize: 12,
+      fontWeight: 600,
+      color: "var(--rt-text-mid)",
+    }}>
+      {label}
+    </span>
+  );
+}
+
+function StatBox({ emoji, value, label }: { emoji: string; value: number; label: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <span style={{ fontSize: 16 }}>{emoji}</span>
+      <div className="rt-mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--rt-text)" }}>{value}</div>
+      <div style={{ fontSize: 10, color: "var(--rt-muted)" }}>{label}</div>
     </div>
   );
 }

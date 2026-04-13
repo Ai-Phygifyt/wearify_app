@@ -23,93 +23,10 @@ function getGreeting(): string {
 
 function formatDate(): string {
   return new Date().toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 }
 
-/* -------- Health Score Ring -------- */
-function HealthRing({
-  score,
-  catalogPct,
-  sessionPct,
-  crmPct,
-}: {
-  score: number;
-  catalogPct: number;
-  sessionPct: number;
-  crmPct: number;
-}) {
-  const pct = Math.min(Math.max(score, 0), 100);
-  const color =
-    pct > 80
-      ? "var(--rt-success)"
-      : pct >= 60
-        ? "var(--rt-amber)"
-        : "var(--rt-alert)";
-  const r = 34;
-  const c = 2 * Math.PI * r;
-  const offset = c - (pct / 100) * c;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-      <svg width="80" height="80" viewBox="0 0 80 80">
-        <circle
-          cx="40"
-          cy="40"
-          r={r}
-          fill="none"
-          stroke="var(--rt-border)"
-          strokeWidth="7"
-        />
-        <circle
-          cx="40"
-          cy="40"
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth="7"
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-          transform="rotate(-90 40 40)"
-          style={{ transition: "stroke-dashoffset 0.8s ease" }}
-        />
-        <text
-          x="40"
-          y="36"
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="var(--rt-navy)"
-          fontSize="24"
-          fontWeight="700"
-          className="rt-mono"
-        >
-          {pct}
-        </text>
-        <text
-          x="40"
-          y="54"
-          textAnchor="middle"
-          fill="var(--rt-muted)"
-          fontSize="9"
-          fontWeight="600"
-        >
-          Store Health
-        </text>
-      </svg>
-      <div style={{ display: "flex", gap: 6 }}>
-        <span className="rt-badge rt-badge-teal">Catalogue {catalogPct}%</span>
-        <span className="rt-badge rt-badge-gold">Sessions {sessionPct}%</span>
-        <span className="rt-badge rt-badge-navy">CRM {crmPct}%</span>
-      </div>
-    </div>
-  );
-}
-
-/* -------- Time Ago Helper -------- */
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
@@ -120,42 +37,86 @@ function timeAgo(ts: number): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-/* -------- Status Badge -------- */
 function SessionBadge({ status }: { status: string }) {
   const cls =
-    status === "active"
-      ? "rt-badge rt-badge-success"
-      : status === "completed"
-        ? "rt-badge rt-badge-teal"
-        : "rt-badge rt-badge-amber";
+    status === "active" ? "w-badge w-badge-success" :
+      status === "completed" ? "w-badge w-badge-teal" :
+        "w-badge w-badge-warn";
   return <span className={cls}>{status}</span>;
 }
 
-/* -------- Loading Spinner -------- */
 function LoadingState() {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: "linear-gradient(135deg, var(--rt-navy), var(--rt-teal))",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            animation: "pulse 2s infinite",
-          }}
-        >
-          <span
-            className="rt-serif"
-            style={{ color: "var(--rt-gold)", fontSize: 14, fontWeight: 800, fontStyle: "italic" }}
-          >
-            W
-          </span>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "72px 0" }}>
+      <div className="w-loadscreen-inner">
+        <div className="w-load-mark">
+          <span className="w-logomark-letter" style={{ fontSize: 18 }}>W</span>
         </div>
-        <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>Loading dashboard...</span>
+        <div>
+          <span className="w-load-text">Loading dashboard</span>
+          <span className="w-load-dots"><span /><span /><span /></span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HealthRing({ score, catalogPct, sessionPct, crmPct }: {
+  score: number; catalogPct: number; sessionPct: number; crmPct: number;
+}) {
+  const pct = Math.min(Math.max(score, 0), 100);
+  const ringColor =
+    pct > 80 ? "var(--w-success)" :
+      pct >= 60 ? "var(--w-warn)" : "var(--w-danger)";
+  const r = 40;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+
+  const bars = [
+    { label: "Catalogue", pct: catalogPct, cls: "w-hbar-fill-teal" },
+    { label: "Sessions", pct: sessionPct, cls: "w-hbar-fill-gold" },
+    { label: "CRM", pct: crmPct, cls: "w-hbar-fill-navy" },
+  ];
+
+  return (
+    <div className="w-health-wrap">
+      <div className="w-health-ring-col">
+        <svg width="108" height="108" viewBox="0 0 108 108" style={{ filter: "drop-shadow(0 4px 14px rgba(28,17,8,0.10))" }}>
+          <circle cx="54" cy="54" r={r} fill="none" stroke="var(--w-cream-border)" strokeWidth="8" />
+          <circle
+            cx="54" cy="54" r={r}
+            fill="none"
+            stroke={ringColor}
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+            transform="rotate(-90 54 54)"
+            style={{ transition: "stroke-dashoffset 1s cubic-bezier(0.34,1.56,0.64,1)" }}
+          />
+          <text x="54" y="49" textAnchor="middle" dominantBaseline="central"
+            fill="var(--w-navy)" fontSize="28" fontWeight="600"
+            fontFamily="'DM Mono', monospace">
+            {pct}
+          </text>
+          <text x="54" y="68" textAnchor="middle"
+            fill="var(--w-ink-muted)" fontSize="8.5" fontWeight="600"
+            fontFamily="'DM Sans', sans-serif" letterSpacing="0.8">
+            STORE HEALTH
+          </text>
+        </svg>
+      </div>
+      <div className="w-health-bars-col">
+        <div className="w-health-bars-title">Health breakdown</div>
+        {bars.map((b) => (
+          <div key={b.label} className="w-hbar-row">
+            <span className="w-hbar-label">{b.label}</span>
+            <div className="w-progress" style={{ flex: 1 }}>
+              <div className={`w-progress-fill ${b.cls}`} style={{ width: `${b.pct}%` }} />
+            </div>
+            <span className="w-hbar-pct">{b.pct}%</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -173,9 +134,7 @@ export default function StoreDashboard() {
       if (u.storeId) setStoreId(u.storeId);
       if (u.name) setOwnerName(u.name.split(" ")[0]);
       if (u.storeName) setStoreName(u.storeName);
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }, []);
 
   const store = useQuery(api.stores.getByStoreId, storeId ? { storeId } : "skip");
@@ -184,7 +143,6 @@ export default function StoreDashboard() {
 
   if (!storeId) return <LoadingState />;
 
-  // Derived values
   const healthScore = store?.healthScore ?? 0;
   const conversionRate = store?.conversionRate ?? 0;
   const sessionCount = store?.sessions ?? 0;
@@ -194,199 +152,90 @@ export default function StoreDashboard() {
   const activeSessions = sessions?.filter((s) => s.status === "active").length ?? 0;
   const recentSessions = (sessions ?? []).slice(0, 5);
   const todayRevenue = Math.round((store?.mrr ?? 0) / 30);
-
-  // Inventory stats for alerts
   const lowStockCount = sarees?.filter((s) => s.status === "low_stock").length ?? 0;
   const agingCount = sarees?.filter((s) => (s.daysOld ?? 0) >= 60).length ?? 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* ── Greeting (no card) ── */}
-      <div>
-        <h1
-          className="rt-serif"
-          style={{
-            fontSize: 22,
-            fontWeight: 600,
-            fontStyle: "italic",
-            color: "var(--rt-navy)",
-            margin: 0,
-            lineHeight: 1.3,
-          }}
-        >
-          {getGreeting()}, {ownerName || "there"}
+    <div className="w-dash">
+
+      <div className="w-greeting">
+        <p className="w-greeting-sub">{storeName || "Your Store"} · {formatDate()}</p>
+        <h1 className="w-greeting-title w-display">
+          {getGreeting()},<br />{ownerName || "there"}
         </h1>
-        <p style={{ fontSize: 13, color: "var(--rt-muted)", margin: "4px 0 0" }}>
-          {storeName || "Your Store"} &middot; {formatDate()}
-        </p>
+        <div className="w-rule-gold" style={{ marginTop: 16, width: 64 }} />
       </div>
 
-      {/* ── Health Score ── */}
-      <div
-        className="rt-card"
-        style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 16px" }}
-      >
-        <HealthRing
-          score={healthScore}
-          catalogPct={catalogPct}
-          sessionPct={featurePct}
-          crmPct={crmPct}
-        />
+      <div className="w-card w-card-gold w-section-health">
+        <HealthRing score={healthScore} catalogPct={catalogPct} sessionPct={featurePct} crmPct={crmPct} />
       </div>
 
-      {/* ── KPI Grid (2x2) ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        {/* Today Revenue */}
-        <div className="rt-card" style={{ padding: 14 }}>
-          <div style={{ fontSize: 20, marginBottom: 4 }}>{"\uD83D\uDCB0"}</div>
-          <div
-            className="rt-mono"
-            style={{ fontSize: 22, fontWeight: 700, color: "var(--rt-navy)" }}
-          >
-            {"\u20B9"}{todayRevenue.toLocaleString("en-IN")}
+      <div className="w-kpi-grid">
+        <div className="w-kpi-card w-card">
+          <div className="w-kpi-icon-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--w-gold)" strokeWidth="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
           </div>
-          <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>Today Revenue</div>
+          <div className="w-mono w-kpi-value">₹{todayRevenue.toLocaleString("en-IN")}</div>
+          <div className="w-kpi-label">Today Revenue</div>
         </div>
-
-        {/* Customers Served */}
-        <div className="rt-card" style={{ padding: 14 }}>
-          <div style={{ fontSize: 20, marginBottom: 4 }}>{"\uD83D\uDC65"}</div>
-          <div
-            className="rt-mono"
-            style={{ fontSize: 22, fontWeight: 700, color: "var(--rt-navy)" }}
-          >
-            {recentSessions.filter((s) => s.customerPhone).length}
+        <div className="w-kpi-card w-card">
+          <div className="w-kpi-icon-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--w-gold)" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
           </div>
-          <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>Customers Served</div>
+          <div className="w-mono w-kpi-value">{recentSessions.filter((s) => s.customerPhone).length}</div>
+          <div className="w-kpi-label">Customers</div>
         </div>
-
-        {/* Conversion Rate */}
-        <div className="rt-card" style={{ padding: 14 }}>
-          <div style={{ fontSize: 20, marginBottom: 4 }}>{"\uD83D\uDCC8"}</div>
-          <div
-            className="rt-mono"
-            style={{ fontSize: 22, fontWeight: 700, color: "var(--rt-navy)" }}
-          >
-            {conversionRate}%
+        <div className="w-kpi-card w-card">
+          <div className="w-kpi-icon-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--w-gold)" strokeWidth="1.8"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>
           </div>
-          <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>Conversion Rate</div>
-          {conversionRate > 0 && (
-            <span
-              className="rt-badge rt-badge-success"
-              style={{ marginTop: 4, display: "inline-block" }}
-            >
-              {"\u2191"} active
-            </span>
-          )}
+          <div className="w-mono w-kpi-value">{conversionRate}%</div>
+          <div className="w-kpi-label">Conversion</div>
+          {conversionRate > 0 && <span className="w-badge w-badge-success" style={{ marginTop: 6 }}>↑ active</span>}
         </div>
-
-        {/* Mirror Sessions */}
-        <div className="rt-card" style={{ padding: 14 }}>
-          <div style={{ fontSize: 20, marginBottom: 4 }}>{"\uD83E\uDE9E"}</div>
-          <div
-            className="rt-mono"
-            style={{ fontSize: 22, fontWeight: 700, color: "var(--rt-navy)" }}
-          >
-            {sessionCount}
+        <div className="w-kpi-card w-card">
+          <div className="w-kpi-icon-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--w-gold)" strokeWidth="1.8"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></svg>
           </div>
-          <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>Mirror Sessions</div>
-          {activeSessions > 0 && (
-            <span
-              className="rt-badge rt-badge-success"
-              style={{ marginTop: 4, display: "inline-block" }}
-            >
-              {activeSessions} live
-            </span>
-          )}
+          <div className="w-mono w-kpi-value">{sessionCount}</div>
+          <div className="w-kpi-label">Sessions</div>
+          {activeSessions > 0 && <span className="w-badge w-badge-success" style={{ marginTop: 6 }}>{activeSessions} live</span>}
         </div>
       </div>
 
-      {/* ── Quick Actions (3x2) ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-        {QUICK_ACTIONS.map((action) => (
-          <button
-            key={action.label}
-            className="rt-card"
-            onClick={() => router.push(action.href)}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              padding: "14px 8px",
-              cursor: "pointer",
-              border: "1px solid var(--rt-border)",
-              transition: "border-color 0.2s, box-shadow 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "var(--rt-gold)";
-              e.currentTarget.style.boxShadow = "0 2px 12px rgba(201,148,26,0.1)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "var(--rt-border)";
-              e.currentTarget.style.boxShadow = "var(--rt-shadow)";
-            }}
-          >
-            <span style={{ fontSize: 20 }}>{action.emoji}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--rt-navy)" }}>
-              {action.label}
-            </span>
-          </button>
-        ))}
+      <div className="w-qa-section">
+        <div className="w-section-label">Quick actions</div>
+        <div className="w-qa-grid">
+          {QUICK_ACTIONS.map((action) => (
+            <button key={action.label} className="w-qa-btn w-card"
+              onClick={() => router.push(action.href)}>
+              <span className="w-qa-emoji">{action.emoji}</span>
+              <span className="w-qa-label">{action.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── Recent Sessions ── */}
-      <div className="rt-card">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 12,
-          }}
-        >
-          <span className="rt-card-title" style={{ marginBottom: 0 }}>Recent Sessions</span>
-          <button
-            className="rt-btn rt-btn-ghost rt-btn-sm"
-            onClick={() => router.push("/store/analytics")}
-          >
-            View All
+      <div className="w-card w-sessions-card">
+        <div className="w-card-header">
+          <span className="w-card-title">Recent Sessions</span>
+          <button className="w-btn w-btn-ghost w-btn-sm" onClick={() => router.push("/store/analytics")}>
+            View all
           </button>
         </div>
         {recentSessions.length === 0 ? (
-          <p style={{ fontSize: 14, color: "var(--rt-muted)", padding: "16px 0", textAlign: "center" }}>
-            No sessions yet
-          </p>
+          <p className="w-empty-state">No sessions yet</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <div className="w-session-list">
             {recentSessions.map((session, idx) => (
-              <div
-                key={session._id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "10px 0",
-                  borderTop: idx > 0 ? "1px solid var(--rt-border)" : "none",
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    className="rt-mono"
-                    style={{ fontSize: 12, color: "var(--rt-muted)", marginBottom: 2 }}
-                  >
-                    {session.sessionId}
-                  </div>
-                  <div style={{ fontSize: 13, color: "var(--rt-text)", fontWeight: 500 }}>
-                    {session.staffName || "Staff"}
-                  </div>
+              <div key={session._id} className={`w-session-row${idx > 0 ? " w-session-row--border" : ""}`}>
+                <div className="w-session-info">
+                  <div className="w-mono w-session-id">{session.sessionId}</div>
+                  <div className="w-session-staff">{session.staffName || "Staff"}</div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                <div className="w-session-meta">
                   <SessionBadge status={session.status} />
-                  <span style={{ fontSize: 10, color: "var(--rt-muted)" }}>
-                    {timeAgo(session.startTime)}
-                  </span>
+                  <span className="w-session-time">{timeAgo(session.startTime)}</span>
                 </div>
               </div>
             ))}
@@ -394,52 +243,28 @@ export default function StoreDashboard() {
         )}
       </div>
 
-      {/* ── Smart Alerts ── */}
       {(agingCount > 0 || lowStockCount > 0) && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="w-alerts">
+          <div className="w-section-label">Alerts</div>
           {agingCount > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 14px",
-                background: "var(--rt-cream)",
-                borderRadius: "var(--rt-radius-sm)",
-                borderLeft: "4px solid var(--rt-amber)",
-              }}
-            >
-              <span style={{ fontSize: 20 }}>{"\u23F3"}</span>
+            <div className="w-alert w-alert--warn">
+              <div className="w-alert-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+              </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--rt-text)" }}>
-                  Aging Inventory
-                </div>
-                <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
-                  {agingCount} saree{agingCount > 1 ? "s" : ""} sitting 60+ days without movement
-                </div>
+                <div className="w-alert-title">Aging Inventory</div>
+                <div className="w-alert-body">{agingCount} saree{agingCount > 1 ? "s" : ""} sitting 60+ days without movement</div>
               </div>
             </div>
           )}
           {lowStockCount > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 14px",
-                background: "var(--rt-cream)",
-                borderRadius: "var(--rt-radius-sm)",
-                borderLeft: "4px solid var(--rt-alert)",
-              }}
-            >
-              <span style={{ fontSize: 20 }}>{"\uD83D\uDCE6"}</span>
+            <div className="w-alert w-alert--danger">
+              <div className="w-alert-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+              </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--rt-text)" }}>
-                  Low Stock Alert
-                </div>
-                <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
-                  {lowStockCount} item{lowStockCount > 1 ? "s" : ""} running low on inventory
-                </div>
+                <div className="w-alert-title">Low Stock Alert</div>
+                <div className="w-alert-body">{lowStockCount} item{lowStockCount > 1 ? "s" : ""} running low on inventory</div>
               </div>
             </div>
           )}

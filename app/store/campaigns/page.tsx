@@ -7,8 +7,8 @@ import { api } from "@/convex/_generated/api";
 const STATUS_BADGES: Record<string, { bg: string; color: string }> = {
   sent: { bg: "rgba(27, 94, 32, 0.1)", color: "#1B5E20" },
   completed: { bg: "rgba(27, 94, 32, 0.1)", color: "#1B5E20" },
-  scheduled: { bg: "rgba(201, 148, 26, 0.12)", color: "#C9941A" },
-  draft: { bg: "rgba(10, 22, 40, 0.08)", color: "#0A1628" },
+  scheduled: { bg: "rgba(184,134,11, 0.12)", color: "#B8860B" },
+  draft: { bg: "rgba(13, 31, 53, 0.08)", color: "#0D1F35" },
 };
 
 const CHANNEL_COLORS: Record<string, { bg: string; icon: string }> = {
@@ -25,140 +25,179 @@ export default function CampaignsPage() {
     try {
       const userData = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
       if (userData.storeId) setStoreId(userData.storeId);
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }, []);
 
-  const campaigns = useQuery(api.campaignOps.listCampaignsByStore, storeId ? { storeId } : "skip");
+  const campaigns = useQuery(
+    api.campaignOps.listCampaignsByStore,
+    storeId ? { storeId } : "skip"
+  );
 
   if (!storeId) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 0" }}>
-        <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>Loading...</span>
+      <div className="w-page-loading">
+        <div className="w-load-mark">
+          <span className="w-logomark-letter" style={{ fontSize: 17 }}>W</span>
+        </div>
+        <div>
+          <span className="w-load-text">Loading</span>
+          <span className="w-load-dots"><span /><span /><span /></span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className="w-campaigns-root">
+
+      {/* ── Page Header ── */}
+      <div className="w-page-header">
         <div>
-          <h1
-            className="rt-serif"
-            style={{ fontSize: 20, fontWeight: 700, fontStyle: "italic", color: "var(--rt-navy)", margin: 0 }}
-          >
-            WhatsApp Campaigns
-          </h1>
-          <p style={{ fontSize: 13, color: "var(--rt-muted)", margin: "4px 0 0" }}>
-            {campaigns?.length ?? 0} campaigns
-          </p>
+          <p className="w-page-eyebrow">Marketing</p>
+          <h1 className="w-display w-page-title">Campaigns</h1>
+          <div className="w-rule-gold" style={{ width: 48, marginTop: 10 }} />
         </div>
-        <button className="rt-btn rt-btn-gold rt-btn-sm" onClick={() => setShowModal(true)}>
-          + New Campaign
+        <button className="w-btn w-btn-gold" onClick={() => setShowModal(true)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          New Campaign
         </button>
       </div>
 
-      {/* Create Modal */}
+      {/* ── Stats bar ── */}
+      <div className="w-campaigns-stats">
+        <div className="w-cstat">
+          <span className="w-mono w-cstat-num">{campaigns?.length ?? 0}</span>
+          <span className="w-cstat-label">Total</span>
+        </div>
+        <div className="w-cstat-divider" />
+        <div className="w-cstat">
+          <span className="w-mono w-cstat-num">
+            {campaigns?.filter(c => c.status === "sent" || c.status === "completed").length ?? 0}
+          </span>
+          <span className="w-cstat-label">Sent</span>
+        </div>
+        <div className="w-cstat-divider" />
+        <div className="w-cstat">
+          <span className="w-mono w-cstat-num">
+            {campaigns?.filter(c => c.status === "scheduled").length ?? 0}
+          </span>
+          <span className="w-cstat-label">Scheduled</span>
+        </div>
+        <div className="w-cstat-divider" />
+        <div className="w-cstat">
+          <span className="w-mono w-cstat-num">
+            {campaigns?.filter(c => c.status === "draft").length ?? 0}
+          </span>
+          <span className="w-cstat-label">Drafts</span>
+        </div>
+      </div>
+
+      {/* ── Modal ── */}
       {showModal && storeId && (
         <CreateCampaignModal storeId={storeId} onClose={() => setShowModal(false)} />
       )}
 
-      {/* Campaign List */}
+      {/* ── Campaign List ── */}
       {campaigns === undefined ? (
-        <div style={{ textAlign: "center", padding: "48px 0" }}>
-          <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>Loading campaigns...</span>
+        <div className="w-list-loading">
+          <span className="w-load-text">Loading campaigns</span>
+          <span className="w-load-dots"><span /><span /><span /></span>
         </div>
       ) : campaigns.length === 0 ? (
-        <div className="rt-card" style={{ textAlign: "center", padding: "32px 16px" }}>
-          <p style={{ fontSize: 14, color: "var(--rt-muted)" }}>No campaigns yet. Create your first one.</p>
+        <div className="w-card w-campaigns-empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--w-ink-ghost)" strokeWidth="1.2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <p className="w-serif" style={{ fontSize: 17, fontStyle: "italic", color: "var(--w-ink-muted)", marginTop: 12 }}>
+            No campaigns yet
+          </p>
+          <p style={{ fontSize: 13, color: "var(--w-ink-ghost)", marginTop: 4 }}>
+            Create your first campaign to reach customers
+          </p>
+          <button className="w-btn w-btn-gold" style={{ marginTop: 16 }} onClick={() => setShowModal(true)}>
+            + New Campaign
+          </button>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {campaigns.map((campaign) => {
+        <div className="w-campaigns-list">
+          {campaigns.map((campaign, idx) => {
             const statusStyle = STATUS_BADGES[campaign.status] || STATUS_BADGES.draft;
-            const channelInfo = CHANNEL_COLORS[campaign.channel] || { bg: "#7A6E8A", icon: "?" };
+            const channelInfo = CHANNEL_COLORS[campaign.channel] || { bg: "#9C8878", icon: "?" };
             const hasSentMetrics = (campaign.sent ?? 0) > 0;
 
             return (
-              <div key={campaign._id} className="rt-card">
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                  {/* Channel Icon */}
+              <div
+                key={campaign._id}
+                className="w-card w-campaign-card"
+                style={{ animationDelay: `${idx * 0.04}s` }}
+              >
+                {/* Top row */}
+                <div className="w-campaign-top">
+                  {/* Channel badge */}
                   <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      background: channelInfo.bg,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
+                    className="w-channel-badge"
+                    style={{ background: channelInfo.bg }}
                   >
-                    <span style={{ color: "white", fontSize: 12, fontWeight: 800 }}>{channelInfo.icon}</span>
+                    <span className="w-channel-icon">{channelInfo.icon}</span>
                   </div>
 
                   {/* Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                  <div className="w-campaign-info">
+                    <div className="w-campaign-name-row">
+                      <span className="w-campaign-name">{campaign.name}</span>
                       <span
+                        className="w-badge"
                         style={{
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: "var(--rt-text)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
+                          background: statusStyle.bg,
+                          color: statusStyle.color,
+                          textTransform: "capitalize",
                         }}
-                      >
-                        {campaign.name}
-                      </span>
-                      <span
-                        className="rt-badge"
-                        style={{ background: statusStyle.bg, color: statusStyle.color, textTransform: "capitalize" }}
                       >
                         {campaign.status}
                       </span>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--rt-muted)" }}>
-                      {campaign.channel.toUpperCase()}
-                      {campaign.segment ? ` \u00B7 ${campaign.segment}` : ""}
+                    <div className="w-campaign-meta">
+                      <span className="w-campaign-channel">{campaign.channel.toUpperCase()}</span>
+                      {campaign.segment && (
+                        <>
+                          <span className="w-campaign-dot">·</span>
+                          <span>{campaign.segment}</span>
+                        </>
+                      )}
                     </div>
                     {campaign.scheduledDate && (
-                      <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
-                        Scheduled: {campaign.scheduledDate}
+                      <div className="w-campaign-scheduled">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
+                          <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                        {campaign.scheduledDate}
                       </div>
                     )}
-                    <div style={{ fontSize: 11, color: "var(--rt-muted)", marginTop: 2 }}>
-                      Created: {campaign.createdAt}
-                    </div>
+                    <div className="w-campaign-created">Created {campaign.createdAt}</div>
                   </div>
                 </div>
 
-                {/* Sent Metrics */}
+                {/* Metrics row */}
                 {hasSentMetrics && (
                   <>
-                    <div className="rt-divider" />
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                      <div style={{ textAlign: "center" }}>
-                        <div className="rt-mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--rt-text)" }}>
-                          {campaign.delivered ?? 0}
-                        </div>
-                        <div style={{ fontSize: 11, color: "var(--rt-muted)" }}>Delivered</div>
+                    <div className="w-campaign-divider" />
+                    <div className="w-campaign-metrics">
+                      <div className="w-metric">
+                        <span className="w-mono w-metric-num">{campaign.delivered ?? 0}</span>
+                        <span className="w-metric-label">Delivered</span>
                       </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div className="rt-mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--rt-teal)" }}>
-                          {campaign.opened ?? 0}
-                        </div>
-                        <div style={{ fontSize: 11, color: "var(--rt-muted)" }}>Opened</div>
+                      <div className="w-metric-sep" />
+                      <div className="w-metric">
+                        <span className="w-mono w-metric-num w-metric-teal">{campaign.opened ?? 0}</span>
+                        <span className="w-metric-label">Opened</span>
                       </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div className="rt-mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--rt-gold)" }}>
-                          {campaign.clicked ?? 0}
-                        </div>
-                        <div style={{ fontSize: 11, color: "var(--rt-muted)" }}>Clicked</div>
+                      <div className="w-metric-sep" />
+                      <div className="w-metric">
+                        <span className="w-mono w-metric-num w-metric-gold">{campaign.clicked ?? 0}</span>
+                        <span className="w-metric-label">Clicked</span>
                       </div>
                     </div>
                   </>
@@ -172,6 +211,7 @@ export default function CampaignsPage() {
   );
 }
 
+/* ── Create Campaign Modal ───────────────────────────────────────────── */
 function CreateCampaignModal({ storeId, onClose }: { storeId: string; onClose: () => void }) {
   const createCampaign = useMutation(api.campaignOps.createCampaign);
   const [name, setName] = useState("");
@@ -187,7 +227,6 @@ function CreateCampaignModal({ storeId, onClose }: { storeId: string; onClose: (
 
   async function handleSubmit() {
     if (!name.trim()) { setError("Campaign name is required"); return; }
-
     setLoading(true);
     setError("");
     try {
@@ -210,68 +249,42 @@ function CreateCampaignModal({ storeId, onClose }: { storeId: string; onClose: (
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(10, 22, 40, 0.4)",
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          background: "var(--rt-white)",
-          borderRadius: "var(--rt-radius)",
-          border: "1px solid var(--rt-border)",
-          width: "100%",
-          maxWidth: 400,
-          padding: 20,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <h2
-            className="rt-serif"
-            style={{ fontSize: 18, fontWeight: 700, fontStyle: "italic", color: "var(--rt-navy)", margin: 0 }}
-          >
-            New Campaign
-          </h2>
-          <button
-            onClick={onClose}
-            style={{ padding: 4, border: "none", background: "transparent", cursor: "pointer" }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--rt-muted)" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
+    <div className="w-modal-backdrop">
+      <div className="w-modal" role="dialog" aria-modal="true">
+
+        {/* Modal header */}
+        <div className="w-modal-header">
+          <div>
+            <p className="w-modal-eyebrow">Marketing</p>
+            <h2 className="w-display w-modal-title">New Campaign</h2>
+          </div>
+          <button className="w-modal-close" onClick={onClose} aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
 
+        <div className="w-rule-gold" style={{ marginBottom: 20 }} />
+
+        {/* Error */}
         {error && (
-          <div style={{
-            padding: "8px 12px",
-            borderRadius: 10,
-            background: "rgba(183, 28, 28, 0.08)",
-            color: "var(--rt-alert)",
-            fontSize: 13,
-            fontWeight: 600,
-            marginBottom: 12,
-          }}>
+          <div className="w-modal-error">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
             {error}
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {/* Name */}
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-              Campaign Name *
-            </label>
+        {/* Form */}
+        <div className="w-modal-form">
+
+          {/* Campaign name */}
+          <div className="w-field">
+            <label className="w-label">Campaign Name <span className="w-label-req">*</span></label>
             <input
-              className="rt-input"
+              className="w-input"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -280,63 +293,64 @@ function CreateCampaignModal({ storeId, onClose }: { storeId: string; onClose: (
           </div>
 
           {/* Channel */}
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-              Channel *
-            </label>
-            <div style={{ display: "flex", gap: 6 }}>
-              {CHANNEL_OPTIONS.map((ch) => (
-                <button
-                  key={ch}
-                  onClick={() => setChannel(ch)}
-                  className={`rt-pill ${channel === ch ? "active" : ""}`}
-                  style={{ flex: 1, textAlign: "center" }}
-                >
-                  {ch.toUpperCase()}
-                </button>
-              ))}
+          <div className="w-field">
+            <label className="w-label">Channel <span className="w-label-req">*</span></label>
+            <div className="w-channel-pills">
+              {CHANNEL_OPTIONS.map((ch) => {
+                const info = CHANNEL_COLORS[ch] || { bg: "#9C8878", icon: "?" };
+                return (
+                  <button
+                    key={ch}
+                    onClick={() => setChannel(ch)}
+                    className={`w-channel-pill${channel === ch ? " active" : ""}`}
+                    style={{ "--ch-color": info.bg } as React.CSSProperties}
+                  >
+                    <span
+                      className="w-channel-pill-dot"
+                      style={{ background: channel === ch ? info.bg : "var(--w-cream-border)" }}
+                    />
+                    {ch.toUpperCase()}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Template */}
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-              Template Text
-            </label>
+          <div className="w-field">
+            <label className="w-label">Template Text</label>
             <textarea
-              className="rt-input"
+              className="w-input w-textarea"
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
               placeholder="Hi {name}, check out our new collection..."
               rows={3}
-              style={{ resize: "vertical", minHeight: 60 }}
             />
           </div>
 
           {/* Segment */}
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-              Target Segment
-            </label>
+          <div className="w-field">
+            <label className="w-label">Target Segment</label>
             <select
-              className="rt-select"
+              className="w-input w-select"
               value={segment}
               onChange={(e) => setSegment(e.target.value)}
             >
-              <option value="">Select segment...</option>
+              <option value="">All customers</option>
               {SEGMENT_OPTIONS.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
 
-          {/* Schedule Date */}
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-              Schedule Date (optional)
+          {/* Schedule */}
+          <div className="w-field">
+            <label className="w-label">
+              Schedule Date
+              <span className="w-label-opt"> — optional</span>
             </label>
             <input
-              className="rt-input"
+              className="w-input"
               type="date"
               value={scheduledDate}
               onChange={(e) => setScheduledDate(e.target.value)}
@@ -344,17 +358,22 @@ function CreateCampaignModal({ storeId, onClose }: { storeId: string; onClose: (
           </div>
 
           {/* Actions */}
-          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <button className="rt-btn rt-btn-ghost" style={{ flex: 1 }} onClick={onClose}>
+          <div className="w-modal-actions">
+            <button className="w-btn w-btn-ghost" style={{ flex: 1 }} onClick={onClose}>
               Cancel
             </button>
             <button
-              className="rt-btn rt-btn-primary"
-              style={{ flex: 1, opacity: loading ? 0.6 : 1 }}
+              className={`w-btn w-btn-primary${loading ? " w-btn-loading" : ""}`}
+              style={{ flex: 2 }}
               onClick={handleSubmit}
               disabled={loading}
             >
-              {loading ? "Creating..." : "Create Campaign"}
+              {loading ? (
+                <>
+                  <span className="w-spinner" />
+                  Creating…
+                </>
+              ) : "Create Campaign"}
             </button>
           </div>
         </div>
