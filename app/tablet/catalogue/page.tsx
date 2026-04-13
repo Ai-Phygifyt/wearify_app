@@ -17,20 +17,26 @@ export default function TabletCataloguePage() {
 
   const [storeId, setStoreId] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [customerId, setCustomerId] = useState<Id<"customers"> | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [occasionFilter, setOccasionFilter] = useState("All");
   const [fabricFilter, setFabricFilter] = useState("All");
   const [sortOption, setSortOption] = useState("Default");
   const [shortlistCount, setShortlistCount] = useState(0);
+  const [showPrevious, setShowPrevious] = useState(false);
 
   useEffect(() => {
     const storeRaw = localStorage.getItem("wearify_tablet_store");
     const sessRaw = localStorage.getItem("wearify_tablet_session");
+    const custRaw = localStorage.getItem("wearify_tablet_customer");
     if (storeRaw) {
       try { setStoreId(JSON.parse(storeRaw).storeId); } catch { /* ignore */ }
     }
     if (sessRaw) {
       try { setSessionId(JSON.parse(sessRaw).sessionId); } catch { /* ignore */ }
+    }
+    if (custRaw) {
+      try { setCustomerId(JSON.parse(custRaw).customerId as Id<"customers">); } catch { /* ignore */ }
     }
   }, []);
 
@@ -53,9 +59,25 @@ export default function TabletCataloguePage() {
     sessionId ? { sessionId } : "skip"
   );
 
+  // Query previous shortlist for returning customers
+  const previousShortlist = useQuery(
+    api.sessionOps.getCustomerPreviousShortlist,
+    customerId && storeId && sessionId
+      ? { customerId, storeId, currentSessionId: sessionId }
+      : "skip"
+  );
+
   useEffect(() => {
     setShortlistCount(shortlistItems?.length || 0);
   }, [shortlistItems]);
+
+  // Build saree lookup map for previous shortlist display
+  const sareeMap = new Map<string, NonNullable<typeof allSarees>[number]>();
+  if (allSarees) {
+    for (const s of allSarees) {
+      sareeMap.set(s._id, s);
+    }
+  }
 
   // Determine which sarees to show
   const baseSarees = searchTerm.trim() ? searchResults : allSarees;
@@ -89,7 +111,12 @@ export default function TabletCataloguePage() {
   const handleAddToShortlist = async (sareeId: Id<"sarees">) => {
     if (!sessionId || !storeId) return;
     try {
-      await addToShortlist({ sessionId, sareeId, storeId });
+      await addToShortlist({
+        sessionId,
+        sareeId,
+        storeId,
+        ...(customerId ? { customerId } : {}),
+      });
     } catch {
       // already added or error
     }
@@ -203,6 +230,55 @@ export default function TabletCataloguePage() {
           ))}
         </div>
       </div>
+
+      {/* Previously shortlisted banner for returning customers */}
+      {previousShortlist && previousShortlist.length > 0 && (
+        <div className="mb-3">
+          <button
+            onClick={() => setShowPrevious(!showPrevious)}
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-wf-gold/10 border border-wf-gold/30 cursor-pointer hover:bg-wf-gold/15 transition-colors"
+          >
+            <span className="text-sm font-semibold text-wf-text">
+              Previously Shortlisted ({previousShortlist.length})
+            </span>
+            <span className="text-xs text-wf-subtext">
+              {showPrevious ? "Hide" : "Show"} &middot; Tap to re-add
+            </span>
+          </button>
+          {showPrevious && (
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {previousShortlist.map((item) => {
+                const alreadyInCurrent = isInShortlist(item.sareeId);
+                const saree = sareeMap.get(item.sareeId);
+                const grad = saree?.grad || ["#E8E0D4", "#D4A843"];
+                return (
+                  <button
+                    key={item._id}
+                    onClick={() => !alreadyInCurrent && handleAddToShortlist(item.sareeId)}
+                    disabled={alreadyInCurrent}
+                    className={`px-3 py-2 rounded-lg border text-xs font-semibold text-left cursor-pointer transition-colors flex items-center gap-2 ${
+                      alreadyInCurrent
+                        ? "border-wf-green/30 bg-wf-green/5 text-wf-green"
+                        : "border-wf-border bg-wf-card text-wf-text hover:border-wf-primary/40"
+                    }`}
+                  >
+                    <div
+                      className="w-8 h-8 rounded flex-shrink-0"
+                      style={{ background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})` }}
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate">{saree?.name || "Saree"}</div>
+                      <div className="text-[10px] text-wf-muted mt-0.5">
+                        {alreadyInCurrent ? "Already added" : saree ? `₹${saree.price.toLocaleString("en-IN")}` : "Tap to re-add"}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Results count */}
       <div className="text-xs text-wf-muted mb-2">

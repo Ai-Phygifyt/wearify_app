@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -11,15 +11,36 @@ export default function TabletShortlistPage() {
   const router = useRouter();
   const removeFromShortlist = useMutation(api.sessionOps.removeFromShortlist);
   const markSentToMirror = useMutation(api.sessionOps.markSentToMirror);
+  const generateCode = useMutation(api.trialRoom.generateCode);
 
   const [sessionId, setSessionId] = useState("");
   const [storeId, setStoreId] = useState("");
+  const [customerId, setCustomerId] = useState<Id<"customers"> | undefined>(undefined);
+  const [customerPhone, setCustomerPhone] = useState<string | undefined>(undefined);
+  const [staffId, setStaffId] = useState<Id<"staff"> | undefined>(undefined);
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [trialCode, setTrialCode] = useState("");
+  const [codeExpiresAt, setCodeExpiresAt] = useState(0);
+  const [codeCountdown, setCodeCountdown] = useState("");
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     const sessRaw = localStorage.getItem("wearify_tablet_session");
     const storeRaw = localStorage.getItem("wearify_tablet_store");
+    const custRaw = localStorage.getItem("wearify_tablet_customer");
+    const staffRaw = localStorage.getItem("wearify_tablet_staff");
     if (sessRaw) try { setSessionId(JSON.parse(sessRaw).sessionId); } catch { /* ignore */ }
     if (storeRaw) try { setStoreId(JSON.parse(storeRaw).storeId); } catch { /* ignore */ }
+    if (custRaw) {
+      try {
+        const cust = JSON.parse(custRaw);
+        setCustomerId(cust.customerId as Id<"customers">);
+        setCustomerPhone(cust.phone);
+      } catch { /* ignore */ }
+    }
+    if (staffRaw) {
+      try { setStaffId(JSON.parse(staffRaw).staffId as Id<"staff">); } catch { /* ignore */ }
+    }
   }, []);
 
   // Fetch shortlist items
@@ -34,13 +55,36 @@ export default function TabletShortlistPage() {
     storeId ? { storeId } : "skip"
   );
 
+  // Check for existing trial room code
+  const existingTrialRoom = useQuery(
+    api.trialRoom.getBySession,
+    sessionId ? { sessionId } : "skip"
+  );
+
   // Build lookup map
-  const sareeMap = new Map<string, typeof allSarees extends (infer T)[] | undefined ? T : never>();
+  const sareeMap = new Map<string, NonNullable<typeof allSarees>[number]>();
   if (allSarees) {
     for (const s of allSarees) {
       sareeMap.set(s._id, s);
     }
   }
+
+  // Countdown timer for code expiry
+  useEffect(() => {
+    if (!codeExpiresAt) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, codeExpiresAt - Date.now());
+      if (remaining <= 0) {
+        setCodeCountdown("Expired");
+        clearInterval(interval);
+        return;
+      }
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      setCodeCountdown(`${mins}:${secs.toString().padStart(2, "0")}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [codeExpiresAt]);
 
   const handleRemove = async (shortlistId: Id<"shortlist">) => {
     try {
@@ -48,21 +92,55 @@ export default function TabletShortlistPage() {
     } catch { /* ignore */ }
   };
 
-  const handleToggleMirror = async (shortlistId: Id<"shortlist">, currentlySent: boolean) => {
-    if (currentlySent) return; // Cannot un-send
+  const handleGenerateCodeAndSend = useCallback(async (itemIds?: Id<"shortlist">[]) => {
+    if (!sessionId || !storeId) return;
+    setSending(true);
     try {
-      await markSentToMirror({ shortlistId });
-    } catch { /* ignore */ }
+      // Mark items as sent to mirror
+      if (itemIds) {
+        for (const id of itemIds) {
+          await markSentToMirror({ shortlistId: id });
+        }
+      } else if (shortlistItems) {
+        for (const item of shortlistItems) {
+          if (!item.sentToMirror) {
+            await markSentToMirror({ shortlistId: item._id });
+          }
+        }
+      }
+
+      // Generate or retrieve trial room code
+      const result = await generateCode({
+        sessionId,
+        storeId,
+        customerId,
+        customerPhone,
+        staffId,
+      });
+
+      setTrialCode(result.code);
+      setCodeExpiresAt(result.expiresAt);
+      setShowCodeModal(true);
+    } catch (err) {
+      console.error("Failed to generate code:", err);
+    } finally {
+      setSending(false);
+    }
+  }, [sessionId, storeId, customerId, customerPhone, staffId, shortlistItems, markSentToMirror, generateCode]);
+
+  const handleSendSingleToMirror = async (shortlistId: Id<"shortlist">) => {
+    await handleGenerateCodeAndSend([shortlistId]);
   };
 
   const handleSendAllToMirror = async () => {
-    if (!shortlistItems) return;
-    for (const item of shortlistItems) {
-      if (!item.sentToMirror) {
-        try {
-          await markSentToMirror({ shortlistId: item._id });
-        } catch { /* ignore */ }
-      }
+    await handleGenerateCodeAndSend();
+  };
+
+  const handleShowExistingCode = () => {
+    if (existingTrialRoom) {
+      setTrialCode(existingTrialRoom.code);
+      setCodeExpiresAt(existingTrialRoom.expiresAt);
+      setShowCodeModal(true);
     }
   };
 
@@ -96,12 +174,17 @@ export default function TabletShortlistPage() {
           <Btn onClick={() => router.push("/tablet/catalogue")}>
             Back to Catalogue
           </Btn>
+          {existingTrialRoom && (
+            <Btn onClick={handleShowExistingCode}>
+              View Code
+            </Btn>
+          )}
           <Btn
             primary
             onClick={handleSendAllToMirror}
-            disabled={totalCount === 0 || sentCount === totalCount}
+            disabled={totalCount === 0 || sentCount === totalCount || sending}
           >
-            Send All to Mirror
+            {sending ? "Sending..." : "Send All to Mirror"}
           </Btn>
         </div>
       </div>
@@ -176,8 +259,8 @@ export default function TabletShortlistPage() {
                   {/* Mirror status */}
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={() => handleToggleMirror(item._id, !!item.sentToMirror)}
-                      disabled={!!item.sentToMirror}
+                      onClick={() => !item.sentToMirror && handleSendSingleToMirror(item._id)}
+                      disabled={!!item.sentToMirror || sending}
                       className={`px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
                         item.sentToMirror
                           ? "bg-wf-green/10 text-wf-green"
@@ -202,6 +285,34 @@ export default function TabletShortlistPage() {
           </div>
         )}
       </div>
+
+      {/* Trial Room Code Modal */}
+      {showCodeModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 w-[420px] shadow-2xl text-center">
+            <div className="text-sm text-wf-subtext mb-2">Trial Room Code</div>
+            <div className="text-5xl font-extrabold font-mono tracking-[0.3em] text-wf-primary mb-4">
+              {trialCode}
+            </div>
+            <div className="text-sm text-wf-subtext mb-1">
+              Enter this code on the mirror to start try-on
+            </div>
+            <div className={`text-sm font-semibold mb-6 ${codeCountdown === "Expired" ? "text-wf-red" : "text-wf-green"}`}>
+              {codeCountdown === "Expired" ? "Code expired" : `Expires in ${codeCountdown}`}
+            </div>
+            <div className="flex gap-3 justify-center">
+              <Btn onClick={() => setShowCodeModal(false)}>
+                Close
+              </Btn>
+              {codeCountdown === "Expired" && (
+                <Btn primary onClick={handleSendAllToMirror}>
+                  Generate New Code
+                </Btn>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

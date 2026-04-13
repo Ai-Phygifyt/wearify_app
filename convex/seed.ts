@@ -102,6 +102,19 @@ export const seedAll = internalMutation({
       });
     }
 
+    // Add body scan data for first 2 customers (Ananya & Deepika) so ScanChoiceScreen can be tested
+    // lastBodyScan indicates the customer has been scanned before (scan data lives on edge device)
+    const _seedNow = Date.now();
+    const _seedDay = 86400000;
+    // Ananya Mehta — scanned 2 months ago (within 6-month validity)
+    await ctx.db.patch(customerIds[0] as any, {
+      lastBodyScan: _seedNow - 60 * _seedDay,
+    });
+    // Deepika Reddy — scanned 1 month ago
+    await ctx.db.patch(customerIds[1] as any, {
+      lastBodyScan: _seedNow - 30 * _seedDay,
+    });
+
     // ===================== CUSTOMER-STORE LINKS =====================
     const csLinks = [
       { customerId: customerIds[0], storeId: "ST-001", storeName: "MAUVE Sarees", visits: 6, lastVisit: "2026-03-28", clv: 85000, segment: "VIP" },
@@ -591,6 +604,36 @@ export const seedRelational = internalMutation({
     await ctx.db.insert("customerSegments", { storeId: "ST-003", name: "Silk Lovers", criteria: '{"fabric":"Silk"}', customerCount: 15, createdAt: "2026-02-01" });
 
     return "Relational data seeded successfully";
+  },
+});
+
+// Standalone patch: adds body scan data to existing customers (safe to run on already-seeded DB)
+export const patchBodyScans = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const ananya = await ctx.db
+      .query("customers")
+      .withIndex("by_phone", (q) => q.eq("phone", "+919900000001"))
+      .unique();
+    const deepika = await ctx.db
+      .query("customers")
+      .withIndex("by_phone", (q) => q.eq("phone", "+919900000002"))
+      .unique();
+
+    const now = Date.now();
+    const DAY = 86400000;
+    let patched = 0;
+
+    if (ananya && !ananya.lastBodyScan) {
+      await ctx.db.patch(ananya._id, { lastBodyScan: now - 60 * DAY });
+      patched++;
+    }
+    if (deepika && !deepika.lastBodyScan) {
+      await ctx.db.patch(deepika._id, { lastBodyScan: now - 30 * DAY });
+      patched++;
+    }
+
+    return `Patched ${patched} customer(s) with body scan data`;
   },
 });
 

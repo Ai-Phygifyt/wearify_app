@@ -297,10 +297,32 @@ export default defineSchema({
     sessionId: v.string(),
     sareeId: v.id("sarees"),
     storeId: v.string(),
+    customerId: v.optional(v.id("customers")),
     sentToMirror: v.optional(v.boolean()),
     addedAt: v.number(),
   })
-    .index("by_sessionId", ["sessionId"]),
+    .index("by_sessionId", ["sessionId"])
+    .index("by_customerId", ["customerId"])
+    .index("by_customerId_and_storeId", ["customerId", "storeId"]),
+
+  // ============================
+  // TRIAL ROOM (kiosk access codes from tablet)
+  // ============================
+  trialRoom: defineTable({
+    code: v.string(), // 6-digit numeric code
+    storeId: v.string(),
+    sessionId: v.string(), // tablet session that created it
+    customerId: v.optional(v.id("customers")),
+    customerPhone: v.optional(v.string()),
+    staffId: v.optional(v.id("staff")),
+    status: v.string(), // "active" | "used" | "expired"
+    expiresAt: v.number(), // timestamp
+    createdAt: v.number(),
+  })
+    .index("by_code", ["code"])
+    .index("by_storeId", ["storeId"])
+    .index("by_sessionId", ["sessionId"])
+    .index("by_status", ["status"]),
 
   // ============================
   // WISHLIST (customer saved items)

@@ -264,16 +264,41 @@ export const addToShortlist = mutation({
     sessionId: v.string(),
     sareeId: v.id("sarees"),
     storeId: v.string(),
+    customerId: v.optional(v.id("customers")),
   },
   handler: async (ctx, args) => {
     const id = await ctx.db.insert("shortlist", {
       sessionId: args.sessionId,
       sareeId: args.sareeId,
       storeId: args.storeId,
+      customerId: args.customerId,
       sentToMirror: false,
       addedAt: Date.now(),
     });
     return id;
+  },
+});
+
+// Get a customer's shortlisted items from all previous sessions at a store
+export const getCustomerPreviousShortlist = query({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    currentSessionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query("shortlist")
+      .withIndex("by_customerId_and_storeId", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId)
+      )
+      .order("desc")
+      .take(100);
+    // Exclude items from the current session
+    if (args.currentSessionId) {
+      return items.filter((item) => item.sessionId !== args.currentSessionId);
+    }
+    return items;
   },
 });
 
