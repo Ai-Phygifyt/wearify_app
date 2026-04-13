@@ -1414,35 +1414,123 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
   const [selColor, setSelColor] = useState(0);
   const grad = product.grad || ["#E8E0D4", "#D4A843"];
   const disc = product.mrp && product.mrp > product.price ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
-  const similar = allSarees.filter((s) => s.occasion === product.occasion && s._id !== product._id).slice(0, 4);
+  const similar = allSarees.filter((s) => s.occasion === product.occasion && s._id !== product._id).slice(0, 6);
+
   return (
     <div className="k-shell">
       <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 16 }}>
-        <div style={{ display: "flex", gap: 12, padding: "12px 18px" }}>
-          <div style={{ width: "45%", position: "relative", borderRadius: "var(--k-r)", overflow: "hidden", paddingTop: "60%", background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})` }}>
-            {product.emoji && <span style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 48 }}>{product.emoji}</span>}
+
+      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 24 }}>
+        {/* Hero section — image left, details right */}
+        <div style={{ display: "flex", padding: "24px", gap: 28, minHeight: 320 }}>
+          {/* Left: product image */}
+          <div className="k-silk" style={{
+            width: "38%", maxWidth: 360, position: "relative", borderRadius: "var(--k-r-lg)",
+            overflow: "hidden", background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
+            boxShadow: "var(--k-shadow-md)", flexShrink: 0,
+          }}>
+            {product.emoji && (
+              <span style={{
+                position: "absolute", top: "50%", left: "50%",
+                transform: "translate(-50%, -50%)", fontSize: 72, opacity: 0.6,
+              }}>{product.emoji}</span>
+            )}
+            {/* Tag */}
+            {product.tag && (
+              <div style={{
+                position: "absolute", top: 14, left: 14,
+                padding: "4px 14px", borderRadius: "var(--k-r-pill)",
+                background: product.tag === "Premium" ? "var(--k-maroon)" : "var(--k-gold)",
+                color: "#fff", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px",
+              }}>{product.tag}</div>
+            )}
+            {disc > 0 && (
+              <div style={{
+                position: "absolute", bottom: 14, left: 14,
+                padding: "4px 12px", borderRadius: "var(--k-r-pill)",
+                background: "var(--k-green)", color: "#fff", fontSize: 13, fontWeight: 700,
+              }}>-{disc}% OFF</div>
+            )}
           </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700 }}>{product.name}</h2>
-            <div style={{ fontSize: 12, color: "var(--k-text-muted)" }}>{product.fabric} · {product.occasion}</div>
-            {product.description && <p style={{ fontSize: 12, color: "var(--k-text-mid)", lineHeight: 1.5 }}>{product.description}</p>}
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              {disc > 0 && <span className="k-mono" style={{ fontSize: 12, color: "var(--k-green)", fontWeight: 600 }}>-{disc}%</span>}
-              <span className="k-mono" style={{ fontSize: 20, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(product.price)}</span>
+
+          {/* Right: details */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            {/* Breadcrumb */}
+            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 6 }}>
+              {product.occasion} · {product.fabric}{product.region ? ` · ${product.region}` : ""}
             </div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>Colors</div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {product.colors.map((c, i) => <div key={i} onClick={() => setSelColor(i)} className="k-swatch" style={{ background: c, borderColor: i === selColor ? "var(--k-maroon)" : "transparent" }} />)}
+
+            {/* Name */}
+            <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, marginBottom: 8 }}>{product.name}</h2>
+
+            {/* Description */}
+            {product.description && (
+              <p style={{ fontSize: 15, color: "var(--k-text-mid)", lineHeight: 1.6, marginBottom: 16 }}>{product.description}</p>
+            )}
+
+            {/* Price */}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
+              <span className="k-mono" style={{ fontSize: 28, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(product.price)}</span>
+              {product.mrp && product.mrp > product.price && (
+                <span className="k-mono" style={{ fontSize: 16, color: "var(--k-text-light)", textDecoration: "line-through" }}>₹{fmtPrice(product.mrp)}</span>
+              )}
+              {disc > 0 && (
+                <span style={{ padding: "2px 10px", borderRadius: "var(--k-r-pill)", background: "var(--k-green-bg)", color: "var(--k-green)", fontSize: 13, fontWeight: 600 }}>Save ₹{fmtPrice(product.mrp! - product.price)}</span>
+              )}
             </div>
+
+            {/* Colors */}
+            {product.colors.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Available Colors</div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {product.colors.map((c, i) => (
+                    <div key={i} onClick={() => setSelColor(i)} style={{
+                      width: 32, height: 32, borderRadius: "50%", background: c, cursor: "pointer",
+                      border: i === selColor ? "3px solid var(--k-maroon)" : "2px solid var(--k-border)",
+                      boxShadow: i === selColor ? "0 0 0 2px rgba(107,26,26,.2)" : "none",
+                      transition: "all .15s",
+                    }} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Details chips */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+              {[product.fabric, product.occasion, product.type, product.region].filter(Boolean).map((tag, i) => (
+                <span key={i} style={{
+                  padding: "6px 14px", borderRadius: "var(--k-r-pill)",
+                  background: "var(--k-bg-warm)", fontSize: 12, fontWeight: 500, color: "var(--k-text-mid)",
+                }}>{tag}</span>
+              ))}
+            </div>
+
+            {/* CTA */}
             <button onClick={onAddToTrial} disabled={isInTrial || isInWardrobe} className="k-press" style={{
-              width: "100%", padding: "12px", borderRadius: "var(--k-r-pill)", marginTop: 4,
+              width: "100%", maxWidth: 360, padding: "16px 24px", borderRadius: "var(--k-r-pill)",
               background: isInTrial || isInWardrobe ? "var(--k-border)" : "var(--k-maroon)",
-              color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            }}>{isInWardrobe ? "In Wardrobe" : isInTrial ? "In Trial Room" : "Add to Trial Room"}</button>
+              color: "#fff", border: "none", fontSize: 18, fontWeight: 700, cursor: "pointer",
+              boxShadow: isInTrial || isInWardrobe ? "none" : "0 4px 16px rgba(107,26,26,.3)",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            }}>
+              <span style={{ fontSize: 20 }}>{isInWardrobe ? "👜" : isInTrial ? "👗" : "✨"}</span>
+              {isInWardrobe ? "Already in Wardrobe" : isInTrial ? "Already in Trial Room" : "Add to Trial Room"}
+            </button>
           </div>
         </div>
-        {similar.length > 0 && <ScrollSection title="Similar Sarees">{similar.map((s) => <div key={s._id} style={{ minWidth: "45%", maxWidth: "45%", scrollSnapAlign: "start" }}><SareeCard saree={s} onTap={() => onProductTap(s)} isSelected={false} isInTrial={false} isInWardrobe={false} /></div>)}</ScrollSection>}
+
+        {/* Divider */}
+        <div style={{ height: 1, background: "var(--k-border-l)", margin: "8px 24px 16px" }} />
+
+        {/* Similar sarees */}
+        {similar.length > 0 && (
+          <ScrollSection title="You May Also Like">
+            {similar.map((s) => (
+              <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} isSelected={false} isInTrial={false} isInWardrobe={false} />
+            ))}
+          </ScrollSection>
+        )}
       </div>
     </div>
   );

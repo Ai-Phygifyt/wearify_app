@@ -146,7 +146,7 @@ export default function OnboardPage() {
       staffList.forEach((s, i) => {
         if (!s.name.trim()) { errs[`staff_${i}_name`] = "Required"; t[`staff_${i}_name`] = true; }
         if (!/^\d{10}$/.test(s.phone)) { errs[`staff_${i}_phone`] = "10 digits"; t[`staff_${i}_phone`] = true; }
-        if (!/^\d{4,6}$/.test(s.pin)) { errs[`staff_${i}_pin`] = "4-6 digits"; t[`staff_${i}_pin`] = true; }
+        if (!/^\d{4}$/.test(s.pin)) { errs[`staff_${i}_pin`] = "4 digits"; t[`staff_${i}_pin`] = true; }
       });
     }
     if (step === 6) {
@@ -512,8 +512,8 @@ export default function OnboardPage() {
               </div>
               <div className="grid grid-cols-2 gap-x-5">
                 <div className="mb-3">
-                  <label className="block text-sm font-semibold text-wf-subtext mb-1">Login PIN (4-6 digits) <span className="text-wf-red">*</span></label>
-                  <input value={s.pin} onChange={(e) => { const u = [...staffList]; u[i].pin = e.target.value.replace(/\D/g, "").slice(0, 6); setStaffList(u); }} placeholder="e.g. 4521" maxLength={6} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
+                  <label className="block text-sm font-semibold text-wf-subtext mb-1">Login PIN (4 digits) <span className="text-wf-red">*</span></label>
+                  <input value={s.pin} onChange={(e) => { const u = [...staffList]; u[i].pin = e.target.value.replace(/\D/g, "").slice(0, 4); setStaffList(u); }} placeholder="e.g. 4521" maxLength={4} className="w-full px-3 py-2 rounded-lg border border-wf-border bg-white text-sm text-wf-text focus:outline-none focus:ring-2 focus:border-wf-primary focus:ring-wf-primary/20" />
                   {touched[`staff_${i}_pin`] && errors[`staff_${i}_pin`] && <p className="text-xs text-wf-red mt-0.5">{errors[`staff_${i}_pin`]}</p>}
                 </div>
                 <div className="mb-3">

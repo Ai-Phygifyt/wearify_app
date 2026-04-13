@@ -157,8 +157,8 @@ export default function StoreDetailPage({
     if (!staffForm.name.trim()) errors.name = "Name is required";
     if (!/^\d{10}$/.test(staffForm.phone))
       errors.phone = "Phone must be 10 digits";
-    if (!/^\d{4,6}$/.test(staffForm.pin))
-      errors.pin = "PIN must be 4-6 digits";
+    if (!/^\d{4}$/.test(staffForm.pin))
+      errors.pin = "PIN must be 4 digits";
     setStaffErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -527,7 +527,7 @@ export default function StoreDetailPage({
                 {/* PIN */}
                 <div>
                   <label className="text-xs text-wf-subtext mb-1 block">
-                    PIN (4-6 digits)
+                    PIN (4 digits)
                   </label>
                   <input
                     className="w-full px-3 py-2 rounded border border-wf-border bg-wf-card text-sm text-wf-text focus:outline-none focus:border-wf-primary"
@@ -536,11 +536,11 @@ export default function StoreDetailPage({
                     onChange={(e) =>
                       setStaffForm({
                         ...staffForm,
-                        pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                        pin: e.target.value.replace(/\D/g, "").slice(0, 4),
                       })
                     }
-                    placeholder="4-6 digit PIN"
-                    maxLength={6}
+                    placeholder="4 digit PIN"
+                    maxLength={4}
                   />
                   {staffErrors.pin && (
                     <span className="text-xs text-wf-red mt-0.5 block">

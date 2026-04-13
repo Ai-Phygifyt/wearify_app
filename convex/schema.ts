@@ -96,7 +96,7 @@ export default defineSchema({
   staff: defineTable({
     name: v.string(),
     phone: v.string(),
-    pin: v.string(), // 4-6 digit PIN for tablet/mirror login
+    pin: v.string(), // 4 digit PIN for tablet/mirror login
     role: v.string(), // "R03" owner | "R04" manager | "R05" salesperson
     storeRef: v.optional(v.id("stores")),
     storeId: v.string(),
