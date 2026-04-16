@@ -52,6 +52,7 @@ export default function MePage() {
   }
 
   const menuItems = [
+    { icon: "profile", label: "Edit Profile", sub: "Name, photo, DOB, height, city", href: "/c/me/profile" },
     { icon: "settings", label: "Preferences", sub: "Occasions, fabrics, colours, upcoming events", href: "/c/me/preferences" },
     { icon: "history", label: "Visit History", sub: `${totalVisits} visits across ${storeLinks?.length || 0} stores`, href: "/c/me/history" },
     { icon: "crown", label: "Loyalty & Credits", sub: `${loyaltyPoints} pts · ₹${storeCredit} credit · ${loyaltyTier}`, href: "/c/me/loyalty" },
@@ -63,6 +64,7 @@ export default function MePage() {
   ];
 
   const iconMap: Record<string, React.ReactNode> = {
+    profile: <svg width={20} height={20} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#1A0A2E" strokeWidth="1.6" /><circle cx="12" cy="8" r="4" fill="#C9941A" opacity=".18" /><path d="M4 22c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke="#1A0A2E" strokeWidth="1.6" strokeLinecap="round" /></svg>,
     settings: <svg width={20} height={20} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#C9941A" strokeWidth="1.6" fill="#C9941A" opacity=".22" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="#1A0A2E" strokeWidth="1.4" /></svg>,
     history: <svg width={20} height={20} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#1A0A2E" strokeWidth="1.6" /><circle cx="12" cy="12" r="9" fill="#C9941A" opacity=".07" /><polyline points="12,7 12,12 15,15" stroke="#C9941A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>,
     crown: <svg width={20} height={20} viewBox="0 0 24 24" fill="none"><path d="M3 17L6 7l6 5 6-5 3 10H3Z" stroke="#1A0A2E" strokeWidth="1.6" strokeLinejoin="round" fill="#C9941A" opacity=".18" /><line x1="3" y1="20" x2="21" y2="20" stroke="#C9941A" strokeWidth="2" strokeLinecap="round" /></svg>,

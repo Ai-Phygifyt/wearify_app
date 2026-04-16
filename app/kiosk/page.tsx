@@ -33,6 +33,7 @@ type Screen =
   | "codeEntry"
   | "phoneAuth"
   | "otp"
+  | "newCustomer"
   | "lang"
   | "scanChoice"
   | "consent"
@@ -277,38 +278,63 @@ export default function KioskPage() {
             storeId={storeId}
             storeName={storeName}
             onVerified={async (customer) => {
-              if (customer) {
-                setCustomerId(customer._id);
-                setCustomerName(customer.name);
-                setIsReturningCustomer(true);
-                const scanAge = customer.lastBodyScan
-                  ? (Date.now() - customer.lastBodyScan) / (1000 * 60 * 60 * 24 * 30)
-                  : Infinity;
-                const hasScan = !!customer.lastBodyScan && scanAge < CFG.scanValidMonths;
-                setHasBodyScan(hasScan);
-                if (customer.language) setLang(customer.language);
-                // Set refs synchronously so lang screen reads correct values
-                returningRef.current = true;
-                scanEligibleRef.current = hasScan;
-              } else {
+              if (!customer) {
+                // Unknown phone — collect minimal profile (name + DOB) on kiosk
                 returningRef.current = false;
                 scanEligibleRef.current = false;
+                navigate("newCustomer");
+                return;
               }
-              // Create a session for customer login path
+              setCustomerId(customer._id);
+              setCustomerName(customer.name);
+              setIsReturningCustomer(true);
+              const scanAge = customer.lastBodyScan
+                ? (Date.now() - customer.lastBodyScan) / (1000 * 60 * 60 * 24 * 30)
+                : Infinity;
+              const hasScan = !!customer.lastBodyScan && scanAge < CFG.scanValidMonths;
+              setHasBodyScan(hasScan);
+              if (customer.language) setLang(customer.language);
+              returningRef.current = true;
+              scanEligibleRef.current = hasScan;
+              // Create a session for returning customer
               const newSessionId = await createSessionMut({
                 storeId,
                 storeName,
-                customerId: customer?._id,
+                customerId: customer._id,
                 customerPhone: `+91${phone}`,
               });
               setSessionId(newSessionId);
-              if (returningRef.current && scanEligibleRef.current) {
+              if (scanEligibleRef.current) {
                 navigate("scanChoice");
               } else {
                 navigate("consent");
               }
             }}
             onBack={goBack}
+          />
+        );
+      case "newCustomer":
+        return (
+          <NewCustomerScreen
+            phone={phone}
+            storeName={storeName}
+            onRegistered={async (cId, cName) => {
+              setCustomerId(cId);
+              setCustomerName(cName);
+              setIsReturningCustomer(false);
+              setHasBodyScan(false);
+              returningRef.current = false;
+              scanEligibleRef.current = false;
+              const newSessionId = await createSessionMut({
+                storeId,
+                storeName,
+                customerId: cId,
+                customerPhone: `+91${phone}`,
+              });
+              setSessionId(newSessionId);
+              navigate("consent");
+            }}
+            onBack={() => navigate("otp")}
           />
         );
       case "codeEntry":
@@ -880,6 +906,142 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
           borderRadius: "var(--k-r-pill)", background: otp.length === 6 ? "var(--k-maroon)" : "var(--k-border)",
           color: "#fff", fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer",
         }}>Continue</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── NEW CUSTOMER (minimal capture: name + DOB) ── */
+function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
+  phone: string;
+  storeName: string;
+  onRegistered: (customerId: Id<"customers">, customerName: string) => void;
+  onBack: () => void;
+}) {
+  const ensureByPhone = useMutation(api.customers.ensureByPhone);
+  const [name, setName] = useState("");
+  const [dob, setDob] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const maxDob = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 13);
+    return d.toISOString().split("T")[0];
+  })();
+
+  const ageOk = (iso: string): boolean => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return false;
+    const now = new Date();
+    let a = now.getFullYear() - d.getFullYear();
+    const m = now.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+    return a >= 13 && a <= 120;
+  };
+
+  async function handleSubmit() {
+    const trimmed = name.trim();
+    if (trimmed.length < 2) { setError("Enter your name"); return; }
+    if (!ageOk(dob)) { setError("Enter a valid date of birth (13+)"); return; }
+    setError("");
+    setSaving(true);
+    try {
+      const result = await ensureByPhone({
+        phone: `+91${phone}`,
+        name: trimmed,
+        dateOfBirth: dob,
+      });
+      onRegistered(result.customerId, trimmed);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not create account");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="k-shell">
+      <div className="k-topbar">
+        <button onClick={onBack} className="k-press" style={{
+          width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--k-border)",
+          background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+        }}>
+          <span style={{ fontSize: 18 }}>&#8249;</span>
+        </button>
+        <div className="k-brand" style={{ fontSize: 22 }}>{storeName}</div>
+        <div style={{ width: 36 }} />
+      </div>
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Welcome to Wearify</h2>
+        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 24, textAlign: "center" }}>
+          Quick setup — complete the rest later on the Wearify app.
+        </p>
+
+        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--k-text)", marginBottom: 6 }}>
+              Full Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError(""); }}
+              placeholder="e.g. Ananya Mehta"
+              style={{
+                width: "100%", padding: "14px 16px", borderRadius: "var(--k-r-sm)",
+                border: "1.5px solid var(--k-border)", background: "var(--k-card)",
+                fontSize: 16, color: "var(--k-text)", outline: "none",
+                boxSizing: "border-box", fontFamily: "inherit",
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--k-text)", marginBottom: 6 }}>
+              Date of Birth
+            </label>
+            <input
+              type="date"
+              value={dob}
+              max={maxDob}
+              onChange={(e) => { setDob(e.target.value); setError(""); }}
+              style={{
+                width: "100%", padding: "14px 16px", borderRadius: "var(--k-r-sm)",
+                border: "1.5px solid var(--k-border)", background: "var(--k-card)",
+                fontSize: 16, color: "var(--k-text)", outline: "none",
+                boxSizing: "border-box", fontFamily: "inherit",
+              }}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ fontSize: 13, color: "var(--k-red)", marginTop: 12, fontWeight: 500 }}>
+            {error}
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          disabled={saving}
+          className="k-press"
+          style={{
+            width: "100%", marginTop: 20, padding: "14px",
+            borderRadius: "var(--k-r-pill)",
+            background: saving ? "var(--k-border)" : "var(--k-maroon)",
+            color: "#fff", fontSize: 16, fontWeight: 700, border: "none",
+            cursor: saving ? "not-allowed" : "pointer",
+          }}
+        >
+          {saving ? "Creating..." : "Continue"}
+        </button>
+
+        <p style={{ fontSize: 11, color: "var(--k-text-muted)", marginTop: 16, textAlign: "center" }}>
+          Your try-on history and wardrobe will be saved to your phone number.
+        </p>
       </div>
     </div>
   );

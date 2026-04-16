@@ -133,10 +133,15 @@ export default function StoresPage() {
   const tailors = useQuery(api.tailorOps.listAll);
   const pendingSarees = useQuery(api.sarees.listPendingApproval);
   const approveOrReject = useMutation(api.sarees.approveOrReject);
+  const registerTailor = useMutation(api.tailorOps.registerTailor);
 
   const [tab, setTab] = useState("Registry");
   const [filter, setFilter] = useState("all");
   const [tailorFilter, setTailorFilter] = useState("all");
+  const [showAddTailor, setShowAddTailor] = useState(false);
+  const [tailorForm, setTailorForm] = useState({ name: "", phone: "", city: "", specialty: "" });
+  const [tailorFormError, setTailorFormError] = useState("");
+  const [tailorSaving, setTailorSaving] = useState(false);
   const [rejectFeedback, setRejectFeedback] = useState<Record<string, string>>({});
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null);
   const [showRejectConfirm, setShowRejectConfirm] = useState<string | null>(null);
@@ -165,6 +170,31 @@ export default function StoresPage() {
     tailorFilter === "all"
       ? tailors
       : tailors?.filter((t) => t.status === tailorFilter);
+
+  async function handleAddTailor() {
+    const name = tailorForm.name.trim();
+    const phoneDigits = tailorForm.phone.replace(/\D/g, "");
+    const city = tailorForm.city.trim();
+    if (!name) { setTailorFormError("Tailor / shop name is required"); return; }
+    if (!/^\d{10}$/.test(phoneDigits)) { setTailorFormError("Phone must be 10 digits"); return; }
+    if (!city) { setTailorFormError("City is required"); return; }
+    setTailorSaving(true);
+    setTailorFormError("");
+    try {
+      await registerTailor({
+        name,
+        phone: `+91${phoneDigits}`,
+        city,
+        specialties: tailorForm.specialty ? [tailorForm.specialty] : undefined,
+      });
+      setTailorForm({ name: "", phone: "", city: "", specialty: "" });
+      setShowAddTailor(false);
+    } catch (err: unknown) {
+      setTailorFormError(err instanceof Error ? err.message : "Failed to add tailor");
+    } finally {
+      setTailorSaving(false);
+    }
+  }
 
   /* Health weights total */
   const weightTotal = Object.values(healthWeights).reduce((a, b) => a + b, 0);
@@ -364,22 +394,112 @@ export default function StoresPage() {
             <KPI label="Revenue from Referrals" value={`₹${totalTailorRevenue > 1000 ? `${(totalTailorRevenue / 1000).toFixed(0)}K` : totalTailorRevenue}`} />
           </div>
 
-          {/* Tailor Filters */}
-          <div className="flex gap-1.5 mb-4">
-            {["all", "verified", "pending"].map((f) => (
-              <button
-                key={f}
-                onClick={() => setTailorFilter(f)}
-                className={`px-4 py-1.5 rounded text-xs font-semibold cursor-pointer transition-colors ${
-                  tailorFilter === f
-                    ? "bg-wf-primary text-wf-bg"
-                    : "bg-wf-card text-wf-subtext border border-wf-border hover:bg-wf-border/50"
-                }`}
-              >
-                {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
+          {/* Tailor Filters + Add */}
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <div className="flex gap-1.5">
+              {["all", "verified", "pending"].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setTailorFilter(f)}
+                  className={`px-4 py-1.5 rounded text-xs font-semibold cursor-pointer transition-colors ${
+                    tailorFilter === f
+                      ? "bg-wf-primary text-wf-bg"
+                      : "bg-wf-card text-wf-subtext border border-wf-border hover:bg-wf-border/50"
+                  }`}
+                >
+                  {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+            </div>
+            <Btn primary onClick={() => { setShowAddTailor(true); setTailorFormError(""); }}>
+              + Add Tailor
+            </Btn>
           </div>
+
+          {showAddTailor && (
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold text-wf-text">Add Tailor</span>
+                <button
+                  onClick={() => { setShowAddTailor(false); setTailorFormError(""); }}
+                  className="text-wf-muted hover:text-wf-text text-sm"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {tailorFormError && (
+                <div className="mb-3 px-3 py-2 rounded bg-wf-red/10 border border-wf-red/20 text-wf-red text-xs font-semibold">
+                  {tailorFormError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-wf-subtext mb-1">Tailor / Shop Name *</label>
+                  <input
+                    className="w-full px-3 py-2 rounded border border-wf-border bg-wf-card text-sm text-wf-text focus:outline-none focus:border-wf-primary"
+                    value={tailorForm.name}
+                    onChange={(e) => setTailorForm({ ...tailorForm, name: e.target.value })}
+                    placeholder="e.g. Stitchwell Tailors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-wf-subtext mb-1">Phone *</label>
+                  <div className="flex items-center rounded border border-wf-border bg-wf-card overflow-hidden focus-within:border-wf-primary">
+                    <span className="pl-3 pr-1 text-sm font-semibold text-wf-subtext select-none font-mono">+91</span>
+                    <input
+                      type="tel"
+                      className="flex-1 px-2 py-2 bg-transparent text-sm text-wf-text focus:outline-none font-mono"
+                      value={tailorForm.phone}
+                      onChange={(e) => setTailorForm({ ...tailorForm, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                      placeholder="10-digit phone"
+                      maxLength={10}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-wf-subtext mb-1">City *</label>
+                  <input
+                    className="w-full px-3 py-2 rounded border border-wf-border bg-wf-card text-sm text-wf-text focus:outline-none focus:border-wf-primary"
+                    value={tailorForm.city}
+                    onChange={(e) => setTailorForm({ ...tailorForm, city: e.target.value })}
+                    placeholder="e.g. Mumbai"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-wf-subtext mb-1">Specialty</label>
+                  <select
+                    className="w-full px-3 py-2 rounded border border-wf-border bg-wf-card text-sm text-wf-text focus:outline-none focus:border-wf-primary"
+                    value={tailorForm.specialty}
+                    onChange={(e) => setTailorForm({ ...tailorForm, specialty: e.target.value })}
+                  >
+                    <option value="">Select specialty (optional)</option>
+                    <option value="blouse">Blouse specialist</option>
+                    <option value="all">All ethnic wear</option>
+                    <option value="premium">Premium / designer blouse</option>
+                    <option value="petticoat">Blouse + Petticoat</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-wf-border">
+                <Btn primary onClick={handleAddTailor} disabled={tailorSaving}>
+                  {tailorSaving ? "Adding..." : "Add Tailor"}
+                </Btn>
+                <Btn onClick={() => { setShowAddTailor(false); setTailorFormError(""); }}>
+                  Cancel
+                </Btn>
+                <span className="text-xs text-wf-muted ml-auto">
+                  Tailor will be created with status <span className="font-semibold">Pending</span>. Use verification workflow to promote.
+                </span>
+              </div>
+            </Card>
+          )}
 
           <Card>
             {!tailors ? (

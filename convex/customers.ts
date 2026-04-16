@@ -1,5 +1,6 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
 
 // ============================
 // Loyalty tier helper
@@ -9,6 +10,85 @@ function computeTier(points: number): string {
   if (points >= 5000) return "Gold";
   if (points >= 1000) return "Silver";
   return "Regular";
+}
+
+// ============================
+// Shared helpers (used by phoneAuth and tablet/kiosk creation flows)
+// ============================
+export function computeInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "U";
+}
+
+/**
+ * Idempotent: returns an existing customer by phone, or creates a stub
+ * with minimal safe defaults. Centralizes customer creation so every
+ * surface (OTP login, tablet register, kiosk first-time) produces
+ * consistent records.
+ *
+ * Pass only what you have — the customer will fill the rest on /c/onboard.
+ * Stored fields reflect current knowledge; profileComplete stays false
+ * until name, DOB, height, and gender are all populated.
+ */
+export async function ensureCustomerByPhone(
+  ctx: MutationCtx,
+  phone: string,
+  opts?: {
+    name?: string;
+    dateOfBirth?: string;
+    language?: string;
+  }
+): Promise<{ customerId: Id<"customers">; created: boolean; profileComplete: boolean }> {
+  const existing = await ctx.db
+    .query("customers")
+    .withIndex("by_phone", (q) => q.eq("phone", phone))
+    .unique();
+  if (existing) {
+    // Backfill name/DOB/language if provided and missing — never overwrite known values
+    const patch: Record<string, unknown> = {};
+    if (opts?.name && (!existing.name || existing.name === "Customer")) {
+      patch.name = opts.name;
+      patch.initials = computeInitials(opts.name);
+    }
+    if (opts?.dateOfBirth && !existing.dateOfBirth) patch.dateOfBirth = opts.dateOfBirth;
+    if (opts?.language && !existing.language) patch.language = opts.language;
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(existing._id, patch);
+    }
+    const merged = { ...existing, ...patch };
+    return {
+      customerId: existing._id,
+      created: false,
+      profileComplete: !!merged.profileComplete,
+    };
+  }
+  const name = opts?.name?.trim() || "";
+  const today = new Date().toISOString().split("T")[0];
+  const customerId = await ctx.db.insert("customers", {
+    phone,
+    name: name || "Guest",
+    initials: computeInitials(name || "Guest"),
+    dateOfBirth: opts?.dateOfBirth,
+    language: opts?.language || "en",
+    profileComplete: false,
+    totalVisits: 0,
+    totalLooks: 0,
+    totalStores: 0,
+    storeCredit: 0,
+    loyaltyPoints: 0,
+    loyaltyTier: "Regular",
+    consentHistory: true,
+    consentMessages: true,
+    consentAiPersonal: true,
+    consentPhotos: true,
+    consentGrantedDate: today,
+  });
+  return { customerId, created: true, profileComplete: false };
 }
 
 // ============================
@@ -35,7 +115,28 @@ export const getById = query({
 });
 
 // ============================
-// 3. updateProfile
+// 2b. ensureByPhone — public wrapper, used by kiosk/tablet to create a
+// customer record without opening a login session. Idempotent.
+// ============================
+export const ensureByPhone = mutation({
+  args: {
+    phone: v.string(),
+    name: v.optional(v.string()),
+    dateOfBirth: v.optional(v.string()),
+    language: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const result = await ensureCustomerByPhone(ctx, args.phone, {
+      name: args.name,
+      dateOfBirth: args.dateOfBirth,
+      language: args.language,
+    });
+    return result;
+  },
+});
+
+// ============================
+// 3. updateProfile — partial updates from /c/me/preferences
 // ============================
 export const updateProfile = mutation({
   args: {
@@ -44,18 +145,94 @@ export const updateProfile = mutation({
     initials: v.optional(v.string()),
     phone: v.optional(v.string()),
     language: v.optional(v.string()),
+    dateOfBirth: v.optional(v.string()),
+    gender: v.optional(v.string()),
+    heightCm: v.optional(v.number()),
+    heightUnit: v.optional(v.string()),
+    email: v.optional(v.string()),
+    city: v.optional(v.string()),
+    photoFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const { customerId, ...fields } = args;
-    const updates: Record<string, string> = {};
+    const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) {
         updates[key] = value;
       }
     }
+    // Recompute profileComplete if any gating field changed
     if (Object.keys(updates).length > 0) {
+      const existing = await ctx.db.get(customerId);
+      if (existing) {
+        const merged = { ...existing, ...updates };
+        updates.profileComplete = isProfileComplete(merged);
+      }
       await ctx.db.patch(customerId, updates);
     }
+  },
+});
+
+function isProfileComplete(c: {
+  name?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  heightCm?: number;
+  city?: string;
+}): boolean {
+  return !!(
+    c.name &&
+    c.name !== "Guest" &&
+    c.name !== "Customer" &&
+    c.dateOfBirth &&
+    c.gender &&
+    typeof c.heightCm === "number" &&
+    c.heightCm > 0 &&
+    c.city
+  );
+}
+
+// ============================
+// 3b. completeProfile — full onboarding save from /c/onboard
+// ============================
+export const completeProfile = mutation({
+  args: {
+    customerId: v.id("customers"),
+    name: v.string(),
+    dateOfBirth: v.string(), // ISO YYYY-MM-DD, required at onboarding
+    gender: v.string(),
+    heightCm: v.number(),
+    heightUnit: v.optional(v.string()),
+    city: v.string(),
+    email: v.optional(v.string()),
+    photoFileId: v.optional(v.id("_storage")),
+    language: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const customer = await ctx.db.get(args.customerId);
+    if (!customer) throw new Error("Customer not found");
+    const name = args.name.trim();
+    if (!name) throw new Error("Name is required");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.dateOfBirth)) {
+      throw new Error("Invalid date of birth");
+    }
+    if (args.heightCm < 50 || args.heightCm > 250) {
+      throw new Error("Height must be between 50 and 250 cm");
+    }
+    await ctx.db.patch(args.customerId, {
+      name,
+      initials: computeInitials(name),
+      dateOfBirth: args.dateOfBirth,
+      gender: args.gender,
+      heightCm: args.heightCm,
+      heightUnit: args.heightUnit ?? "cm",
+      city: args.city.trim(),
+      email: args.email?.trim() || undefined,
+      photoFileId: args.photoFileId,
+      language: args.language ?? customer.language ?? "en",
+      profileComplete: true,
+    });
+    return { success: true };
   },
 });
 

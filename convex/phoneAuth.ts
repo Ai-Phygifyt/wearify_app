@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation, MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { ensureCustomerByPhone } from "./customers";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -104,24 +105,9 @@ export const register = mutation({
         return { success: false, error: "Phone number already registered" };
       }
       const hash = await hashPassword(args.password);
-      const id = await ctx.db.insert("customers", {
-        phone,
-        name: args.name,
-        passwordHash: hash,
-        totalVisits: 0,
-        totalLooks: 0,
-        totalStores: 0,
-        storeCredit: 0,
-        loyaltyPoints: 0,
-        loyaltyTier: "Regular",
-        initials: args.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2),
-        consentHistory: true,
-        consentMessages: true,
-        consentAiPersonal: true,
-        consentPhotos: true,
-        consentGrantedDate: new Date().toISOString().split("T")[0],
-        language: "en",
-      });
+      const ensured = await ensureCustomerByPhone(ctx, phone, { name: args.name });
+      // Attach password hash to the freshly created customer row
+      await ctx.db.patch(ensured.customerId, { passwordHash: hash });
       const userId = await ctx.db.insert("users", {
         phone,
         passwordHash: hash,
@@ -129,7 +115,7 @@ export const register = mutation({
         role: "customer",
       });
       const token = await createSession(ctx, userId, "customer");
-      return { success: true, token, userId: id, role: "customer" };
+      return { success: true, token, userId: ensured.customerId, role: "customer" };
     }
 
     if (args.role === "tailor") {
@@ -292,32 +278,10 @@ export const loginWithOtp = mutation({
     }
 
     if (args.role === "customer") {
-      let customer = await ctx.db
-        .query("customers")
-        .withIndex("by_phone", (q) => q.eq("phone", phone))
-        .first();
-      if (!customer) {
-        // Auto-create customer on first OTP login
-        const custName = args.name || "Customer";
-        const id = await ctx.db.insert("customers", {
-          phone,
-          name: custName,
-          initials: custName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2),
-          totalVisits: 0,
-          totalLooks: 0,
-          totalStores: 0,
-          storeCredit: 0,
-          loyaltyPoints: 0,
-          loyaltyTier: "Regular",
-          consentHistory: true,
-          consentMessages: true,
-          consentAiPersonal: true,
-          consentPhotos: true,
-          consentGrantedDate: new Date().toISOString().split("T")[0],
-          language: "en",
-        });
-        customer = await ctx.db.get(id);
-      }
+      const ensured = await ensureCustomerByPhone(ctx, phone, {
+        name: args.name,
+      });
+      const customer = await ctx.db.get(ensured.customerId);
       const existingUser = await ctx.db
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "customer"))
@@ -330,7 +294,13 @@ export const loginWithOtp = mutation({
             role: "customer",
           });
       const token = await createSession(ctx, userId, "customer");
-      return { success: true, token, customerId: customer!._id, role: "customer" };
+      return {
+        success: true,
+        token,
+        customerId: ensured.customerId,
+        role: "customer",
+        profileComplete: ensured.profileComplete,
+      };
     }
 
     if (args.role === "tailor") {

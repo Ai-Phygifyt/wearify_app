@@ -168,6 +168,13 @@ export default function CustomerLayout({
       router.replace("/c/login");
       return;
     }
+    // Gate: unfinished profile must complete onboarding before accessing /c
+    if (customerData !== undefined && pathname !== "/c/onboard") {
+      if (customerData && !customerData.profileComplete) {
+        router.replace("/c/onboard");
+        return;
+      }
+    }
     const stored = getStoredUser();
     setCustomerCtx({
       user: stored,
@@ -177,8 +184,8 @@ export default function CustomerLayout({
     });
   }, [session, ready, router, pathname, customerData]);
 
-  // Login page does not need auth shell
-  if (pathname === "/c/login") {
+  // Login and onboard pages render without the bottom nav shell
+  if (pathname === "/c/login" || pathname === "/c/onboard") {
     return (
       <>
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}

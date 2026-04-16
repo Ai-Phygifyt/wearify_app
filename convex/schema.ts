@@ -186,6 +186,16 @@ export default defineSchema({
     phone: v.string(),
     name: v.string(),
     initials: v.optional(v.string()),
+    // Core profile (required for production; added 2026-04)
+    dateOfBirth: v.optional(v.string()), // ISO YYYY-MM-DD; age computed from this
+    gender: v.optional(v.string()), // "male" | "female" | "other" | "prefer_not_to_say"
+    heightCm: v.optional(v.number()), // canonical height stored in cm
+    heightUnit: v.optional(v.string()), // "cm" | "ftin" — display preference only
+    email: v.optional(v.string()),
+    city: v.optional(v.string()),
+    photoFileId: v.optional(v.id("_storage")),
+    profileComplete: v.optional(v.boolean()), // gate for /c
+    // Engagement counters
     totalVisits: v.optional(v.number()),
     totalLooks: v.optional(v.number()),
     totalStores: v.optional(v.number()),

@@ -14,14 +14,22 @@ export default function TabletRegisterPage() {
   const verifyOtp = useMutation(api.phoneAuth.verifyOtp);
   const loginWithOtp = useMutation(api.phoneAuth.loginWithOtp);
   const updateConsent = useMutation(api.customers.updateConsent);
+  const updateProfile = useMutation(api.customers.updateProfile);
 
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
+  const [dob, setDob] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [customerId, setCustomerId] = useState<Id<"customers"> | null>(null);
+
+  const maxDob = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 13);
+    return d.toISOString().split("T")[0];
+  })();
 
   // Consent toggles
   const [consentHistory, setConsentHistory] = useState(true);
@@ -65,6 +73,23 @@ export default function TabletRegisterPage() {
       setError("Please enter the customer's name");
       return;
     }
+    if (!dob) {
+      setError("Please enter date of birth");
+      return;
+    }
+    const age = (() => {
+      const d = new Date(dob);
+      if (isNaN(d.getTime())) return -1;
+      const now = new Date();
+      let a = now.getFullYear() - d.getFullYear();
+      const m = now.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+      return a;
+    })();
+    if (age < 13) {
+      setError("Customer must be at least 13 years old");
+      return;
+    }
     setError("");
     setStep("consent");
   };
@@ -88,6 +113,12 @@ export default function TabletRegisterPage() {
 
       const cId = result.customerId as Id<"customers">;
       setCustomerId(cId);
+
+      // Persist DOB captured at tablet (customer completes the rest at /c)
+      await updateProfile({
+        customerId: cId,
+        dateOfBirth: dob,
+      });
 
       // Update consent
       await updateConsent({
@@ -213,14 +244,15 @@ export default function TabletRegisterPage() {
             </>
           )}
 
-          {/* Step 3: Name */}
+          {/* Step 3: Name + DOB */}
           {step === "name" && (
             <>
-              <h2 className="text-lg font-bold text-wf-text mb-1">Customer Name</h2>
+              <h2 className="text-lg font-bold text-wf-text mb-1">Customer Details</h2>
               <p className="text-sm text-wf-subtext mb-6">
-                Phone verified! Enter the customer's name.
+                Phone verified. Capture the basics — customer completes the rest on the Wearify app.
               </p>
 
+              <label className="block text-sm font-semibold text-wf-text mb-2">Full Name</label>
               <input
                 type="text"
                 value={name}
@@ -229,6 +261,16 @@ export default function TabletRegisterPage() {
                 className="w-full px-4 py-3 rounded-lg border border-wf-border bg-wf-bg text-wf-text text-base focus:outline-none focus:ring-2 focus:ring-wf-primary/30 focus:border-wf-primary placeholder:text-wf-muted"
                 autoFocus
               />
+
+              <label className="block text-sm font-semibold text-wf-text mt-4 mb-2">Date of Birth</label>
+              <input
+                type="date"
+                value={dob}
+                max={maxDob}
+                onChange={(e) => { setDob(e.target.value); setError(""); }}
+                className="w-full px-4 py-3 rounded-lg border border-wf-border bg-wf-bg text-wf-text text-base focus:outline-none focus:ring-2 focus:ring-wf-primary/30 focus:border-wf-primary"
+              />
+
               {error && <p className="text-sm text-wf-red mt-2">{error}</p>}
               <div className="mt-6 flex gap-3">
                 <Btn onClick={() => { setStep("otp"); setError(""); }}>

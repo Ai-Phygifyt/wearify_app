@@ -103,7 +103,6 @@ export default function CustomerLoginPage() {
           phone: fullPhone(phoneDigits),
           otp,
           role: "customer",
-          name: "Customer",
         });
         if (result.success && result.token) {
           // Clear any stale data first, then set fresh token
@@ -112,12 +111,13 @@ export default function CustomerLoginPage() {
           setToken(result.token);
           setStoredUser({
             phone: fullPhone(phoneDigits),
-            name: result.customerId ? "Customer" : "Customer",
+            name: "",
             role: "customer",
             customerId: result.customerId as string,
           });
-          // Use window.location for a clean navigation (avoids stale state)
-          window.location.href = "/c";
+          // Route to onboarding if profile is incomplete; otherwise home
+          const next = result.profileComplete ? "/c" : "/c/onboard";
+          window.location.href = next;
         } else {
           setError(result.error || "Invalid OTP");
           setOtpDigits(["", "", "", "", "", ""]);
