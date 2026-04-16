@@ -1,11 +1,29 @@
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { QueryCtx } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Create a new session row for a user (allows multiple devices concurrently).
+async function createSession(ctx: MutationCtx, userId: Id<"users">, role: string): Promise<string> {
+  const token = generateToken();
+  const now = Date.now();
+  await ctx.db.insert("userSessions", {
+    userId,
+    token,
+    role,
+    expiresAt: now + SESSION_TTL_MS,
+    createdAt: now,
+    lastSeenAt: now,
+  });
+  await ctx.db.patch(userId, { lastLogin: now });
+  return token;
+}
 
 // Normalize phone to canonical format: +91XXXXXXXXXX (no spaces)
 function normalizePhone(phone: string): string {
   // Strip all whitespace
-  let cleaned = phone.replace(/\s+/g, "");
+  const cleaned = phone.replace(/\s+/g, "");
   // Extract digits only
   const digits = cleaned.replace(/\D/g, "");
   // If starts with 91 and has >10 digits, strip the country code
@@ -104,16 +122,13 @@ export const register = mutation({
         consentGrantedDate: new Date().toISOString().split("T")[0],
         language: "en",
       });
-      const token = generateToken();
-      await ctx.db.insert("users", {
+      const userId = await ctx.db.insert("users", {
         phone,
         passwordHash: hash,
         name: args.name,
         role: "customer",
-        sessionToken: token,
-        sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
-        lastLogin: Date.now(),
       });
+      const token = await createSession(ctx, userId, "customer");
       return { success: true, token, userId: id, role: "customer" };
     }
 
@@ -152,17 +167,14 @@ export const register = mutation({
         consentLocation: false,
         consentAnalytics: false,
       });
-      const token = generateToken();
-      await ctx.db.insert("users", {
+      const userId = await ctx.db.insert("users", {
         phone,
         passwordHash: hash,
         name: args.name,
         role: "tailor",
         tailorId,
-        sessionToken: token,
-        sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-        lastLogin: Date.now(),
       });
+      const token = await createSession(ctx, userId, "tailor");
       return { success: true, token, tailorId, userId: id, role: "tailor" };
     }
 
@@ -194,12 +206,7 @@ export const loginWithPassword = mutation({
       if (!user || user.passwordHash !== hash) {
         return { success: false, error: "Invalid password" };
       }
-      const token = generateToken();
-      await ctx.db.patch(user._id, {
-        sessionToken: token,
-        sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-        lastLogin: Date.now(),
-      });
+      const token = await createSession(ctx, user._id, "store_owner");
       return { success: true, token, storeId: store.storeId, storeName: store.name, role: "store_owner" };
     }
 
@@ -219,12 +226,7 @@ export const loginWithPassword = mutation({
       if (!customer) {
         return { success: false, error: "Customer record not found" };
       }
-      const token = generateToken();
-      await ctx.db.patch(user._id, {
-        sessionToken: token,
-        sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-        lastLogin: Date.now(),
-      });
+      const token = await createSession(ctx, user._id, "customer");
       return { success: true, token, customerId: customer._id, role: "customer" };
     }
 
@@ -244,12 +246,7 @@ export const loginWithPassword = mutation({
       if (!tailor) {
         return { success: false, error: "Tailor record not found" };
       }
-      const token = generateToken();
-      await ctx.db.patch(user._id, {
-        sessionToken: token,
-        sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-        lastLogin: Date.now(),
-      });
+      const token = await createSession(ctx, user._id, "tailor");
       return { success: true, token, tailorId: tailor.tailorId, role: "tailor" };
     }
 
@@ -271,35 +268,26 @@ export const loginWithOtp = mutation({
     }
 
     const phone = normalizePhone(args.phone);
-    const token = generateToken();
 
     if (args.role === "store_owner") {
       const store = await findStoreByOwnerPhone(ctx, phone);
       if (!store) {
         return { success: false, error: "No store found for this phone number" };
       }
-      const user = await ctx.db
+      const existingUser = await ctx.db
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "store_owner"))
         .first();
-      if (user) {
-        await ctx.db.patch(user._id, {
-          sessionToken: token,
-          sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          lastLogin: Date.now(),
-        });
-      } else {
-        await ctx.db.insert("users", {
-          phone,
-          name: store.ownerName || "Store Owner",
-          role: "store_owner",
-          storeId: store.storeId,
-          sessionToken: token,
-          sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          lastLogin: Date.now(),
-        });
-      }
-      const hasPassword = !!(user?.passwordHash);
+      const userId = existingUser
+        ? existingUser._id
+        : await ctx.db.insert("users", {
+            phone,
+            name: store.ownerName || "Store Owner",
+            role: "store_owner",
+            storeId: store.storeId,
+          });
+      const token = await createSession(ctx, userId, "store_owner");
+      const hasPassword = !!(existingUser?.passwordHash);
       return { success: true, token, storeId: store.storeId, storeName: store.name, role: "store_owner", hasPassword };
     }
 
@@ -330,26 +318,18 @@ export const loginWithOtp = mutation({
         });
         customer = await ctx.db.get(id);
       }
-      const user = await ctx.db
+      const existingUser = await ctx.db
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "customer"))
         .first();
-      if (user) {
-        await ctx.db.patch(user._id, {
-          sessionToken: token,
-          sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          lastLogin: Date.now(),
-        });
-      } else {
-        await ctx.db.insert("users", {
-          phone,
-          name: customer!.name,
-          role: "customer",
-          sessionToken: token,
-          sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          lastLogin: Date.now(),
-        });
-      }
+      const userId = existingUser
+        ? existingUser._id
+        : await ctx.db.insert("users", {
+            phone,
+            name: customer!.name,
+            role: "customer",
+          });
+      const token = await createSession(ctx, userId, "customer");
       return { success: true, token, customerId: customer!._id, role: "customer" };
     }
 
@@ -361,27 +341,19 @@ export const loginWithOtp = mutation({
       if (!tailor) {
         return { success: false, error: "No tailor account found. Please register first." };
       }
-      const user = await ctx.db
+      const existingUser = await ctx.db
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "tailor"))
         .first();
-      if (user) {
-        await ctx.db.patch(user._id, {
-          sessionToken: token,
-          sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          lastLogin: Date.now(),
-        });
-      } else {
-        await ctx.db.insert("users", {
-          phone,
-          name: tailor.name,
-          role: "tailor",
-          tailorId: tailor.tailorId,
-          sessionToken: token,
-          sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          lastLogin: Date.now(),
-        });
-      }
+      const userId = existingUser
+        ? existingUser._id
+        : await ctx.db.insert("users", {
+            phone,
+            name: tailor.name,
+            role: "tailor",
+            tailorId: tailor.tailorId,
+          });
+      const token = await createSession(ctx, userId, "tailor");
       return { success: true, token, tailorId: tailor.tailorId, role: "tailor" };
     }
 
@@ -432,19 +404,23 @@ export const setPassword = mutation({
   },
 });
 
-// Validate session token
+// Validate session token. Looks up the per-device session row in userSessions,
+// then returns the linked user — so sessions on other devices are unaffected
+// when someone logs in on a new device.
 export const validateSession = query({
   args: {
     token: v.string(),
   },
   handler: async (ctx, args) => {
     if (!args.token) return null;
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_sessionToken", (q) => q.eq("sessionToken", args.token))
+    const session = await ctx.db
+      .query("userSessions")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
       .first();
+    if (!session) return null;
+    if (session.expiresAt < Date.now()) return null;
+    const user = await ctx.db.get(session.userId);
     if (!user) return null;
-    if (user.sessionExpiry && user.sessionExpiry < Date.now()) return null;
     return {
       phone: user.phone,
       name: user.name,
@@ -481,23 +457,42 @@ export const staffPinLogin = mutation({
   },
 });
 
-// Logout
+// Logout — deletes only the current device's session row.
 export const logout = mutation({
   args: {
     token: v.string(),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_sessionToken", (q) => q.eq("sessionToken", args.token))
+    const session = await ctx.db
+      .query("userSessions")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
       .first();
-    if (user) {
-      await ctx.db.patch(user._id, {
-        sessionToken: undefined,
-        sessionExpiry: undefined,
-      });
+    if (session) {
+      await ctx.db.delete(session._id);
     }
     return { success: true };
+  },
+});
+
+// Logout from every device (invalidates all sessions for the current user).
+export const logoutAll = mutation({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db
+      .query("userSessions")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .first();
+    if (!session) return { success: true, count: 0 };
+    const allSessions = await ctx.db
+      .query("userSessions")
+      .withIndex("by_userId", (q) => q.eq("userId", session.userId))
+      .collect();
+    for (const s of allSessions) {
+      await ctx.db.delete(s._id);
+    }
+    return { success: true, count: allSessions.length };
   },
 });
 

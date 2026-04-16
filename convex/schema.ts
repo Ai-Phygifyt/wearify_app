@@ -12,6 +12,8 @@ export default defineSchema({
     role: v.string(), // "store_owner" | "customer" | "tailor" | "staff"
     storeId: v.optional(v.string()), // for store_owner/staff
     tailorId: v.optional(v.string()), // for tailor
+    // Deprecated: sessions now live in userSessions table to support multi-device login.
+    // Kept optional so existing rows remain valid; no longer written.
     sessionToken: v.optional(v.string()),
     sessionExpiry: v.optional(v.number()),
     lastLogin: v.optional(v.number()),
@@ -20,6 +22,19 @@ export default defineSchema({
     .index("by_phone_and_role", ["phone", "role"])
     .index("by_sessionToken", ["sessionToken"])
     .index("by_role", ["role"]),
+
+  // Per-device session tokens. One row per active login so multiple devices
+  // can stay signed in concurrently for the same user.
+  userSessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    role: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    lastSeenAt: v.optional(v.number()),
+  })
+    .index("by_token", ["token"])
+    .index("by_userId", ["userId"]),
 
   // ============================
   // STORES
