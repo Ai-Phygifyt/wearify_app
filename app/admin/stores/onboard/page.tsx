@@ -58,6 +58,7 @@ export default function OnboardPage() {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const router = useRouter();
   const createStore = useMutation(api.stores.create);
+  const createStaff = useMutation(api.stores.createStaff);
 
   // Step 1: Store Profile & Business Details
   const [d, setD] = useState({
@@ -161,8 +162,9 @@ export default function OnboardPage() {
   const handleNext = () => { if (validateStep()) setStep(step + 1); };
 
   const handleActivate = async (status: "trial" | "active") => {
+    const storeId = `ST-${String(Date.now()).slice(-3)}`;
     await createStore({
-      storeId: `ST-${String(Date.now()).slice(-3)}`,
+      storeId,
       name: d.name, city: d.city,
       state: d.state || undefined, address: d.address || undefined, pin: d.pin || undefined,
       status, plan,
@@ -172,6 +174,19 @@ export default function OnboardPage() {
       ownerEmail: d.ownerEmail || undefined,
       gstin: d.gstin || undefined,
     });
+
+    // Persist staff captured in step 6 (skip blank rows)
+    for (const s of staffList) {
+      if (!s.name.trim() || !/^\d{10}$/.test(s.phone) || !/^\d{4,6}$/.test(s.pin)) continue;
+      await createStaff({
+        name: s.name.trim(),
+        phone: `+91${s.phone}`,
+        pin: s.pin,
+        role: s.role,
+        storeId,
+      });
+    }
+
     router.push("/admin/stores");
   };
 

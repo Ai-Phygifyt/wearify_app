@@ -96,6 +96,11 @@ export default defineSchema({
     // Subscription
     subscriptionPlan: v.optional(v.string()), // "Starter" | "Professional" | "Enterprise"
     essentialMode: v.optional(v.boolean()),
+    nextBillingDate: v.optional(v.string()), // ISO date, set by admin
+    // Notification channels (store owner preferences)
+    notifyWhatsApp: v.optional(v.boolean()),
+    notifyEmail: v.optional(v.boolean()),
+    notifySms: v.optional(v.boolean()),
     // Retailer settings
     digitisedPercent: v.optional(v.number()),
     catalogueCount: v.optional(v.number()),

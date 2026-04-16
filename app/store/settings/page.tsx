@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
-const SETTINGS_ITEMS = [
-  { icon: "🏪", label: "Store Profile", description: "Name, address, hours", color: "#1A4A65" },
-  { icon: "👥", label: "Staff & Roles", description: "Manage team members", color: "#0A1628" },
-  { icon: "🔔", label: "Notifications", description: "Alert preferences", color: "#C9941A" },
-  { icon: "💳", label: "Billing", description: "Invoices & payment method", color: "#1B5E20" },
+const SETTINGS_ITEMS: Array<{ icon: string; label: string; description: string; color: string; href?: string }> = [
+  { icon: "🏪", label: "Store Profile", description: "Name, address, hours", color: "#1A4A65", href: "/store/settings/profile" },
+  { icon: "👥", label: "Staff & Roles", description: "Manage team members", color: "#0A1628", href: "/store/staff" },
+  { icon: "🔔", label: "Notifications", description: "Alert preferences", color: "#C9941A", href: "/store/settings/notifications" },
+  { icon: "💳", label: "Billing", description: "Invoices & payment method", color: "#1B5E20", href: "/store/settings/billing" },
   { icon: "🔒", label: "Privacy & DPDP", description: "Data protection settings", color: "#B71C1C" },
   { icon: "🔗", label: "Connected Apps", description: "WhatsApp, POS integrations", color: "#1565C0" },
   { icon: "📸", label: "Photo Booth Guide", description: "Mirror calibration steps", color: "#E65100" },
@@ -66,7 +66,9 @@ export default function SettingsPage() {
 
   const planName = store?.subscriptionPlan || store?.plan || "Starter";
   const planPrice = store?.mrr ?? 999;
-  const nextBilling = "2026-05-01";
+  const nextBilling = store?.nextBillingDate
+    ? new Date(store.nextBillingDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+    : "Not scheduled";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -160,6 +162,8 @@ export default function SettingsPage() {
         {SETTINGS_ITEMS.map((item, idx) => (
           <button
             key={item.label}
+            onClick={() => { if (item.href) router.push(item.href); }}
+            disabled={!item.href}
             style={{
               display: "flex",
               alignItems: "center",
@@ -169,8 +173,9 @@ export default function SettingsPage() {
               background: "transparent",
               border: "none",
               borderBottom: idx < SETTINGS_ITEMS.length - 1 ? "1px solid var(--rt-border)" : "none",
-              cursor: "pointer",
+              cursor: item.href ? "pointer" : "not-allowed",
               textAlign: "left",
+              opacity: item.href ? 1 : 0.55,
             }}
           >
             {/* Icon Circle */}

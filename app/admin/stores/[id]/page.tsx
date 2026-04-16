@@ -125,6 +125,8 @@ export default function StoreDetailPage({
   const [editHours, setEditHours] = useState("");
   const [editEssential, setEditEssential] = useState(false);
   const [editSubPlan, setEditSubPlan] = useState("");
+  const [editMrr, setEditMrr] = useState("");
+  const [editNextBilling, setEditNextBilling] = useState("");
   const [editInit, setEditInit] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -146,6 +148,8 @@ export default function StoreDetailPage({
     setEditHours(store.hours || "");
     setEditEssential(store.essentialMode || false);
     setEditSubPlan(store.subscriptionPlan || "Starter");
+    setEditMrr(String(store.mrr ?? 0));
+    setEditNextBilling(store.nextBillingDate || "");
     setEditInit(true);
   }
 
@@ -187,6 +191,7 @@ export default function StoreDetailPage({
   // ---------------------------------------------------------------------------
   async function handleSave() {
     setSaving(true);
+    const mrrNum = Number(editMrr);
     await updateStore({
       id: store!._id,
       name: editName,
@@ -194,8 +199,11 @@ export default function StoreDetailPage({
       status: editStatus,
       plan: editPlan,
       discountCode: editDiscount || undefined,
+      hours: editHours || undefined,
       essentialMode: editEssential,
       subscriptionPlan: editSubPlan,
+      mrr: Number.isFinite(mrrNum) ? mrrNum : undefined,
+      nextBillingDate: editNextBilling || undefined,
     });
     setSaving(false);
   }
@@ -937,6 +945,34 @@ export default function StoreDetailPage({
                   <option value="Professional">Professional</option>
                   <option value="Enterprise">Enterprise</option>
                 </select>
+              </div>
+
+              {/* MRR */}
+              <div>
+                <label className="text-xs text-wf-subtext mb-1 block">
+                  MRR (Rs/month)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full px-3 py-2 rounded border border-wf-border bg-wf-card text-sm text-wf-text focus:outline-none focus:border-wf-primary"
+                  value={editMrr}
+                  onChange={(e) => setEditMrr(e.target.value)}
+                  placeholder="e.g. 15000"
+                />
+              </div>
+
+              {/* Next Billing Date */}
+              <div>
+                <label className="text-xs text-wf-subtext mb-1 block">
+                  Next Billing Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 rounded border border-wf-border bg-wf-card text-sm text-wf-text focus:outline-none focus:border-wf-primary"
+                  value={editNextBilling}
+                  onChange={(e) => setEditNextBilling(e.target.value)}
+                />
               </div>
 
               {/* Essential Mode */}
