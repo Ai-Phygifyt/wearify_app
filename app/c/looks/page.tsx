@@ -4,6 +4,28 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../layout";
 import { useRouter } from "next/navigation";
+import { Id } from "@/convex/_generated/dataModel";
+
+/* Convex-storage image loader for look cards. Falls back silently when
+ * the id is missing; the gradient silhouette underneath is the last resort. */
+function LookImage({ fileId, alt }: { fileId: Id<"_storage">; alt: string }) {
+  const url = useQuery(api.files.getUrl, { fileId });
+  if (!url) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={alt}
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+      }}
+    />
+  );
+}
 
 /* ── colour tokens (inline) ──────────────────────────────────────── */
 const P = {
@@ -251,9 +273,16 @@ export default function MyLooksPage() {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             {filteredLooks.map((look, idx) => {
-              const grad = look.grad || ["#71221D", "#D4A843"];
+              const enriched = look as typeof look & {
+                sareeImageId?: Id<"_storage">;
+                sareeGrad?: string[];
+              };
+              const grad = enriched.grad || enriched.sareeGrad || ["#71221D", "#D4A843"];
               const storeInfo = storeLinks?.find((s) => s.storeId === look.storeId);
               const delayClass = `cx-d${(idx % 6) + 1}`;
+              // Prefer the actual try-on image; fall back to the saree catalogue image
+              const displayImageId: Id<"_storage"> | undefined =
+                enriched.imageFileId ?? enriched.sareeImageId;
 
               return (
                 <div
@@ -275,10 +304,11 @@ export default function MyLooksPage() {
                       background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})`,
                     }}
                   >
+                    {displayImageId && <LookImage fileId={displayImageId} alt={look.sareeName} />}
                     <SilkOverlay />
 
-                    {/* saree silhouette */}
-                    <SareeSVG />
+                    {/* saree silhouette (only when no image is available) */}
+                    {!displayImageId && <SareeSVG />}
 
                     {/* cross-hatch SVG pattern */}
                     <svg

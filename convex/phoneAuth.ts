@@ -240,13 +240,15 @@ export const loginWithPassword = mutation({
   },
 });
 
-// Login with OTP (creates account if not exists for customer)
+// Login with OTP. Customer accounts are never auto-created on login —
+// the /c/register flow must pass allowCreate:true to sign up.
 export const loginWithOtp = mutation({
   args: {
     phone: v.string(),
     otp: v.string(),
     role: v.string(),
     name: v.optional(v.string()),
+    allowCreate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     if (args.otp !== "123456") {
@@ -278,6 +280,15 @@ export const loginWithOtp = mutation({
     }
 
     if (args.role === "customer") {
+      // Existing-customer lookup first
+      const existingCustomer = await ctx.db
+        .query("customers")
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
+        .unique();
+      if (!existingCustomer && !args.allowCreate) {
+        // Login path must not create accounts — tell the client to show Register CTA
+        return { success: false, error: "no_account", errorCode: "NO_ACCOUNT" };
+      }
       const ensured = await ensureCustomerByPhone(ctx, phone, {
         name: args.name,
       });

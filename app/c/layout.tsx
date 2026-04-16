@@ -115,6 +115,40 @@ function BottomNav() {
   );
 }
 
+const PUBLIC_ROUTES = new Set<string>(["/c/login", "/c/register"]);
+const SPLASH_MS = 1200;
+
+function Splash() {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 1000,
+      background: "linear-gradient(155deg, #0D0418 0%, #1A0A2E 25%, #2D1B4E 55%, #6B1D52 80%, #C9941A 100%)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      flexDirection: "column", gap: 14,
+      animation: "cx-fadeIn 0.25s ease-out",
+    }}>
+      <div style={{
+        width: 88, height: 88, borderRadius: 24,
+        background: "rgba(255,255,255,0.08)",
+        border: "1.5px solid rgba(201,148,26,0.6)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        backdropFilter: "blur(8px)",
+        animation: "cx-scaleIn 0.5s ease-out",
+      }}>
+        <span className="cx-serif" style={{ fontSize: 52, fontWeight: 700, fontStyle: "italic", color: "#C9941A" }}>
+          W
+        </span>
+      </div>
+      <div className="cx-serif" style={{ fontSize: 30, fontWeight: 700, fontStyle: "italic", color: "#FDF8F0", letterSpacing: "0.02em" }}>
+        Wearify
+      </div>
+      <div style={{ fontSize: 12, color: "rgba(253,248,240,0.65)", letterSpacing: "0.3em", textTransform: "uppercase" }}>
+        Try on the moment
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerLayout({
   children,
 }: {
@@ -124,6 +158,7 @@ export default function CustomerLayout({
   const pathname = usePathname();
   const [token, setTokenState] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [splashing, setSplashing] = useState(true);
   const [customerCtx, setCustomerCtx] = useState<CustomerCtx>({
     user: null,
     customerId: null,
@@ -131,10 +166,16 @@ export default function CustomerLayout({
     customer: null,
   });
 
+  // Splash on initial mount — ~1.2s then fade out
+  useEffect(() => {
+    const t = setTimeout(() => setSplashing(false), SPLASH_MS);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     const t = getToken();
     if (!t) {
-      if (pathname !== "/c/login") {
+      if (!PUBLIC_ROUTES.has(pathname)) {
         router.replace("/c/login");
       }
       setReady(true);
@@ -156,7 +197,7 @@ export default function CustomerLayout({
 
   useEffect(() => {
     if (!ready) return;
-    if (pathname === "/c/login") return;
+    if (PUBLIC_ROUTES.has(pathname)) return;
     if (session === undefined) return;
     if (session === null) {
       clearToken();
@@ -168,13 +209,6 @@ export default function CustomerLayout({
       router.replace("/c/login");
       return;
     }
-    // Gate: unfinished profile must complete onboarding before accessing /c
-    if (customerData !== undefined && pathname !== "/c/onboard") {
-      if (customerData && !customerData.profileComplete) {
-        router.replace("/c/onboard");
-        return;
-      }
-    }
     const stored = getStoredUser();
     setCustomerCtx({
       user: stored,
@@ -184,8 +218,13 @@ export default function CustomerLayout({
     });
   }, [session, ready, router, pathname, customerData]);
 
-  // Login and onboard pages render without the bottom nav shell
-  if (pathname === "/c/login" || pathname === "/c/onboard") {
+  // Splash is rendered above everything until it times out
+  if (splashing) {
+    return <Splash />;
+  }
+
+  // Login and register pages render without the bottom nav shell
+  if (PUBLIC_ROUTES.has(pathname)) {
     return (
       <>
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}

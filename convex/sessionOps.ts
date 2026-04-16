@@ -207,7 +207,21 @@ export const listByCustomer = query({
       .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
       .order("desc")
       .take(200);
-    return looks;
+    // Enrich with saree cover image so /c/looks can fall back when the look
+    // itself has no imageFileId (e.g. try-ons produced before image capture).
+    return await Promise.all(
+      looks.map(async (l) => {
+        const saree = await ctx.db.get(l.sareeId);
+        const sareeImageId = saree?.imageIds?.[0];
+        return {
+          ...l,
+          sareeImageId,
+          sareeGrad: saree?.grad,
+          sareeEmoji: saree?.emoji,
+          storeIdLabel: l.storeId,
+        };
+      })
+    );
   },
 });
 
@@ -374,6 +388,39 @@ export const removeFromWardrobe = mutation({
   args: { wardrobeId: v.id("wardrobe") },
   handler: async (ctx, args) => {
     await ctx.db.delete(args.wardrobeId);
+  },
+});
+
+export const listWardrobeByCustomer = query({
+  args: { customerId: v.id("customers") },
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query("wardrobe")
+      .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+      .order("desc")
+      .take(200);
+    // Enrich with saree cover image + store metadata for the wishlist tab UI
+    return await Promise.all(
+      items.map(async (w) => {
+        const saree = await ctx.db.get(w.sareeId);
+        const store = saree
+          ? await ctx.db
+              .query("stores")
+              .withIndex("by_storeId", (q) => q.eq("storeId", saree.storeId))
+              .unique()
+          : null;
+        return {
+          ...w,
+          storeId: saree?.storeId,
+          storeName: store?.name,
+          storeCity: store?.city,
+          sareeImageId: saree?.imageIds?.[0],
+          sareeGrad: saree?.grad,
+          sareeEmoji: saree?.emoji,
+          sareeFabric: saree?.fabric,
+        };
+      })
+    );
   },
 });
 

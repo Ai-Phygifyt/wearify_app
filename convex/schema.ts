@@ -651,7 +651,8 @@ export default defineSchema({
     price: v.optional(v.number()),
     addedAt: v.number(),
   })
-    .index("by_sessionId", ["sessionId"]),
+    .index("by_sessionId", ["sessionId"])
+    .index("by_customerId", ["customerId"]),
 
   // ============================
   // ORDERS (purchase orders from mirror/checkout)

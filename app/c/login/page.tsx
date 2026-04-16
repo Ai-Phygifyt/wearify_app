@@ -92,12 +92,15 @@ export default function CustomerLoginPage() {
     setTimeout(() => otpRefs.current[0]?.focus(), 80);
   }
 
+  const [noAccount, setNoAccount] = useState(false);
+
   const submitOtp = useCallback(
     async (digits: string[]) => {
       const otp = digits.join("");
       if (otp.length !== 6) return;
       setLoading(true);
       setError("");
+      setNoAccount(false);
       try {
         const result = await loginWithOtp({
           phone: fullPhone(phoneDigits),
@@ -105,7 +108,6 @@ export default function CustomerLoginPage() {
           role: "customer",
         });
         if (result.success && result.token) {
-          // Clear any stale data first, then set fresh token
           localStorage.removeItem("wearify_auth_token");
           localStorage.removeItem("wearify_auth_user");
           setToken(result.token);
@@ -115,9 +117,10 @@ export default function CustomerLoginPage() {
             role: "customer",
             customerId: result.customerId as string,
           });
-          // Route to onboarding if profile is incomplete; otherwise home
-          const next = result.profileComplete ? "/c" : "/c/onboard";
-          window.location.href = next;
+          window.location.href = "/c";
+        } else if (result.errorCode === "NO_ACCOUNT") {
+          setNoAccount(true);
+          setOtpDigits(["", "", "", "", "", ""]);
         } else {
           setError(result.error || "Invalid OTP");
           setOtpDigits(["", "", "", "", "", ""]);
@@ -475,6 +478,29 @@ export default function CustomerLoginPage() {
               >
                 Send OTP &nbsp;&rarr;
               </button>
+
+              {/* New user? Register */}
+              <div style={{ textAlign: "center", marginTop: 18 }}>
+                <span style={{ fontSize: 13, color: "#8B7EA0" }}>
+                  New user?{" "}
+                </span>
+                <button
+                  onClick={() => router.push(`/c/register${phoneDigits ? `?phone=${phoneDigits}` : ""}`)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#C9941A",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: 3,
+                    fontFamily: "inherit",
+                  }}
+                >
+                  Register
+                </button>
+              </div>
             </div>
           )}
 
@@ -575,7 +601,7 @@ export default function CustomerLoginPage() {
               </div>
 
               {/* Error */}
-              {error && (
+              {error && !noAccount && (
                 <p
                   style={{
                     fontSize: 12,
@@ -586,6 +612,58 @@ export default function CustomerLoginPage() {
                 >
                   {error}
                 </p>
+              )}
+
+              {/* No account found — prompt to register */}
+              {noAccount && (
+                <div style={{
+                  padding: "14px 14px",
+                  borderRadius: 14,
+                  background: "#FDF5E4",
+                  border: "1px solid rgba(201,148,26,.35)",
+                  marginBottom: 14,
+                  textAlign: "center",
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1A0A1E", marginBottom: 4 }}>
+                    No account found
+                  </div>
+                  <div style={{ fontSize: 12, color: "#4A3558", marginBottom: 12 }}>
+                    We couldn&apos;t find a Wearify account for +91 {phoneDigits}. Create one in under a minute.
+                  </div>
+                  <button
+                    onClick={() => router.push(`/c/register?phone=${phoneDigits}`)}
+                    style={{
+                      width: "100%",
+                      padding: "11px 16px",
+                      borderRadius: 100,
+                      border: "none",
+                      background: "linear-gradient(135deg, #C9941A 0%, #E8C46A 100%)",
+                      color: "#1A0A1E",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Register as new user
+                  </button>
+                  <button
+                    onClick={() => {
+                      setNoAccount(false);
+                      setStep("phone");
+                      setOtpDigits(["", "", "", "", "", ""]);
+                    }}
+                    style={{
+                      marginTop: 8,
+                      background: "none", border: "none", cursor: "pointer",
+                      color: "#4A2D6E", fontSize: 12, fontWeight: 600,
+                      textDecoration: "underline", textUnderlineOffset: 3,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Try a different number
+                  </button>
+                </div>
               )}
 
               {/* Loading state */}
