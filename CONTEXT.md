@@ -198,6 +198,85 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 7. Support ticket system with AI diagnosis
 8. DPDP consent enforcement UI
 
+## 12. Conversation Log — engineering decisions taken
+
+Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
+
+### Visit count consistency — `/c/me` + per-store breakdown
+
+- **Problem:** `/c/me` showed "0 Visits" while `/c/me/history` showed "1 visit" for the same customer. `/c/me` was reading the denormalised `customers.totalVisits` column; nothing bumps it. `/c/me/history` reads the `visitHistory` table directly.
+- **Fix:** `/c/me` now queries `customers.listVisitHistory` and derives count from rows — single source of truth. `customers.totalVisits` marked **deprecated** in schema; do not read/write.
+- **Added:** per-store breakdown card on `/c/me/history` — aggregates visits per storeId, renders "BY STORE" pill list above the timeline.
+
+### Session → visit/link wiring + backfill
+
+- **Problem:** Kiosk sessions wrote `looks`/`wardrobe` but never `customerStoreLinks`/`visitHistory`, so Store Locator + Visit History + home "My Stores" were always empty for anyone not seeded.
+- **Forward fix** ([convex/sessionOps.ts](convex/sessionOps.ts)):
+  - New `ensureStoreLink(ctx, customerId, storeId)` helper — idempotent create-or-touch; called from `createLook` and `addToWardrobe`. Inserts `customerStoreLinks` with `visits: 0` (session-end owns the counter).
+  - `endSession` now idempotently (skips if already `"completed"`) inserts a `visitHistory` row and bumps `customerStoreLinks` (`visits +1`, `lastVisit`, `clv += spentInSession`, promotes segment `New → Regular` at visits ≥ 2). Derives `sareesTried` from `session.sareesTriedOn` or looks count; detects `purchased` from orders filtered by sessionId.
+- **Backfill** (two `internalMutation`s, idempotent, never overwrite existing rows):
+  - `sessionOps:backfillStoreLinksFromActivity` — walks looks + wardrobe + orders, derives missing `(customerId, storeId)` pairs, creates links. Wardrobe rows resolve `storeId` via their saree.
+  - `sessionOps:backfillVisitHistoryFromSessions` — walks `sessions` table, inserts missing `visitHistory` rows keyed by `(customerId, sessionId)`.
+  - Run with: `npx convex run sessionOps:backfillStoreLinksFromActivity '{}'` and `...:backfillVisitHistoryFromSessions '{}'`.
+
+### Customer module standardisation (big bang)
+
+- **Schema changes** on `customers` ([convex/schema.ts](convex/schema.ts)): added `dateOfBirth`, `gender`, `heightCm`, `heightUnit`, `email`, `city`, `photoFileId`, `profileComplete`. Added `by_customerId` index on `wardrobe`.
+- **Centralised creation** ([convex/customers.ts](convex/customers.ts)):
+  - `ensureCustomerByPhone(ctx, phone, opts)` — shared helper. Idempotent get-or-create. Backfills missing name/DOB/language when caller supplies them; never overwrites.
+  - `ensureByPhone` mutation — public wrapper used by kiosk (no login session needed).
+  - `completeProfile(customerId, ...full)` — onboarding save; validates DOB format + height range; sets `profileComplete: true`.
+  - `updateProfile` — extended with all new fields; auto-recomputes `profileComplete` on any edit.
+  - `computeInitials(name)` — avatar fallback helper.
+- **All creation surfaces route through the shared helper:** `phoneAuth.register` customer branch and `phoneAuth.loginWithOtp` customer branch both call `ensureCustomerByPhone` — single code path. `phoneAuth.loginWithOtp` takes `allowCreate: v.optional(v.boolean())`; defaults false (unknown phone returns `{ success: false, error: "no_account", errorCode: "NO_ACCOUNT" }`). Only `/c/register` and tablet register pass `allowCreate: true`.
+
+### /c as a mobile app shell (splash → login/register split)
+
+- **Splash** ([app/c/layout.tsx](app/c/layout.tsx)): full-screen plum→gold gradient with "W" monogram + "WEARIFY · TRY ON THE MOMENT". Renders over everything on initial mount for `SPLASH_MS = 1200`. `PUBLIC_ROUTES = {/c/login, /c/register}` are shell-less (no bottom nav).
+- **Login** ([app/c/login/page.tsx](app/c/login/page.tsx)): existing users only. Unknown phone → gold-bordered "No account found" card appears on the OTP step with a "Register as new user" CTA that carries the typed phone into `/c/register?phone=...`. "New user? Register" link below the Send OTP button.
+- **Register** ([app/c/register/page.tsx](app/c/register/page.tsx)): 3-step wizard with 3-dot progress bar. Phone → OTP (via `verifyOtp`) → profile form (photo / name / DOB / gender / height cm↔ft-in / city / email). On finish: `loginWithOtp({ allowCreate: true })` → `completeProfile` → `/c`.
+- **Onboard-force gate removed** in `/c/layout.tsx`. Legacy `/c/onboard` route deleted — `/c/me/profile` is the "complete profile later" surface.
+
+### Tablet register — mirrors /c/register
+
+- [app/tablet/register/page.tsx](app/tablet/register/page.tsx) rebuilt to 3-step flow: phone → OTP → full profile (same fields as `/c/register`). Uses shared `loginWithOtp({ allowCreate: true })` + `completeProfile` pipeline. Tailwind styling matches tablet theme; helpers imported from [lib/profileHelpers.ts](lib/profileHelpers.ts).
+
+### Kiosk first-time customer capture
+
+- Added **`newCustomer` screen** in [app/kiosk/page.tsx](app/kiosk/page.tsx): when OTP verifies but customer is unknown, navigate to this screen. Captures minimal set (name + DOB — "13+" guard). Submits via `customers.ensureByPhone` (public wrapper, no session issued). On success, creates the kiosk session and proceeds to consent. Returning customers skip it.
+
+### Shared profile helpers
+
+- [lib/profileHelpers.ts](lib/profileHelpers.ts) is the single source of truth for `cmToFtIn` / `ftInToCm` / `clampHeightCm` / `ageFromDob` / `initialsOf` / `maxDobToday` / `validateProfile` / `validatePhoto` + constants (`MIN_HEIGHT_CM=120`, `MAX_HEIGHT_CM=220`, `MIN_AGE_YEARS=13`, `MAX_PHOTO_BYTES=4MB`). `/c/register`, `/c/me/profile`, and tablet register all import from here. If onboarding rules change, change them here.
+
+### My Looks images + Wardrobe tab
+
+- **`/c/looks`** ([app/c/looks/page.tsx](app/c/looks/page.tsx)): cards now render actual saree images. Query `sessionOps.listByCustomer` enriched to include `sareeImageId`/`sareeGrad`/`sareeEmoji` from the look's saree. Priority: `look.imageFileId` → `saree.imageIds[0]` → gradient silhouette. `<SareeSVG />` decoration only shows when no image at all.
+- **`/c/wishlist`** ([app/c/wishlist/page.tsx](app/c/wishlist/page.tsx)): two-tab UI — **Wardrobe** (kiosk-session saves, via new `sessionOps.listWardrobeByCustomer` query) + **Wishlist** (hearted items, unchanged). Pill tab switcher in plum palette. Hero subtitle reflects active tab's count and value. `/c` home tile renamed **My Wardrobe** (👗) pointing to the same page (defaults to Wardrobe tab).
+- Seed extended: `seedRelational` now inserts wardrobe rows for c1, c2, c3, c5 with drape style + accessories + neckline, so the Wardrobe tab is populated out of the box.
+
+### Multi-device login fix
+
+- **Problem:** `users.sessionToken` was a single field overwritten on every login → logging in on device B silently invalidated device A because `useQuery(validateSession)` is reactive.
+- **Fix:** new `userSessions` table (`userId`, `token`, `role`, `expiresAt`, `createdAt`, indexes `by_token` + `by_userId`). `createSession(ctx, userId, role)` helper inserts a session row per device. `validateSession` reads from this table. `logout` deletes only the current session; new `logoutAll` nukes every session for a user. `sessionToken`/`sessionExpiry` fields on `users` are deprecated.
+
+### Admin ↔ Store bidirectional data audit
+
+- **Admin onboard wizard** ([app/admin/stores/onboard/page.tsx](app/admin/stores/onboard/page.tsx)): used to discard Step-6 staff entries. Fixed — loops `api.stores.createStaff` after `createStore` so staff captured during onboarding appear in `/store/staff` immediately.
+- **Admin store detail Edit tab** ([app/admin/stores/[id]/page.tsx](app/admin/stores/[id]/page.tsx)): `MRR`, `Next Billing Date` inputs added; `hours` was collected but never saved — fixed. All now flow via `api.stores.update` and propagate live to `/store/settings/billing` + profile.
+- **Store settings sub-pages** ([app/store/settings/*](app/store/settings/)):
+  - `/store/settings/profile` — editable name, address, area, PIN, city, state, hours, closed-on, owner name/email.
+  - `/store/settings/notifications` — WhatsApp/Email/SMS channel toggles + WhatsApp number field.
+  - `/store/settings/billing` — read-only plan, MRR, billing cycle, next billing date, agreement status, payment method, bank, GSTIN/PAN.
+  - Staff & Roles tile links to existing `/store/staff`.
+- **Admin Tailors tab** — `+ Add Tailor` button on `/admin/stores` → Tailors. Opens inline form (name / phone / city / specialty). Uses existing `api.tailorOps.registerTailor` (same mutation tailor self-register uses), so the new tailor can immediately log in at `/tailor/login` with OTP `123456`. Duplicate-phone error surfaced inline.
+- **stores.update mutation** extended with: `state`, `address`, `pin`, `area`, `hours`, `closedOn`, `ownerName`, `ownerEmail`, `whatsappNumber`, `notifyWhatsApp/Email/Sms`, `nextBillingDate`.
+- **stores schema** gained: `nextBillingDate`, `notifyWhatsApp`, `notifyEmail`, `notifySms`.
+
+### Test credentials still valid
+
+Seed customers/stores/tailors all continue to work with OTP `123456`. See section 8 above.
+
 ---
 
-**Maintenance:** when modules, tables, or major flows change materially, update the relevant section here so future sessions stay accurate.
+**Maintenance:** when modules, tables, or major flows change materially, update the relevant section here so future sessions stay accurate. Append to section 12 when solving a non-obvious bug or making a design decision that future-you (or a new Claude session) would otherwise have to re-derive from scratch.

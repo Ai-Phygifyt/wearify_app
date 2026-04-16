@@ -25,6 +25,10 @@ export default function MePage() {
     api.sessionOps.listByCustomer,
     customerId ? { customerId } : "skip"
   );
+  const visits = useQuery(
+    api.customers.listVisitHistory,
+    customerId ? { customerId } : "skip"
+  );
 
   const displayName = user?.name || (customer?.name as string) || "Customer";
   const initials = displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -32,7 +36,8 @@ export default function MePage() {
   const loyaltyTier = (customer?.loyaltyTier as string) || "Regular";
   const loyaltyPoints = (customer?.loyaltyPoints as number) || 0;
   const storeCredit = (customer?.storeCredit as number) || 0;
-  const totalVisits = (customer?.totalVisits as number) || 0;
+  // Derived from visitHistory so the summary matches /c/me/history exactly.
+  const totalVisits = visits?.length ?? 0;
 
   async function handleLogout() {
     const token = getToken();

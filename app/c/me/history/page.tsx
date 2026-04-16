@@ -45,6 +45,23 @@ export default function VisitHistoryPage() {
   const visitCount = visits?.length ?? 0;
   const storeCount = storeLinks?.length ?? 0;
 
+  // Aggregate visits per store so the customer can see how often they
+  // walked into each one — e.g. "MAUVE Sarees · 3 visits".
+  const perStore: { storeId: string; storeName: string; count: number }[] = (() => {
+    if (!visits || visits.length === 0) return [];
+    const map = new Map<string, { storeName: string; count: number }>();
+    for (const v of visits as any[]) {
+      const id = v.storeId as string;
+      const name = (v.storeName as string) || id;
+      const entry = map.get(id);
+      if (entry) entry.count += 1;
+      else map.set(id, { storeName: name, count: 1 });
+    }
+    return Array.from(map.entries())
+      .map(([storeId, { storeName, count }]) => ({ storeId, storeName, count }))
+      .sort((a, b) => b.count - a.count);
+  })();
+
   return (
     <div
       className="cx-pageIn"
@@ -118,6 +135,65 @@ export default function VisitHistoryPage() {
 
       {/* ── Content ─────────────────────────────────────── */}
       <div style={{ padding: "20px 18px 32px" }}>
+        {/* Per-store visit breakdown */}
+        {perStore.length > 0 && (
+          <div
+            className="cx-slideUp"
+            style={{
+              marginBottom: 16,
+              background: "#FFFFFF",
+              border: "1px solid #F2E8EE",
+              borderRadius: 16,
+              padding: "14px 16px",
+              boxShadow: "0 2px 14px rgba(45,27,78,.06)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#8B7EA0",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                marginBottom: 10,
+              }}
+            >
+              By Store
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {perStore.map((s) => (
+                <div
+                  key={s.storeId}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A0A1E", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {s.storeName}
+                  </span>
+                  <span
+                    className="cx-mono"
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: 100,
+                      background: "#F4EFF9",
+                      color: "#2D1B4E",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {s.count} visit{s.count !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {visits === undefined ? (
           /* Skeleton */
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

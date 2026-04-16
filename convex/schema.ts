@@ -196,6 +196,8 @@ export default defineSchema({
     photoFileId: v.optional(v.id("_storage")),
     profileComplete: v.optional(v.boolean()), // gate for /c
     // Engagement counters
+    // totalVisits: DEPRECATED — UI now derives from visitHistory row count.
+    // Kept for seeded data backwards-compat; do not read or write new values.
     totalVisits: v.optional(v.number()),
     totalLooks: v.optional(v.number()),
     totalStores: v.optional(v.number()),

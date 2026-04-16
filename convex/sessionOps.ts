@@ -1,5 +1,58 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
+
+// ============================================================
+// STORE-LINK HELPERS
+// Shared: keep customerStoreLinks in sync with real kiosk activity so
+// /c/me/stores and /c/me/history never lie about whether a customer has
+// been seen at a store. The link is created on the first look/wardrobe
+// save and refreshed on session end with accurate totals.
+// ============================================================
+
+function todayInIndia(): string {
+  return new Date().toLocaleDateString("en-IN", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
+/**
+ * Idempotent: creates a customerStoreLinks row if one does not already
+ * exist, otherwise touches lastVisit. Does NOT bump visits — that only
+ * happens on session end so a single visit never counts twice.
+ */
+async function ensureStoreLink(
+  ctx: MutationCtx,
+  customerId: Id<"customers">,
+  storeId: string
+) {
+  const existing = await ctx.db
+    .query("customerStoreLinks")
+    .withIndex("by_customerId_and_storeId", (q) =>
+      q.eq("customerId", customerId).eq("storeId", storeId)
+    )
+    .unique();
+  const today = todayInIndia();
+  if (existing) {
+    if (existing.lastVisit !== today) {
+      await ctx.db.patch(existing._id, { lastVisit: today });
+    }
+    return existing._id;
+  }
+  const store = await ctx.db
+    .query("stores")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .unique();
+  return await ctx.db.insert("customerStoreLinks", {
+    customerId,
+    storeId,
+    storeName: store?.name,
+    visits: 0, // session-end bumps this — prevents double counting on partial sessions
+    lastVisit: today,
+    clv: 0,
+    segment: "New",
+  });
+}
 
 // ============================================================
 // SESSIONS
@@ -99,6 +152,12 @@ export const endSession = mutation({
       .unique();
     if (!session) throw new Error("Session not found");
 
+    // Idempotency: if this session was already completed, return the prior
+    // totals instead of double-writing a visit record.
+    if (session.status === "completed") {
+      return { endTime: session.endTime ?? Date.now(), duration: session.duration ?? "0m 0s" };
+    }
+
     const endTime = Date.now();
     const durationMs = endTime - session.startTime;
     const minutes = Math.floor(durationMs / 60000);
@@ -110,6 +169,81 @@ export const endSession = mutation({
       endTime,
       duration,
     });
+
+    // Close the loop: write visit history + bump the store link so
+    // /c/me/stores, /c/me/history, and the My Stores tile reflect reality.
+    if (session.customerId) {
+      const looks = await ctx.db
+        .query("looks")
+        .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+        .collect();
+      const sareesTried = session.sareesTriedOn ?? looks.length;
+
+      // Detect purchase via orders table (filter customer's orders by sessionId)
+      const orders = await ctx.db
+        .query("orders")
+        .withIndex("by_customerId", (q) => q.eq("customerId", session.customerId))
+        .collect();
+      const sessionOrders = orders.filter((o) => o.sessionId === args.sessionId);
+      const purchased = session.purchased ?? sessionOrders.length > 0;
+      const spentInSession = sessionOrders.reduce((sum, o) => sum + (o.total ?? 0), 0);
+
+      const storeName =
+        session.storeName ??
+        (
+          await ctx.db
+            .query("stores")
+            .withIndex("by_storeId", (q) => q.eq("storeId", session.storeId))
+            .unique()
+        )?.name;
+
+      const pointsEarned = purchased ? 500 : 50;
+      const date = todayInIndia();
+
+      await ctx.db.insert("visitHistory", {
+        customerId: session.customerId,
+        storeId: session.storeId,
+        storeName,
+        sessionId: args.sessionId,
+        date,
+        sareesTried,
+        purchased,
+        staffName: session.staffName,
+        pointsEarned,
+      });
+
+      // Bump the customerStoreLinks counters — create if the look-time
+      // ensureStoreLink somehow missed (e.g. session with no looks saved).
+      const link = await ctx.db
+        .query("customerStoreLinks")
+        .withIndex("by_customerId_and_storeId", (q) =>
+          q.eq("customerId", session.customerId!).eq("storeId", session.storeId)
+        )
+        .unique();
+      if (link) {
+        const newVisits = (link.visits ?? 0) + 1;
+        const newClv = (link.clv ?? 0) + spentInSession;
+        await ctx.db.patch(link._id, {
+          visits: newVisits,
+          lastVisit: date,
+          clv: newClv,
+          // Promote 'New' to 'Regular' once they have any meaningful activity
+          segment:
+            link.segment === "New" && newVisits >= 2 ? "Regular" : link.segment,
+        });
+      } else {
+        await ctx.db.insert("customerStoreLinks", {
+          customerId: session.customerId,
+          storeId: session.storeId,
+          storeName,
+          visits: 1,
+          lastVisit: date,
+          clv: spentInSession,
+          segment: "New",
+        });
+      }
+    }
+
     return { endTime, duration };
   },
 });
@@ -195,6 +329,9 @@ export const createLook = mutation({
       grad: args.grad,
       createdAt: Date.now(),
     });
+    if (args.customerId) {
+      await ensureStoreLink(ctx, args.customerId, args.storeId);
+    }
     return id;
   },
 });
@@ -380,6 +517,12 @@ export const addToWardrobe = mutation({
       price: args.price,
       addedAt: Date.now(),
     });
+    if (args.customerId) {
+      const saree = await ctx.db.get(args.sareeId);
+      if (saree?.storeId) {
+        await ensureStoreLink(ctx, args.customerId, saree.storeId);
+      }
+    }
     return id;
   },
 });
@@ -539,5 +682,162 @@ export const updateOrderStatus = mutation({
     if (!order) throw new Error("Order not found");
     await ctx.db.patch(order._id, { status: args.status });
     return order._id;
+  },
+});
+
+// ============================================================
+// BACKFILL MIGRATIONS
+// One-shot repair for pre-existing customers whose looks/wardrobe/session
+// rows were written before store-link tracking was wired. Idempotent —
+// never overwrites rows that already exist, so safe to re-run.
+//
+// Invoke via Convex CLI:
+//   npx convex run sessionOps:backfillStoreLinksFromActivity '{}'
+//   npx convex run sessionOps:backfillVisitHistoryFromSessions '{}'
+// ============================================================
+
+export const backfillStoreLinksFromActivity = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // Gather every (customerId, storeId) pair that has any kiosk activity.
+    // Price maps are built in the same pass so we can seed CLV from orders.
+    const looks = await ctx.db.query("looks").collect();
+    const wardrobe = await ctx.db.query("wardrobe").collect();
+    const orders = await ctx.db.query("orders").collect();
+
+    type Key = string; // `${customerId}|${storeId}`
+    const seen = new Map<
+      Key,
+      { customerId: Id<"customers">; storeId: string; sessionIds: Set<string>; lastActivity: number; spent: number }
+    >();
+
+    const touch = (
+      customerId: Id<"customers"> | undefined,
+      storeId: string | undefined,
+      sessionId: string | undefined,
+      timestamp: number,
+      spent: number
+    ) => {
+      if (!customerId || !storeId) return;
+      const key = `${customerId}|${storeId}`;
+      const entry = seen.get(key);
+      if (entry) {
+        if (sessionId) entry.sessionIds.add(sessionId);
+        if (timestamp > entry.lastActivity) entry.lastActivity = timestamp;
+        entry.spent += spent;
+      } else {
+        seen.set(key, {
+          customerId,
+          storeId,
+          sessionIds: new Set(sessionId ? [sessionId] : []),
+          lastActivity: timestamp,
+          spent,
+        });
+      }
+    };
+
+    for (const l of looks) touch(l.customerId, l.storeId, l.sessionId, l.createdAt, 0);
+
+    // Wardrobe rows carry sareeId but not storeId — look up via saree.
+    for (const w of wardrobe) {
+      if (!w.customerId) continue;
+      const saree = await ctx.db.get(w.sareeId);
+      if (!saree?.storeId) continue;
+      touch(w.customerId, saree.storeId, w.sessionId, w.addedAt, 0);
+    }
+
+    for (const o of orders) {
+      touch(o.customerId, o.storeId, o.sessionId, o.createdAt, o.total ?? 0);
+    }
+
+    let created = 0;
+    let skipped = 0;
+    for (const { customerId, storeId, sessionIds, lastActivity, spent } of seen.values()) {
+      const existing = await ctx.db
+        .query("customerStoreLinks")
+        .withIndex("by_customerId_and_storeId", (q) =>
+          q.eq("customerId", customerId).eq("storeId", storeId)
+        )
+        .unique();
+      if (existing) {
+        skipped++;
+        continue;
+      }
+      const store = await ctx.db
+        .query("stores")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+        .unique();
+      const lastVisitDate = new Date(lastActivity).toLocaleDateString("en-IN", {
+        day: "2-digit", month: "short", year: "numeric",
+      });
+      await ctx.db.insert("customerStoreLinks", {
+        customerId,
+        storeId,
+        storeName: store?.name,
+        visits: Math.max(1, sessionIds.size),
+        lastVisit: lastVisitDate,
+        clv: spent,
+        segment: sessionIds.size >= 2 ? "Regular" : "New",
+      });
+      created++;
+    }
+
+    return { created, skipped, distinctPairs: seen.size };
+  },
+});
+
+export const backfillVisitHistoryFromSessions = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const sessions = await ctx.db.query("sessions").collect();
+    const existingVisits = await ctx.db.query("visitHistory").collect();
+    const byKey = new Set(existingVisits.map((v) => `${v.customerId}|${v.sessionId ?? ""}`));
+
+    let created = 0;
+    let skipped = 0;
+    for (const s of sessions) {
+      if (!s.customerId) { skipped++; continue; }
+      const key = `${s.customerId}|${s.sessionId}`;
+      if (byKey.has(key)) { skipped++; continue; }
+
+      // Derive totals from the session itself first, fall back to counts.
+      let sareesTried = s.sareesTriedOn;
+      if (sareesTried === undefined) {
+        const looks = await ctx.db
+          .query("looks")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", s.sessionId))
+          .collect();
+        sareesTried = looks.length;
+      }
+
+      let purchased = s.purchased;
+      if (purchased === undefined) {
+        const matchingOrders = await ctx.db
+          .query("orders")
+          .withIndex("by_customerId", (q) => q.eq("customerId", s.customerId))
+          .collect();
+        purchased = matchingOrders.some((o) => o.sessionId === s.sessionId);
+      }
+
+      const dateSource = s.endTime ?? s.startTime;
+      const date = new Date(dateSource).toLocaleDateString("en-IN", {
+        day: "2-digit", month: "short", year: "numeric",
+      });
+
+      await ctx.db.insert("visitHistory", {
+        customerId: s.customerId,
+        storeId: s.storeId,
+        storeName: s.storeName,
+        sessionId: s.sessionId,
+        date,
+        sareesTried,
+        purchased,
+        staffName: s.staffName,
+        pointsEarned: purchased ? 500 : 50,
+      });
+      created++;
+    }
+
+    return { created, skipped, totalSessions: sessions.length };
   },
 });
