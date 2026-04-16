@@ -72,8 +72,8 @@ export default function CustomerHomePage() {
     api.sessionOps.listByCustomer,
     customerId ? { customerId } : "skip"
   );
-  const wishlist = useQuery(
-    api.customers.getWishlist,
+  const wardrobe = useQuery(
+    api.sessionOps.listWardrobeByCustomer,
     customerId ? { customerId } : "skip"
   );
   const offers = useQuery(
@@ -614,7 +614,7 @@ export default function CustomerHomePage() {
             </div>
           </div>
 
-          {/* My Wishlist */}
+          {/* My Wardrobe */}
           <div
             className="cx-press cx-scaleIn cx-d2"
             onClick={() => router.push("/c/wishlist")}
@@ -636,12 +636,12 @@ export default function CustomerHomePage() {
                 fontSize: 24,
               }}
             >
-              {"\u2764\uFE0F"}
+              {"\uD83D\uDC57"}
             </div>
             <div style={{ padding: "10px 12px" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>My Wishlist</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>My Wardrobe</div>
               <div style={{ fontSize: 11, color: T.textMuted, marginTop: 1 }}>
-                {(wishlist ?? []).length} item{(wishlist ?? []).length !== 1 ? "s" : ""}
+                {(wardrobe ?? []).length} piece{(wardrobe ?? []).length !== 1 ? "s" : ""}
               </div>
             </div>
           </div>
