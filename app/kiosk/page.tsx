@@ -1576,7 +1576,7 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
 
   return (
     <div className="k-shell">
-      <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} />
+      <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
 
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 100 }}>
         {/* Search bar */}
