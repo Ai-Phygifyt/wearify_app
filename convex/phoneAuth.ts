@@ -1,28 +1,35 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { QueryCtx } from "./_generated/server";
 
-// Normalize phone: strip spaces, ensure +91 prefix with no space
+// Normalize phone to canonical format: +91XXXXXXXXXX (no spaces)
 function normalizePhone(phone: string): string {
-  return phone.replace(/\s+/g, "");
+  // Strip all whitespace
+  let cleaned = phone.replace(/\s+/g, "");
+  // Extract digits only
+  const digits = cleaned.replace(/\D/g, "");
+  // If starts with 91 and has >10 digits, strip the country code
+  if (digits.startsWith("91") && digits.length > 10) {
+    return "+91" + digits.slice(2);
+  }
+  // If already has +91 prefix after stripping spaces, return as-is
+  if (cleaned.startsWith("+91")) {
+    return cleaned;
+  }
+  // Raw 10-digit number — add prefix
+  if (digits.length === 10) {
+    return "+91" + digits;
+  }
+  // Fallback: return stripped version
+  return cleaned;
 }
 
-// Find store by owner phone, trying both "+91XXXXXXXXXX" and "+91 XXXXXXXXXX"
+// Find store by owner phone (single canonical format lookup)
 async function findStoreByOwnerPhone(ctx: QueryCtx, phone: string) {
-  const normalized = normalizePhone(phone);
-  let store = await ctx.db
+  return await ctx.db
     .query("stores")
-    .withIndex("by_ownerPhone", (q) => q.eq("ownerPhone", normalized))
+    .withIndex("by_ownerPhone", (q) => q.eq("ownerPhone", phone))
     .first();
-  if (!store) {
-    // Try with space format: "+91 XXXXXXXXXX"
-    const withSpace = normalized.replace(/^\+91/, "+91 ");
-    store = await ctx.db
-      .query("stores")
-      .withIndex("by_ownerPhone", (q) => q.eq("ownerPhone", withSpace))
-      .first();
-  }
-  return store;
 }
 
 // Simple hash for passwords (not bcrypt, but adequate for demo + Convex runtime)
@@ -67,18 +74,20 @@ export const register = mutation({
     role: v.string(), // "customer" | "tailor" | "store_owner"
   },
   handler: async (ctx, args) => {
+    const phone = normalizePhone(args.phone);
+
     // Check if phone already exists in the relevant table
     if (args.role === "customer") {
       const existing = await ctx.db
         .query("customers")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (existing) {
         return { success: false, error: "Phone number already registered" };
       }
       const hash = await hashPassword(args.password);
       const id = await ctx.db.insert("customers", {
-        phone: args.phone,
+        phone,
         name: args.name,
         passwordHash: hash,
         totalVisits: 0,
@@ -97,7 +106,7 @@ export const register = mutation({
       });
       const token = generateToken();
       await ctx.db.insert("users", {
-        phone: args.phone,
+        phone,
         passwordHash: hash,
         name: args.name,
         role: "customer",
@@ -111,16 +120,17 @@ export const register = mutation({
     if (args.role === "tailor") {
       const existing = await ctx.db
         .query("tailors")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (existing) {
         return { success: false, error: "Phone number already registered" };
       }
       const hash = await hashPassword(args.password);
-      const tailorId = `TL-${String(Date.now()).slice(-6)}`;
+      const randomDigits = Math.floor(100000 + Math.random() * 900000).toString();
+      const tailorId = `TL-${randomDigits}`;
       const id = await ctx.db.insert("tailors", {
         tailorId,
-        phone: args.phone,
+        phone,
         name: args.name,
         passwordHash: hash,
         city: "",
@@ -128,13 +138,23 @@ export const register = mutation({
         rating: 0,
         revenue: 0,
         referrals: 0,
+        leadsThisMonth: 0,
+        earnedThisMonth: 0,
+        commissionOwed: 0,
+        freeReferralsUsed: 0,
         available: true,
         subscription: "free",
         joinDate: new Date().toISOString().split("T")[0],
+        aadhaarVerified: false,
+        panVerified: false,
+        addressVerified: false,
+        consentProfile: false,
+        consentLocation: false,
+        consentAnalytics: false,
       });
       const token = generateToken();
       await ctx.db.insert("users", {
-        phone: args.phone,
+        phone,
         passwordHash: hash,
         name: args.name,
         role: "tailor",
@@ -159,26 +179,18 @@ export const loginWithPassword = mutation({
     role: v.string(),
   },
   handler: async (ctx, args) => {
+    const phone = normalizePhone(args.phone);
     const hash = await hashPassword(args.password);
 
     if (args.role === "store_owner") {
-      const store = await findStoreByOwnerPhone(ctx, args.phone);
+      const store = await findStoreByOwnerPhone(ctx, phone);
       if (!store) {
         return { success: false, error: "Store not found for this phone" };
       }
-      // Check user record (try normalized phone)
-      const normalizedPhone = normalizePhone(args.phone);
-      let user = await ctx.db
+      const user = await ctx.db
         .query("users")
-        .withIndex("by_phone", (q) => q.eq("phone", normalizedPhone))
+        .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "store_owner"))
         .first();
-      if (!user) {
-        const withSpace = normalizedPhone.replace(/^\+91/, "+91 ");
-        user = await ctx.db
-          .query("users")
-          .withIndex("by_phone", (q) => q.eq("phone", withSpace))
-          .first();
-      }
       if (!user || user.passwordHash !== hash) {
         return { success: false, error: "Invalid password" };
       }
@@ -192,51 +204,53 @@ export const loginWithPassword = mutation({
     }
 
     if (args.role === "customer") {
-      const customer = await ctx.db
-        .query("customers")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
-        .first();
-      if (!customer || customer.passwordHash !== hash) {
-        return { success: false, error: "Invalid phone or password" };
-      }
       const user = await ctx.db
         .query("users")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "customer"))
         .first();
-      if (user) {
-        const token = generateToken();
-        await ctx.db.patch(user._id, {
-          sessionToken: token,
-          sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          lastLogin: Date.now(),
-        });
-        return { success: true, token, customerId: customer._id, role: "customer" };
+      if (!user || user.passwordHash !== hash) {
+        return { success: false, error: "Invalid phone or password" };
       }
-      return { success: false, error: "User record not found" };
+      // Look up the customer record for the customerId
+      const customer = await ctx.db
+        .query("customers")
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
+        .first();
+      if (!customer) {
+        return { success: false, error: "Customer record not found" };
+      }
+      const token = generateToken();
+      await ctx.db.patch(user._id, {
+        sessionToken: token,
+        sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        lastLogin: Date.now(),
+      });
+      return { success: true, token, customerId: customer._id, role: "customer" };
     }
 
     if (args.role === "tailor") {
-      const tailor = await ctx.db
-        .query("tailors")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
-        .first();
-      if (!tailor || tailor.passwordHash !== hash) {
-        return { success: false, error: "Invalid phone or password" };
-      }
       const user = await ctx.db
         .query("users")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "tailor"))
         .first();
-      if (user) {
-        const token = generateToken();
-        await ctx.db.patch(user._id, {
-          sessionToken: token,
-          sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          lastLogin: Date.now(),
-        });
-        return { success: true, token, tailorId: tailor.tailorId, role: "tailor" };
+      if (!user || user.passwordHash !== hash) {
+        return { success: false, error: "Invalid phone or password" };
       }
-      return { success: false, error: "User record not found" };
+      // Look up the tailor record for the tailorId
+      const tailor = await ctx.db
+        .query("tailors")
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
+        .first();
+      if (!tailor) {
+        return { success: false, error: "Tailor record not found" };
+      }
+      const token = generateToken();
+      await ctx.db.patch(user._id, {
+        sessionToken: token,
+        sessionExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        lastLogin: Date.now(),
+      });
+      return { success: true, token, tailorId: tailor.tailorId, role: "tailor" };
     }
 
     return { success: false, error: "Invalid role" };
@@ -256,25 +270,18 @@ export const loginWithOtp = mutation({
       return { success: false, error: "Invalid OTP" };
     }
 
+    const phone = normalizePhone(args.phone);
     const token = generateToken();
 
     if (args.role === "store_owner") {
-      const store = await findStoreByOwnerPhone(ctx, args.phone);
+      const store = await findStoreByOwnerPhone(ctx, phone);
       if (!store) {
         return { success: false, error: "No store found for this phone number" };
       }
-      const normalizedPhone = normalizePhone(args.phone);
-      let user = await ctx.db
+      const user = await ctx.db
         .query("users")
-        .withIndex("by_phone", (q) => q.eq("phone", normalizedPhone))
+        .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "store_owner"))
         .first();
-      if (!user) {
-        const withSpace = normalizedPhone.replace(/^\+91/, "+91 ");
-        user = await ctx.db
-          .query("users")
-          .withIndex("by_phone", (q) => q.eq("phone", withSpace))
-          .first();
-      }
       if (user) {
         await ctx.db.patch(user._id, {
           sessionToken: token,
@@ -283,7 +290,7 @@ export const loginWithOtp = mutation({
         });
       } else {
         await ctx.db.insert("users", {
-          phone: normalizedPhone,
+          phone,
           name: store.ownerName || "Store Owner",
           role: "store_owner",
           storeId: store.storeId,
@@ -299,13 +306,13 @@ export const loginWithOtp = mutation({
     if (args.role === "customer") {
       let customer = await ctx.db
         .query("customers")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (!customer) {
         // Auto-create customer on first OTP login
         const custName = args.name || "Customer";
         const id = await ctx.db.insert("customers", {
-          phone: args.phone,
+          phone,
           name: custName,
           initials: custName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2),
           totalVisits: 0,
@@ -323,9 +330,9 @@ export const loginWithOtp = mutation({
         });
         customer = await ctx.db.get(id);
       }
-      let user = await ctx.db
+      const user = await ctx.db
         .query("users")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "customer"))
         .first();
       if (user) {
         await ctx.db.patch(user._id, {
@@ -335,7 +342,7 @@ export const loginWithOtp = mutation({
         });
       } else {
         await ctx.db.insert("users", {
-          phone: args.phone,
+          phone,
           name: customer!.name,
           role: "customer",
           sessionToken: token,
@@ -349,14 +356,14 @@ export const loginWithOtp = mutation({
     if (args.role === "tailor") {
       const tailor = await ctx.db
         .query("tailors")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (!tailor) {
         return { success: false, error: "No tailor account found. Please register first." };
       }
-      let user = await ctx.db
+      const user = await ctx.db
         .query("users")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "tailor"))
         .first();
       if (user) {
         await ctx.db.patch(user._id, {
@@ -366,7 +373,7 @@ export const loginWithOtp = mutation({
         });
       } else {
         await ctx.db.insert("users", {
-          phone: args.phone,
+          phone,
           name: tailor.name,
           role: "tailor",
           tailorId: tailor.tailorId,
@@ -390,19 +397,13 @@ export const setPassword = mutation({
     role: v.string(),
   },
   handler: async (ctx, args) => {
+    const phone = normalizePhone(args.phone);
     const hash = await hashPassword(args.password);
-    const normalized = normalizePhone(args.phone);
-    let user = await ctx.db
+
+    const user = await ctx.db
       .query("users")
-      .withIndex("by_phone", (q) => q.eq("phone", normalized))
+      .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", args.role))
       .first();
-    if (!user) {
-      const withSpace = normalized.replace(/^\+91/, "+91 ");
-      user = await ctx.db
-        .query("users")
-        .withIndex("by_phone", (q) => q.eq("phone", withSpace))
-        .first();
-    }
     if (!user) {
       return { success: false, error: "User not found" };
     }
@@ -412,7 +413,7 @@ export const setPassword = mutation({
     if (args.role === "customer") {
       const customer = await ctx.db
         .query("customers")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (customer) {
         await ctx.db.patch(customer._id, { passwordHash: hash });
@@ -420,7 +421,7 @@ export const setPassword = mutation({
     } else if (args.role === "tailor") {
       const tailor = await ctx.db
         .query("tailors")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (tailor) {
         await ctx.db.patch(tailor._id, { passwordHash: hash });
@@ -497,5 +498,70 @@ export const logout = mutation({
       });
     }
     return { success: true };
+  },
+});
+
+// ============================
+// Migration: normalize all phone numbers to +91XXXXXXXXXX (no spaces)
+// Run once via dashboard: npx convex run phoneAuth:normalizeAllPhones
+// ============================
+export const normalizeAllPhones = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let fixed = 0;
+
+    // Fix users table
+    const users = await ctx.db.query("users").take(500);
+    for (const user of users) {
+      const normalized = normalizePhone(user.phone);
+      if (normalized !== user.phone) {
+        await ctx.db.patch(user._id, { phone: normalized });
+        fixed++;
+      }
+    }
+
+    // Fix stores.ownerPhone
+    const stores = await ctx.db.query("stores").take(200);
+    for (const store of stores) {
+      if (store.ownerPhone) {
+        const normalized = normalizePhone(store.ownerPhone);
+        if (normalized !== store.ownerPhone) {
+          await ctx.db.patch(store._id, { ownerPhone: normalized });
+          fixed++;
+        }
+      }
+    }
+
+    // Fix customers table
+    const customers = await ctx.db.query("customers").take(500);
+    for (const customer of customers) {
+      const normalized = normalizePhone(customer.phone);
+      if (normalized !== customer.phone) {
+        await ctx.db.patch(customer._id, { phone: normalized });
+        fixed++;
+      }
+    }
+
+    // Fix tailors table
+    const tailors = await ctx.db.query("tailors").take(200);
+    for (const tailor of tailors) {
+      const normalized = normalizePhone(tailor.phone);
+      if (normalized !== tailor.phone) {
+        await ctx.db.patch(tailor._id, { phone: normalized });
+        fixed++;
+      }
+    }
+
+    // Fix staff table
+    const staff = await ctx.db.query("staff").take(500);
+    for (const s of staff) {
+      const normalized = normalizePhone(s.phone);
+      if (normalized !== s.phone) {
+        await ctx.db.patch(s._id, { phone: normalized });
+        fixed++;
+      }
+    }
+
+    return { fixed };
   },
 });

@@ -146,6 +146,15 @@ export const registerTailor = mutation({
     passwordHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Duplicate check — prevent creating a second tailor with the same phone
+    const existing = await ctx.db
+      .query("tailors")
+      .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+      .first();
+    if (existing) {
+      throw new Error("A tailor with this phone number already exists");
+    }
+
     const randomDigits = Math.floor(100000 + Math.random() * 900000).toString();
     const tailorId = `TL-${randomDigits}`;
     return await ctx.db.insert("tailors", {

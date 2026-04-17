@@ -17,6 +17,7 @@ export default defineSchema({
     lastLogin: v.optional(v.number()),
   })
     .index("by_phone", ["phone"])
+    .index("by_phone_and_role", ["phone", "role"])
     .index("by_sessionToken", ["sessionToken"])
     .index("by_role", ["role"]),
 
@@ -95,7 +96,7 @@ export default defineSchema({
   staff: defineTable({
     name: v.string(),
     phone: v.string(),
-    pin: v.string(), // 4-6 digit PIN for tablet/mirror login
+    pin: v.string(), // 4 digit PIN for tablet/mirror login
     role: v.string(), // "R03" owner | "R04" manager | "R05" salesperson
     storeRef: v.optional(v.id("stores")),
     storeId: v.string(),
@@ -296,10 +297,32 @@ export default defineSchema({
     sessionId: v.string(),
     sareeId: v.id("sarees"),
     storeId: v.string(),
+    customerId: v.optional(v.id("customers")),
     sentToMirror: v.optional(v.boolean()),
     addedAt: v.number(),
   })
-    .index("by_sessionId", ["sessionId"]),
+    .index("by_sessionId", ["sessionId"])
+    .index("by_customerId", ["customerId"])
+    .index("by_customerId_and_storeId", ["customerId", "storeId"]),
+
+  // ============================
+  // TRIAL ROOM (kiosk access codes from tablet)
+  // ============================
+  trialRoom: defineTable({
+    code: v.string(), // 6-digit numeric code
+    storeId: v.string(),
+    sessionId: v.string(), // tablet session that created it
+    customerId: v.optional(v.id("customers")),
+    customerPhone: v.optional(v.string()),
+    staffId: v.optional(v.id("staff")),
+    status: v.string(), // "active" | "used" | "expired"
+    expiresAt: v.number(), // timestamp
+    createdAt: v.number(),
+  })
+    .index("by_code", ["code"])
+    .index("by_storeId", ["storeId"])
+    .index("by_sessionId", ["sessionId"])
+    .index("by_status", ["status"]),
 
   // ============================
   // WISHLIST (customer saved items)

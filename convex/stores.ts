@@ -1,5 +1,6 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { MutationCtx } from "./_generated/server";
 
 export const list = query({
   args: {},
@@ -170,5 +171,158 @@ export const removeStaff = mutation({
   args: { id: v.id("staff") },
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
+  },
+});
+
+// ============================
+// FULL STORE REMOVAL (cascading delete across all related tables)
+// This is the single canonical place that knows every table referencing storeId.
+// Any new table with storeId must be added here.
+// ============================
+async function deleteStoreData(ctx: MutationCtx, storeId: string): Promise<number> {
+  let deleted = 0;
+
+  // Helper: delete all docs from an indexed query
+  async function deleteByIndex<T extends { _id: any }>(
+    query: Promise<T[]>
+  ) {
+    const docs = await query;
+    for (const doc of docs) {
+      await ctx.db.delete(doc._id);
+      deleted++;
+    }
+  }
+
+  // Helper: delete from tables without a by_storeId index (scan + filter)
+  async function deleteByFilter(
+    table: "wishlist" | "loyaltyTransactions" | "tailorReferrals" | "tailorOrders",
+    limit: number
+  ) {
+    const docs = await ctx.db.query(table).take(limit);
+    for (const doc of docs) {
+      if ((doc as any).storeId === storeId) {
+        await ctx.db.delete(doc._id);
+        deleted++;
+      }
+    }
+  }
+
+  // 1. Store record itself
+  const store = await ctx.db
+    .query("stores")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .first();
+  if (store) {
+    await ctx.db.delete(store._id);
+    deleted++;
+  }
+
+  // 2. Users linked to this store (store_owner/staff)
+  const users = await ctx.db.query("users").take(500);
+  for (const u of users) {
+    if (u.storeId === storeId) {
+      await ctx.db.delete(u._id);
+      deleted++;
+    }
+  }
+
+  // 3. Staff
+  await deleteByIndex(
+    ctx.db.query("staff").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(200)
+  );
+
+  // 4. Sarees (catalog)
+  await deleteByIndex(
+    ctx.db.query("sarees").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(500)
+  );
+
+  // 5. Customer-store links
+  await deleteByIndex(
+    ctx.db.query("customerStoreLinks").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(500)
+  );
+
+  // 6. Sessions + their child records (shortlist, wardrobe)
+  const sessions = await ctx.db
+    .query("sessions")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .take(500);
+  for (const s of sessions) {
+    await deleteByIndex(
+      ctx.db.query("shortlist").withIndex("by_sessionId", (q) => q.eq("sessionId", s.sessionId)).take(200)
+    );
+    await deleteByIndex(
+      ctx.db.query("wardrobe").withIndex("by_sessionId", (q) => q.eq("sessionId", s.sessionId)).take(200)
+    );
+    await ctx.db.delete(s._id);
+    deleted++;
+  }
+
+  // 7. Looks
+  await deleteByIndex(
+    ctx.db.query("looks").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(500)
+  );
+
+  // 8. Visit history
+  await deleteByIndex(
+    ctx.db.query("visitHistory").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(500)
+  );
+
+  // 9. Offers
+  await deleteByIndex(
+    ctx.db.query("offers").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(200)
+  );
+
+  // 10. Feedback
+  await deleteByIndex(
+    ctx.db.query("feedback").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(500)
+  );
+
+  // 11. Campaigns
+  await deleteByIndex(
+    ctx.db.query("campaigns").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(200)
+  );
+
+  // 12. Customer segments
+  await deleteByIndex(
+    ctx.db.query("customerSegments").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(200)
+  );
+
+  // 13. Orders
+  await deleteByIndex(
+    ctx.db.query("orders").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(500)
+  );
+
+  // 14. Devices
+  await deleteByIndex(
+    ctx.db.query("devices").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(100)
+  );
+
+  // 15-17. Tables with optional storeId (no index)
+  await deleteByFilter("wishlist", 1000);
+  await deleteByFilter("loyaltyTransactions", 1000);
+  await deleteByFilter("tailorReferrals", 500);
+  await deleteByFilter("tailorOrders", 500);
+
+  return deleted;
+}
+
+// Internal mutation: remove one store by storeId
+export const removeStore = internalMutation({
+  args: { storeId: v.string() },
+  handler: async (ctx, args) => {
+    const deleted = await deleteStoreData(ctx, args.storeId);
+    return { deleted, storeId: args.storeId };
+  },
+});
+
+// Internal mutation: remove multiple stores at once
+export const removeStores = internalMutation({
+  args: { storeIds: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    let totalDeleted = 0;
+    for (const storeId of args.storeIds) {
+      totalDeleted += await deleteStoreData(ctx, storeId);
+    }
+    return { deleted: totalDeleted, stores: args.storeIds };
   },
 });

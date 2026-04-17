@@ -30,6 +30,7 @@ import type * as settings from "../settings.js";
 import type * as stores from "../stores.js";
 import type * as support from "../support.js";
 import type * as tailorOps from "../tailorOps.js";
+import type * as trialRoom from "../trialRoom.js";
 
 import type {
   ApiFromModules,
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   stores: typeof stores;
   support: typeof support;
   tailorOps: typeof tailorOps;
+  trialRoom: typeof trialRoom;
 }>;
 
 /**
