@@ -421,7 +421,7 @@ export default function SettingsPage() {
       <div>
         <SectionLabel>Manage</SectionLabel>
         <div className="w-card" style={{ overflow: "hidden", padding: 0 }}>
-          <SettingsRow icon={icons.staff}    label="Staff & Roles"     description="Manage team members and permissions" onClick={() => {}} />
+          <SettingsRow icon={icons.staff}    label="Staff & Roles"     description="Manage team members and permissions" onClick={() => router.push("/store/staff")} />
           <SettingsRow icon={icons.link}     label="Connected Apps"    description="WhatsApp, POS and integrations"      onClick={() => {}} />
           <SettingsRow icon={icons.camera}   label="Photo Booth Guide" description="Mirror calibration and setup"        onClick={() => {}} />
           <SettingsRow icon={icons.download} label="Export Data"       description="Download reports and CSV backups"    onClick={() => {}} />
