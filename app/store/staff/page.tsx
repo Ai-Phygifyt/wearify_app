@@ -5,22 +5,43 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
-const ROLE_MAP: Record<string, { label: string; bg: string; color: string }> = {
-  R03: { label: "Owner", bg: "rgba(201, 148, 26, 0.15)", color: "#C9941A" },
-  R04: { label: "Manager", bg: "rgba(26, 74, 101, 0.1)", color: "#1A4A65" },
-  R05: { label: "Salesperson", bg: "rgba(10, 22, 40, 0.08)", color: "#0A1628" },
+const ROLE_MAP: Record<string, { label: string; badge: string; avatarGrad: string }> = {
+  R03: {
+    label: "Owner",
+    badge: "w-badge w-badge-gold",
+    avatarGrad: "linear-gradient(145deg, #C9941A, #E8B84A)",
+  },
+  R04: {
+    label: "Manager",
+    badge: "w-badge w-badge-teal",
+    avatarGrad: "linear-gradient(145deg, var(--w-teal), #2980B9)",
+  },
+  R05: {
+    label: "Salesperson",
+    badge: "w-badge w-badge-navy",
+    avatarGrad: "linear-gradient(145deg, var(--w-navy), var(--w-navy-mid))",
+  },
 };
 
 function getRoleInfo(role: string) {
-  return ROLE_MAP[role] || { label: role, bg: "rgba(122, 110, 138, 0.1)", color: "#7A6E8A" };
+  return ROLE_MAP[role] ?? {
+    label: role,
+    badge: "w-badge",
+    avatarGrad: "linear-gradient(145deg, var(--w-ink-muted), var(--w-ink-soft))",
+  };
 }
 
-function getAvatarGradient(role: string): string {
-  switch (role) {
-    case "R03": return "linear-gradient(135deg, #C9941A, #E8B84A)";
-    case "R04": return "linear-gradient(135deg, #1A4A65, #2A6A85)";
-    default: return "linear-gradient(135deg, #0A1628, #1A4A65)";
-  }
+function staffInitials(name: string): string {
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+}
+
+function StatCell({ value, label }: { value: string; label: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div className="w-mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--w-navy)" }}>{value}</div>
+      <div style={{ fontSize: 11, color: "var(--w-ink-ghost)", marginTop: 2, letterSpacing: "0.03em" }}>{label}</div>
+    </div>
+  );
 }
 
 export default function StaffPage() {
@@ -32,11 +53,9 @@ export default function StaffPage() {
 
   useEffect(() => {
     try {
-      const userData = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
-      if (userData.storeId) setStoreId(userData.storeId);
-    } catch {
-      /* ignore */
-    }
+      const u = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
+      if (u.storeId) setStoreId(u.storeId);
+    } catch { /* */ }
   }, []);
 
   const staff = useQuery(api.stores.listStaffByStore, storeId ? { storeId } : "skip");
@@ -56,160 +75,198 @@ export default function StaffPage() {
     }
   }
 
-  if (!storeId) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 0" }}>
-        <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>Loading...</span>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <h1
-            className="rt-serif"
-            style={{ fontSize: 20, fontWeight: 700, fontStyle: "italic", color: "var(--rt-navy)", margin: 0 }}
-          >
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--w-ink-muted)", marginBottom: 4 }}>
+            Team
+          </p>
+          <h1 className="w-serif" style={{ fontSize: 28, fontWeight: 700, fontStyle: "italic", color: "var(--w-navy)", lineHeight: 1.1, margin: 0 }}>
             Staff
           </h1>
-          <p style={{ fontSize: 13, color: "var(--rt-muted)", margin: "4px 0 0" }}>
-            {staff?.length ?? 0} team members
-          </p>
+          {staff !== undefined && (
+            <p style={{ fontSize: 13, color: "var(--w-ink-muted)", marginTop: 5 }}>
+              {staff.length} team member{staff.length !== 1 ? "s" : ""}
+            </p>
+          )}
         </div>
-        <button className="rt-btn rt-btn-gold rt-btn-sm" onClick={() => setShowForm(!showForm)}>
-          + Add Staff
+        <button
+          className="w-btn w-btn-primary"
+          onClick={() => setShowForm(!showForm)}
+          style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Staff
         </button>
       </div>
 
-      {/* Add Staff Form (collapsible) */}
+      {/* ── Role breakdown ── */}
+      {staff !== undefined && staff.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+          {(["R03", "R04", "R05"] as const).map((role) => {
+            const info = getRoleInfo(role);
+            const count = staff.filter((s) => s.role === role).length;
+            return (
+              <div key={role} className="w-card" style={{ padding: "12px 10px", textAlign: "center" }}>
+                <div className="w-mono" style={{ fontSize: 20, fontWeight: 700, color: "var(--w-navy)", lineHeight: 1 }}>{count}</div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--w-ink-muted)", marginTop: 4, letterSpacing: "0.04em" }}>
+                  {info.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Add Staff Form ── */}
       {showForm && storeId && (
         <AddStaffForm
           storeId={storeId}
           onClose={() => setShowForm(false)}
-          onSuccess={() => {
-            setShowForm(false);
-            showToast("Staff added successfully");
-          }}
+          onSuccess={() => { setShowForm(false); showToast("Staff added successfully"); }}
         />
       )}
 
-      {/* Staff List */}
-      {staff === undefined ? (
-        <div style={{ textAlign: "center", padding: "48px 0" }}>
-          <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>Loading staff...</span>
+      {/* ── Loading ── */}
+      {staff === undefined && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "56px 0" }}>
+          <div className="w-loadscreen-inner">
+            <div className="w-load-mark"><span className="w-logomark-letter" style={{ fontSize: 17 }}>W</span></div>
+            <div><span className="w-load-text">Loading staff</span><span className="w-load-dots"><span /><span /><span /></span></div>
+          </div>
         </div>
-      ) : staff.length === 0 ? (
-        <div className="rt-card" style={{ textAlign: "center", padding: "32px 16px" }}>
-          <p style={{ fontSize: 14, color: "var(--rt-muted)" }}>No staff members yet. Add your first team member.</p>
+      )}
+
+      {/* ── Empty ── */}
+      {staff !== undefined && staff.length === 0 && !showForm && (
+        <div className="w-card" style={{ textAlign: "center", padding: "48px 24px" }}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--w-ink-ghost)" strokeWidth="1.4" style={{ marginBottom: 14 }}>
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          <p className="w-serif" style={{ fontSize: 17, fontStyle: "italic", color: "var(--w-ink-soft)", marginBottom: 6 }}>
+            No team members yet
+          </p>
+          <p style={{ fontSize: 13, color: "var(--w-ink-ghost)" }}>Add your first staff member to get started</p>
         </div>
-      ) : (
+      )}
+
+      {/* ── Staff List ── */}
+      {staff !== undefined && staff.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {staff.map((s) => {
-            const roleInfo = getRoleInfo(s.role);
-            const initials = s.name
-              .split(" ")
-              .map((w) => w[0])
-              .join("")
-              .toUpperCase()
-              .slice(0, 2);
+            const info = getRoleInfo(s.role);
+            const isOwner = s.role === "R03";
 
             return (
-              <div key={s._id} className="rt-card">
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                key={s._id}
+                className="w-card"
+                style={{
+                  padding: "16px",
+                  border: isOwner ? "1.5px solid rgba(184,134,11,0.3)" : "1px solid var(--w-cream-border)",
+                }}
+              >
+                {/* Top row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   {/* Avatar */}
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: "50%",
-                      background: getAvatarGradient(s.role),
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span style={{ color: "white", fontSize: 14, fontWeight: 700 }}>{initials}</span>
+                  <div style={{
+                    width: 50, height: 50, borderRadius: "50%",
+                    background: info.avatarGrad,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0,
+                    boxShadow: isOwner ? "0 4px 14px rgba(184,134,11,0.28)" : "var(--w-shadow-sm)",
+                    border: isOwner ? "2px solid var(--w-gold-pale)" : "2px solid rgba(255,255,255,0.6)",
+                  }}>
+                    <span style={{ color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em" }}>
+                      {staffInitials(s.name)}
+                    </span>
                   </div>
 
                   {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: "var(--rt-text)" }}>{s.name}</span>
-                      <span
-                        className="rt-badge"
-                        style={{ background: roleInfo.bg, color: roleInfo.color }}
-                      >
-                        {roleInfo.label}
-                      </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: "var(--w-ink)" }}>{s.name}</span>
+                      <span className={info.badge}>{info.label}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
-                      PIN: {"*".repeat(s.pin.length)} &middot; {s.phone}
+                    <div style={{ fontSize: 12, color: "var(--w-ink-ghost)", display: "flex", alignItems: "center", gap: 6 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.8 19.8 0 0 1 1.62 3.38 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L7.91 9a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7a2 2 0 0 1 1.72 2.02z" />
+                      </svg>
+                      {s.phone}
+                      <span style={{ color: "var(--w-cream-border)" }}>·</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      PIN {"•".repeat(s.pin.length)}
                     </div>
                   </div>
 
-                  {/* Remove */}
+                  {/* Remove btn */}
                   <button
-                    onClick={() => setConfirmRemove(s._id)}
+                    onClick={() => setConfirmRemove(confirmRemove === s._id ? null : s._id)}
                     style={{
-                      padding: 6,
-                      borderRadius: 8,
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      flexShrink: 0,
+                      width: 32, height: 32, borderRadius: "var(--w-r-xs)",
+                      border: "1px solid var(--w-cream-border)",
+                      background: confirmRemove === s._id ? "var(--w-danger-bg)" : "transparent",
+                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0, transition: "all 0.18s",
                     }}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--rt-alert)" strokeWidth="2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      stroke={confirmRemove === s._id ? "var(--w-danger)" : "var(--w-ink-ghost)"}
+                      strokeWidth="2" strokeLinecap="round">
                       <polyline points="3 6 5 6 21 6" />
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                     </svg>
                   </button>
                 </div>
 
-                {/* Stats Row */}
-                <div className="rt-divider" />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                  <div style={{ textAlign: "center" }}>
-                    <div className="rt-mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--rt-text)" }}>
-                      {s.sessionCount ?? 0}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--rt-muted)" }}>Sessions</div>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div className="rt-mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--rt-text)" }}>
-                      {s.conversion ?? 0}%
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--rt-muted)" }}>Conversion</div>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div className="rt-mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--rt-text)" }}>
-                      Rs{(s.revenue ?? 0).toLocaleString("en-IN")}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--rt-muted)" }}>Revenue</div>
-                  </div>
+                {/* Stats */}
+                <div style={{
+                  display: "grid", gridTemplateColumns: "1fr 1px 1fr 1px 1fr",
+                  marginTop: 14, paddingTop: 14,
+                  borderTop: "1px solid var(--w-cream-border)",
+                  gap: 0,
+                }}>
+                  <StatCell value={String(s.sessionCount ?? 0)} label="Sessions" />
+                  <div style={{ background: "var(--w-cream-border)" }} />
+                  <StatCell value={`${s.conversion ?? 0}%`} label="Conversion" />
+                  <div style={{ background: "var(--w-cream-border)" }} />
+                  <StatCell value={`₹${(s.revenue ?? 0).toLocaleString("en-IN")}`} label="Revenue" />
                 </div>
 
-                {/* Confirm Remove Dialog */}
+                {/* Confirm remove */}
                 {confirmRemove === s._id && (
-                  <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "rgba(183, 28, 28, 0.05)", border: "1px solid rgba(183, 28, 28, 0.15)" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--rt-alert)", marginBottom: 8 }}>
-                      Remove {s.name}?
+                  <div style={{
+                    marginTop: 12, padding: "12px 14px",
+                    borderRadius: "var(--w-r-sm)",
+                    background: "var(--w-danger-bg)",
+                    border: "1px solid rgba(139,0,0,0.15)",
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--w-danger)", marginBottom: 10 }}>
+                      Remove {s.name} from your team?
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button
-                        className="rt-btn rt-btn-ghost rt-btn-sm"
-                        style={{ flex: 1 }}
+                        className="w-btn w-btn-ghost"
+                        style={{ flex: 1, fontSize: 13, padding: "8px 12px" }}
                         onClick={() => setConfirmRemove(null)}
                       >
                         Cancel
                       </button>
                       <button
-                        className="rt-btn rt-btn-danger rt-btn-sm"
-                        style={{ flex: 1 }}
+                        style={{
+                          flex: 1, fontSize: 13, padding: "8px 12px",
+                          borderRadius: "var(--w-r-sm)", border: "none",
+                          background: "var(--w-danger)", color: "#fff",
+                          fontWeight: 600, cursor: "pointer",
+                        }}
                         onClick={() => handleRemove(s._id)}
                       >
                         Remove
@@ -223,12 +280,25 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Toast */}
-      {toast && <div className="rt-toast">{toast}</div>}
+      {/* ── Toast ── */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 90, left: "50%", transform: "translateX(-50%)",
+          background: "var(--w-navy)", color: "#fff", fontSize: 13, fontWeight: 600,
+          padding: "10px 20px", borderRadius: "var(--w-r-pill)",
+          boxShadow: "var(--w-shadow-lg)", zIndex: 999,
+          whiteSpace: "nowrap",
+        }}>
+          {toast}
+        </div>
+      )}
+
+      <div style={{ height: 8 }} />
     </div>
   );
 }
 
+/* ── Add Staff Form ───────────────────────────────────────────────── */
 function AddStaffForm({
   storeId,
   onClose,
@@ -248,19 +318,12 @@ function AddStaffForm({
 
   async function handleSubmit() {
     if (!name.trim()) { setError("Name is required"); return; }
-    if (phone.length < 10) { setError("Enter a valid phone number"); return; }
-    if (pin.length < 4 || pin.length > 6) { setError("PIN must be 4-6 digits"); return; }
-
+    if (phone.length < 10) { setError("Enter a valid 10-digit phone number"); return; }
+    if (pin.length < 4 || pin.length > 6) { setError("PIN must be 4–6 digits"); return; }
     setLoading(true);
     setError("");
     try {
-      await createStaff({
-        name: name.trim(),
-        phone: "+91" + phone,
-        pin,
-        role,
-        storeId,
-      });
+      await createStaff({ name: name.trim(), phone: "+91" + phone, pin, role, storeId });
       onSuccess();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to add staff");
@@ -269,126 +332,104 @@ function AddStaffForm({
     }
   }
 
+  const labelStyle: React.CSSProperties = {
+    display: "block", fontSize: 11, fontWeight: 700,
+    letterSpacing: "0.07em", textTransform: "uppercase",
+    color: "var(--w-ink-muted)", marginBottom: 6,
+  };
+
   return (
-    <div className="rt-card" style={{ border: "1.5px solid var(--rt-gold)" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div className="rt-card-title" style={{ margin: 0 }}>Add New Staff</div>
+    <div className="w-card w-card-gold" style={{ padding: 20 }}>
+      {/* Form header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+        <div>
+          <p style={{ ...labelStyle, marginBottom: 2 }}>New Team Member</p>
+          <h3 className="w-serif" style={{ fontSize: 20, fontWeight: 700, fontStyle: "italic", color: "var(--w-navy)", margin: 0 }}>
+            Add Staff
+          </h3>
+        </div>
         <button
           onClick={onClose}
-          style={{ padding: 4, border: "none", background: "transparent", cursor: "pointer" }}
+          style={{ width: 32, height: 32, borderRadius: "var(--w-r-xs)", border: "1px solid var(--w-cream-border)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--rt-muted)" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--w-ink-muted)" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
       </div>
 
+      {/* Error */}
       {error && (
         <div style={{
-          padding: "8px 12px",
-          borderRadius: 10,
-          background: "rgba(183, 28, 28, 0.08)",
-          color: "var(--rt-alert)",
-          fontSize: 13,
-          fontWeight: 600,
-          marginBottom: 12,
+          padding: "10px 14px", borderRadius: "var(--w-r-sm)",
+          background: "var(--w-danger-bg)", border: "1px solid rgba(139,0,0,0.15)",
+          color: "var(--w-danger)", fontSize: 13, fontWeight: 600, marginBottom: 16,
+          display: "flex", alignItems: "center", gap: 8,
         }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
           {error}
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Name */}
         <div>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-            Name *
-          </label>
-          <input
-            className="rt-input"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Staff name"
-          />
+          <label style={labelStyle}>Full Name <span style={{ color: "var(--w-gold)" }}>*</span></label>
+          <input className="w-input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya Sharma" />
         </div>
 
+        {/* Phone */}
         <div>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-            Phone *
-          </label>
-          <div style={{ display: "flex", border: "1.5px solid var(--rt-border)", borderRadius: "var(--rt-radius-sm)", overflow: "hidden" }}>
-            <span
-              className="rt-mono"
-              style={{
-                padding: "10px 12px",
-                fontSize: 14,
-                color: "var(--rt-muted)",
-                background: "var(--rt-cream)",
-                borderRight: "1px solid var(--rt-border)",
-              }}
-            >
+          <label style={labelStyle}>Phone <span style={{ color: "var(--w-gold)" }}>*</span></label>
+          <div style={{ display: "flex", border: "1.5px solid var(--w-cream-border)", borderRadius: "var(--w-r-sm)", overflow: "hidden", background: "#fff" }}>
+            <span className="w-mono" style={{ padding: "10px 12px", fontSize: 14, color: "var(--w-ink-muted)", background: "var(--w-cream-deep)", borderRight: "1px solid var(--w-cream-border)", flexShrink: 0 }}>
               +91
             </span>
             <input
-              type="tel"
-              value={phone}
+              type="tel" value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              placeholder="Phone number"
-              maxLength={10}
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                fontSize: 14,
-                border: "none",
-                outline: "none",
-                color: "var(--rt-text)",
-                fontFamily: "inherit",
-              }}
+              placeholder="10-digit number" maxLength={10}
+              style={{ flex: 1, padding: "10px 12px", fontSize: 14, border: "none", outline: "none", color: "var(--w-ink)", fontFamily: "inherit", background: "transparent" }}
             />
           </div>
         </div>
 
+        {/* PIN */}
         <div>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-            PIN (4-6 digits) *
-          </label>
+          <label style={labelStyle}>Tablet PIN (4–6 digits) <span style={{ color: "var(--w-gold)" }}>*</span></label>
           <input
-            className="rt-input rt-mono"
-            type="password"
-            value={pin}
+            className="w-input w-mono" type="password" value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="Tablet login PIN"
-            maxLength={6}
-            style={{ letterSpacing: "0.25em" }}
+            placeholder="••••" maxLength={6}
+            style={{ letterSpacing: "0.3em" }}
           />
         </div>
 
+        {/* Role */}
         <div>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--rt-text)", marginBottom: 4 }}>
-            Role *
-          </label>
-          <select
-            className="rt-select"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-          >
-            <option value="R03">Owner</option>
-            <option value="R04">Manager</option>
+          <label style={labelStyle}>Role <span style={{ color: "var(--w-gold)" }}>*</span></label>
+          <select className="w-input" value={role} onChange={(e) => setRole(e.target.value)}
+            style={{ appearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239C8878' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}>
             <option value="R05">Salesperson</option>
+            <option value="R04">Manager</option>
+            <option value="R03">Owner</option>
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-          <button className="rt-btn rt-btn-ghost" style={{ flex: 1 }} onClick={onClose}>
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+          <button className="w-btn w-btn-ghost" style={{ flex: 1 }} onClick={onClose} disabled={loading}>
             Cancel
           </button>
           <button
-            className="rt-btn rt-btn-primary"
-            style={{ flex: 1, opacity: loading ? 0.6 : 1 }}
+            className="w-btn w-btn-primary"
+            style={{ flex: 2, opacity: loading ? 0.65 : 1 }}
             onClick={handleSubmit}
             disabled={loading}
           >
-            {loading ? "Adding..." : "Add Staff"}
+            {loading ? "Adding…" : "Add Staff Member"}
           </button>
         </div>
       </div>
