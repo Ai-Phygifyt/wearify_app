@@ -2,6 +2,11 @@
 
 > Persistent reference for Claude Code sessions. Read this first to orient before exploring.
 
+## 0. Working style (applies every session)
+
+- **Ask before you code when the ask is vague.** If the user's request is ambiguous, under-scoped, or could reasonably be interpreted multiple ways, ask a focused clarifying question first. Guessing and redoing is more expensive than one round-trip.
+- **Log substantial changes to section 12.** After a meaningful change — new feature, schema change, cross-module refactor, non-obvious design decision, or anything a future session would have to re-derive from code alone — append a concise entry to the Conversation Log below. Keep small fixes out of it.
+
 ## 1. Project Purpose
 
 **Wearify** is an AI-powered virtual try-on platform for Indian saree retailers. Full-stack Next.js 16 + Convex application spanning 6 interconnected modules:
