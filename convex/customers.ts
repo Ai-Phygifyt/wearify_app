@@ -324,6 +324,21 @@ export const updateMeasurements = mutation({
 });
 
 // ============================
+// 6b. recordBodyScan — kiosk marks scan complete so next visit shows "Welcome back"
+// ============================
+export const recordBodyScan = mutation({
+  args: {
+    customerId: v.id("customers"),
+    bodyScanFileId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    const updates: Record<string, unknown> = { lastBodyScan: Date.now() };
+    if (args.bodyScanFileId) updates.bodyScanFileId = args.bodyScanFileId;
+    await ctx.db.patch(args.customerId, updates);
+  },
+});
+
+// ============================
 // 7. listStoreLinks
 // ============================
 export const listStoreLinks = query({

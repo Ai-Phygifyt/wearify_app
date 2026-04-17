@@ -657,6 +657,19 @@ export default defineSchema({
     .index("by_customerId", ["customerId"]),
 
   // ============================
+  // KIOSK TRIAL CART (per-customer-per-store persistent trial room)
+  // Retains items the customer had in their kiosk trial room across visits.
+  // ============================
+  kioskTrialCart: defineTable({
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+    addedAt: v.number(),
+  })
+    .index("by_customer_store", ["customerId", "storeId"])
+    .index("by_customer_store_saree", ["customerId", "storeId", "sareeId"]),
+
+  // ============================
   // ORDERS (purchase orders from mirror/checkout)
   // ============================
   orders: defineTable({

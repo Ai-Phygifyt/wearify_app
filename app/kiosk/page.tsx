@@ -138,6 +138,9 @@ export default function KioskPage() {
   const createOrder = useMutation(api.sessionOps.createOrder);
   const endSessionMut = useMutation(api.sessionOps.endSession);
   const updateSessionMut = useMutation(api.sessionOps.updateSession);
+  const recordBodyScan = useMutation(api.customers.recordBodyScan);
+  const addTrialCartItem = useMutation(api.sessionOps.addTrialCartItem);
+  const removeTrialCartItem = useMutation(api.sessionOps.removeTrialCartItem);
 
   // Load config
   useEffect(() => {
@@ -213,6 +216,7 @@ export default function KioskPage() {
     historyRef.current = [];
     returningRef.current = false;
     scanEligibleRef.current = false;
+    hydratedRef.current = null;
     setScreen("sessionEnd");
   }, []);
 
@@ -231,6 +235,42 @@ export default function KioskPage() {
     api.stores.getByStoreId,
     storeId ? { storeId } : "skip"
   );
+
+  // Persistent retention — load the customer's wardrobe + trial cart for THIS store.
+  // Hydrates local state once `customerId`, `storeId`, and `allSarees` are all ready.
+  const savedWardrobe = useQuery(
+    api.sessionOps.listWardrobeByCustomer,
+    customerId ? { customerId } : "skip",
+  );
+  const savedTrialCart = useQuery(
+    api.sessionOps.listTrialCart,
+    customerId && storeId ? { customerId, storeId } : "skip",
+  );
+  const hydratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!customerId || !storeId || !allSarees) return;
+    if (savedWardrobe === undefined || savedTrialCart === undefined) return;
+    const key = `${customerId}:${storeId}`;
+    if (hydratedRef.current === key) return;
+    hydratedRef.current = key;
+    const sareeMap = new Map(allSarees.map((s) => [s._id, s] as const));
+    const wardrobeForStore = savedWardrobe
+      .filter((w) => w.storeId === storeId)
+      .map((w) => sareeMap.get(w.sareeId))
+      .filter(Boolean) as SareeItem[];
+    const trialForStore = savedTrialCart
+      .map((t) => sareeMap.get(t.sareeId))
+      .filter(Boolean) as SareeItem[];
+    // Merge rather than replace — codeEntry may have already populated trialItems from tablet shortlist.
+    setWardrobeItems((prev) => {
+      const have = new Set(prev.map((s) => s._id));
+      return [...prev, ...wardrobeForStore.filter((s) => !have.has(s._id))];
+    });
+    setTrialItems((prev) => {
+      const have = new Set(prev.map((s) => s._id));
+      return [...prev, ...trialForStore.filter((s) => !have.has(s._id))];
+    });
+  }, [customerId, storeId, allSarees, savedWardrobe, savedTrialCart]);
 
   if (!storeId) return null;
 
@@ -371,6 +411,11 @@ export default function KioskPage() {
                   .map((item: { sareeId: Id<"sarees"> }) => sareeMap.get(item.sareeId))
                   .filter(Boolean) as SareeItem[];
                 setTrialItems(resolved);
+                if (data.customer) {
+                  for (const item of resolved) {
+                    addTrialCartItem({ customerId: data.customer._id, storeId, sareeId: item._id });
+                  }
+                }
               }
               // Mark code as used
               markCodeUsed({ code: data.trialRoom.code, storeId });
@@ -411,7 +456,12 @@ export default function KioskPage() {
         return (
           <BodyScanScreen
             storeName={storeName}
-            onCapture={() => navigate("aiProcessing")}
+            onCapture={() => {
+              if (customerId) {
+                recordBodyScan({ customerId }).catch(() => {});
+              }
+              navigate("aiProcessing");
+            }}
             onBack={goBack}
           />
         );
@@ -429,9 +479,10 @@ export default function KioskPage() {
           <TrialRoomScreen
             items={trialItems}
             wardrobeItems={wardrobeItems}
-            onRemoveItem={(id) =>
-              setTrialItems((prev) => prev.filter((s) => s._id !== id))
-            }
+            onRemoveItem={(id) => {
+              setTrialItems((prev) => prev.filter((s) => s._id !== id));
+              if (customerId) removeTrialCartItem({ customerId, storeId, sareeId: id });
+            }}
             onAddToWardrobe={(items) => {
               if (wardrobeItems.length + items.length > CFG.maxWardrobe) {
                 showToast(`Wardrobe limit (${CFG.maxWardrobe})`, "warning");
@@ -441,6 +492,11 @@ export default function KioskPage() {
               setTrialItems((prev) =>
                 prev.filter((s) => !items.some((i) => i._id === s._id))
               );
+              if (customerId) {
+                for (const item of items) {
+                  removeTrialCartItem({ customerId, storeId, sareeId: item._id });
+                }
+              }
               for (const item of items) {
                 addToWardrobeMut({
                   sessionId,
@@ -478,6 +534,11 @@ export default function KioskPage() {
             onProductTap={(p) => navigate("productDetail", p)}
             onSendToTrial={(items) => {
               setTrialItems((prev) => [...prev, ...items]);
+              if (customerId) {
+                for (const item of items) {
+                  addTrialCartItem({ customerId, storeId, sareeId: item._id });
+                }
+              }
               navigate("aiProcessing");
             }}
             navigate={navigate}
@@ -503,6 +564,7 @@ export default function KioskPage() {
                 return;
               }
               setTrialItems((prev) => [...prev, selectedProduct]);
+              if (customerId) addTrialCartItem({ customerId, storeId, sareeId: selectedProduct._id });
               showToast("Added to Trial Room", "success");
             }}
             onBack={goBack}

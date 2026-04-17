@@ -202,6 +202,35 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Kiosk retention — body scan + wardrobe + trial cart per (customer, store)
+
+- **Problem:** Returning customer `9061890670` at kiosk never saw the "Welcome back" screen, and trial room + wardrobe were empty every visit.
+- **Root causes (all pre-existing on main, not merge-related):**
+  1. `BodyScanScreen` was pure UI — countdown then `onCapture()`, no mutation. Only seeded customers (Ananya, Deepika) had `lastBodyScan` set via `seed.ts`.
+  2. `wardrobeItems` was pure React state. The `wardrobe` table persisted items but kiosk never queried them back.
+  3. No persistence layer for trial items at all — React state only, reset each session.
+- **Fix — backend:**
+  - `customers.recordBodyScan({ customerId, bodyScanFileId? })` ([convex/customers.ts](convex/customers.ts)) — patches `lastBodyScan = Date.now()`. `bodyScanFileId` optional since kiosk BodyScanScreen is currently fake-capture (no real photo upload yet).
+  - New table `kioskTrialCart` ([convex/schema.ts](convex/schema.ts)): `{ customerId, storeId, sareeId, addedAt }` + indexes `by_customer_store`, `by_customer_store_saree`. Separate from `wardrobe` to keep "trying now" vs "saved for later" distinct.
+  - `sessionOps.addTrialCartItem` / `removeTrialCartItem` / `clearTrialCart` / `listTrialCart` — idempotent per `(customer, store, saree)` triple.
+- **Fix — frontend kiosk** ([app/kiosk/page.tsx](app/kiosk/page.tsx)):
+  - `BodyScanScreen.onCapture` now calls `recordBodyScan({ customerId })` before navigating to `aiProcessing`. Fire-and-forget; guests skip.
+  - Hydration effect: on `(customerId, storeId, allSarees)` ready, queries `listWardrobeByCustomer` (filtered by `storeId` via saree lookup) and `listTrialCart`, maps ids to `SareeItem` via the store's catalog, and **merges** (not replaces) into local state. `hydratedRef` keys on `${customerId}:${storeId}` and is reset in `handleWipe` so re-logins rehydrate.
+  - Every `setTrialItems` add/remove site mirrors to `addTrialCartItem` / `removeTrialCartItem` (gated on `customerId` — guests don't persist). Covers: `onSendToTrial` (home), `onAddToTrial` (product detail), `onRemoveItem` (trial room), `onAddToWardrobe` (move trial→wardrobe deletes from cart), and `codeEntry` shortlist load.
+- **Consequence:** any customer who completes a body scan once at a store will see the "Welcome back" `ScanChoiceScreen` on next visit (valid for `CFG.scanValidMonths = 6`). Wardrobe + trial cart persist per `(customer, store)` across sessions.
+- **Deferred (flagged):** wardrobe rows are NOT deleted when the customer checks out — purchased items stay visible on return. Handle later via `removeFromWardrobe` mutation from checkout handler.
+
+### `release` branch — merge of `main` + `origin/frontend`
+
+- **Why:** teammate's `origin/frontend` branch restyled `/store/*` while `main` evolved independently (customer module, kiosk newCustomer capture, settings sub-pages, schema additions). Needed an integration branch with main's logic and frontend's `/store` visuals.
+- **Rule:** main logic wins globally; `/store` follows frontend visually; kiosk stays on main.
+- **Taken from frontend (clean):** `/store/analytics`, `/store/campaigns`, `/store/customers/*`, `/store/inventory/*`, `/store/layout`, `/store/login`, `/store/page`, `/store/staff`, `/store/store-theme.css`, `public/inventory/*` images, `package-lock.json`.
+- **Reverted to main (frontend's changes dropped):** `app/kiosk/page.tsx`, `app/kiosk/layout.tsx`, `app/kiosk/kiosk-theme.css` — frontend's font swap (Cormorant/DM Sans → Montserrat/Roboto) and colour token rename would have broken main's kiosk CSS references + newCustomer capture flow.
+- **Manually reconciled:** [app/store/settings/page.tsx](app/store/settings/page.tsx) — kept frontend's redesigned UI (`Toggle`, `SettingsRow`, gradient subscription card, inline profile edit, inline notification toggles). Kept main's `useRouter`-based logout + formatted `nextBilling` date. Wired `Staff & Roles → /store/staff` and `Upgrade → /store/settings/billing`. Dropped unused `SETTINGS_ITEMS` constant. Main's sub-page routes (`/store/settings/{profile,notifications,billing}`) still exist but are only reachable for billing; profile/notifications are now edited inline on the main settings page.
+- **Convex:** all `convex/*` files byte-identical to main after merge — no logic loss.
+- **Commits:** `182d92a` (merge) + `57f52a0` (missed Staff & Roles onClick wiring).
+- **State:** local only; not pushed.
+
 ### Visit count consistency — `/c/me` + per-store breakdown
 
 - **Problem:** `/c/me` showed "0 Visits" while `/c/me/history` showed "1 visit" for the same customer. `/c/me` was reading the denormalised `customers.totalVisits` column; nothing bumps it. `/c/me/history` reads the `visitHistory` table directly.

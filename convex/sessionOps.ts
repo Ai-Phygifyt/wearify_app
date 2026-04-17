@@ -580,6 +580,76 @@ export const getWardrobe = query({
 });
 
 // ============================================================
+// KIOSK TRIAL CART — per (customer, store) persistent trial room
+// ============================================================
+
+export const addTrialCartItem = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("kioskTrialCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (existing) return existing._id;
+    return await ctx.db.insert("kioskTrialCart", {
+      customerId: args.customerId,
+      storeId: args.storeId,
+      sareeId: args.sareeId,
+      addedAt: Date.now(),
+    });
+  },
+});
+
+export const removeTrialCartItem = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("kioskTrialCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (row) await ctx.db.delete(row._id);
+  },
+});
+
+export const clearTrialCart = mutation({
+  args: { customerId: v.id("customers"), storeId: v.string() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("kioskTrialCart")
+      .withIndex("by_customer_store", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
+      )
+      .collect();
+    for (const r of rows) await ctx.db.delete(r._id);
+  },
+});
+
+export const listTrialCart = query({
+  args: { customerId: v.id("customers"), storeId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("kioskTrialCart")
+      .withIndex("by_customer_store", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
+      )
+      .order("desc")
+      .collect();
+  },
+});
+
+// ============================================================
 // ORDERS
 // ============================================================
 
