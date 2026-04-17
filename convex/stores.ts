@@ -106,6 +106,7 @@ export const update = mutation({
     notifyWhatsApp: v.optional(v.boolean()),
     notifyEmail: v.optional(v.boolean()),
     notifySms: v.optional(v.boolean()),
+    logoFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const { id, ...fields } = args;

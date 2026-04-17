@@ -158,6 +158,49 @@ export default function KioskPage() {
     }
   }, [router]);
 
+  // Restore an in-progress customer session across page refresh.
+  // Writes: see persistKioskSession below. Clears: handleWipe.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("wearify_kiosk_session");
+      if (!raw) return;
+      const s = JSON.parse(raw) as {
+        customerId?: Id<"customers">;
+        customerName?: string;
+        sessionId?: string;
+        phone?: string;
+        lang?: string;
+        hasBodyScan?: boolean;
+      };
+      if (!s.customerId || !s.sessionId) return;
+      setCustomerId(s.customerId);
+      setCustomerName(s.customerName ?? "");
+      setSessionId(s.sessionId);
+      setPhone(s.phone ?? "");
+      if (s.lang) setLang(s.lang);
+      setIsReturningCustomer(true);
+      setHasBodyScan(!!s.hasBodyScan);
+      returningRef.current = true;
+      scanEligibleRef.current = !!s.hasBodyScan;
+      setScreen("home");
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const persistKioskSession = useCallback((patch: Partial<{
+    customerId: Id<"customers">;
+    customerName: string;
+    sessionId: string;
+    phone: string;
+    lang: string;
+    hasBodyScan: boolean;
+  }>) => {
+    try {
+      const current = JSON.parse(localStorage.getItem("wearify_kiosk_session") ?? "{}");
+      localStorage.setItem("wearify_kiosk_session", JSON.stringify({ ...current, ...patch }));
+    } catch { /* ignore */ }
+  }, []);
+
   // 5-minute inactivity auto-logout
   const lastActivity = useRef(Date.now());
   useEffect(() => {
@@ -219,6 +262,7 @@ export default function KioskPage() {
     returningRef.current = false;
     scanEligibleRef.current = false;
     hydratedRef.current = null;
+    try { localStorage.removeItem("wearify_kiosk_session"); } catch { /* ignore */ }
     setScreen("sessionEnd");
   }, []);
 
@@ -263,6 +307,14 @@ export default function KioskPage() {
     const trialForStore = savedTrialCart
       .map((t) => sareeMap.get(t.sareeId))
       .filter(Boolean) as SareeItem[];
+    // Diagnostic — check browser console if retention looks off.
+    console.log("[kiosk hydrate]", {
+      key,
+      wardrobeFromDb: savedWardrobe.length,
+      wardrobeForStore: wardrobeForStore.length,
+      trialCartFromDb: savedTrialCart.length,
+      trialForStore: trialForStore.length,
+    });
     // Merge rather than replace — codeEntry may have already populated trialItems from tablet shortlist.
     setWardrobeItems((prev) => {
       const have = new Set(prev.map((s) => s._id));
@@ -346,6 +398,14 @@ export default function KioskPage() {
                 customerPhone: `+91${phone}`,
               });
               setSessionId(newSessionId);
+              persistKioskSession({
+                customerId: customer._id,
+                customerName: customer.name,
+                sessionId: newSessionId,
+                phone,
+                lang: customer.language ?? "en",
+                hasBodyScan: hasScan,
+              });
               if (scanEligibleRef.current) {
                 navigate("scanChoice");
               } else {
@@ -374,6 +434,14 @@ export default function KioskPage() {
                 customerPhone: `+91${phone}`,
               });
               setSessionId(newSessionId);
+              persistKioskSession({
+                customerId: cId,
+                customerName: cName,
+                sessionId: newSessionId,
+                phone,
+                lang,
+                hasBodyScan: false,
+              });
               navigate("consent");
             }}
             onBack={() => navigate("otp")}
@@ -399,6 +467,14 @@ export default function KioskPage() {
                 if (data.customer.language) setLang(data.customer.language);
                 returningRef.current = true;
                 scanEligibleRef.current = hasScan;
+                persistKioskSession({
+                  customerId: data.customer._id,
+                  customerName: data.customer.name,
+                  sessionId: data.trialRoom.sessionId,
+                  phone: data.customer.phone?.replace(/^\+91/, "") ?? "",
+                  lang: data.customer.language ?? lang,
+                  hasBodyScan: hasScan,
+                });
               } else {
                 setCustomerId(data.trialRoom.customerId ?? null);
                 setIsReturningCustomer(false);
@@ -462,6 +538,9 @@ export default function KioskPage() {
               if (customerId) {
                 recordBodyScan({ customerId }).catch(() => {});
               }
+              setHasBodyScan(true);
+              scanEligibleRef.current = true;
+              persistKioskSession({ hasBodyScan: true });
               navigate("aiProcessing");
             }}
             onBack={goBack}

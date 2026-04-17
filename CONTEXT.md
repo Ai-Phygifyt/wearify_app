@@ -207,6 +207,12 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Kiosk session persistence + store logo upload
+
+- **Refresh-logs-out problem:** kiosk customer state (`customerId`, `sessionId`, `customerName`, `phone`, `lang`, `hasBodyScan`) lived only in React `useState`, so any browser refresh dumped the user back at idle. Fixed with a `wearify_kiosk_session` localStorage record. On mount, a `useEffect` in [app/kiosk/page.tsx](app/kiosk/page.tsx) restores the session and lands directly on `home` (skipping login/scan). `handleWipe` deletes the key. Writes happen at OTP verify, tablet code entry, and new-customer register; `hasBodyScan` is re-persisted when `BodyScanScreen` completes so a mid-session refresh doesn't force a rescan.
+- **Store logo pipeline:** `stores.update` now accepts `logoFileId`. [app/store/settings/page.tsx](app/store/settings/page.tsx)'s identity-card avatar is click-to-upload (uses `useUploadFile` from [lib/useUpload.ts](lib/useUpload.ts)); displays the uploaded logo via `api.files.getUrl`, falls back to initial. Kiosk `StoreBrand` already reads `storeData.logoFileId`, so the logo flows into the kiosk top-bar automatically.
+- **Retention diagnostic:** added a one-line `console.log("[kiosk hydrate]", ...)` inside the hydration effect so users can verify what `listTrialCart` / `listWardrobeByCustomer` actually returned when retention looks off. Remove once confident.
+
 ### Shared `SareeThumb` — end image-invisibility across tablet + kiosk
 
 - **Problem:** Image uploaded via `/store/inventory/add` (written to `sarees.imageIds[]`) never appeared in `/tablet/catalogue` or kiosk. Root cause: only `/store/inventory` had any code to render images — tablet and kiosk both drew gradient-only placeholders because they were built before the upload flow existed.

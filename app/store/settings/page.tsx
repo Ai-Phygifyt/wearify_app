@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useUploadFile } from "@/lib/useUpload";
 
 /* ── Toggle ────────────────────────────────────────────────────────── */
 function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () => void; disabled?: boolean }) {
@@ -144,6 +145,24 @@ export default function SettingsPage() {
   }, []);
 
   const store = useQuery(api.stores.getByStoreId, storeId ? { storeId } : "skip");
+  const logoUrl = useQuery(
+    api.files.getUrl,
+    store?.logoFileId ? { fileId: store.logoFileId } : "skip",
+  );
+  const { upload } = useUploadFile();
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  async function handleLogoPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !store) return;
+    setLogoUploading(true);
+    try {
+      const fileId = await upload(file);
+      await updateStore({ id: store._id, logoFileId: fileId });
+    } finally { setLogoUploading(false); }
+  }
 
   useEffect(() => {
     if (store) {
@@ -236,16 +255,43 @@ export default function SettingsPage() {
       {/* ── Store identity card ── */}
       <div className="w-card w-card-gold" style={{ padding: "20px 22px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
-          <div style={{
-            width: 60, height: 60, borderRadius: 18, flexShrink: 0,
-            background: "linear-gradient(145deg, var(--w-navy), var(--w-teal))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 6px 20px rgba(13,31,53,0.28)",
-          }}>
-            <span className="w-serif" style={{ color: "var(--w-gold-bright)", fontSize: 26, fontWeight: 700, fontStyle: "italic" }}>
-              {avatarLetter}
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={() => logoInputRef.current?.click()}
+            disabled={logoUploading}
+            title={logoUrl ? "Change store logo" : "Upload store logo"}
+            style={{
+              width: 60, height: 60, borderRadius: 18, flexShrink: 0, padding: 0,
+              cursor: logoUploading ? "wait" : "pointer", position: "relative", overflow: "hidden",
+              background: logoUrl ? "#fff" : "linear-gradient(145deg, var(--w-navy), var(--w-teal))",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 6px 20px rgba(13,31,53,0.28)",
+              border: "none",
+            }}
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt="Store logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <span className="w-serif" style={{ color: "var(--w-gold-bright)", fontSize: 26, fontWeight: 700, fontStyle: "italic" }}>
+                {avatarLetter}
+              </span>
+            )}
+            {logoUploading && (
+              <div style={{
+                position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <span className="w-spinner" />
+              </div>
+            )}
+          </button>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handleLogoPick}
+          />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="w-serif" style={{ fontSize: 20, fontWeight: 700, fontStyle: "italic", color: "var(--w-navy)", marginBottom: 2 }}>
               {store?.name || "My Store"}
