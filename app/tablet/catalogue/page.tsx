@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge, Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { SareeThumb } from "@/components/SareeThumb";
 import { Id } from "@/convex/_generated/dataModel";
 
 const OCCASION_FILTERS = ["All", "Wedding", "Festival", "Office", "Party", "Daily", "Gift"];
@@ -250,7 +251,6 @@ export default function TabletCataloguePage() {
               {previousShortlist.map((item) => {
                 const alreadyInCurrent = isInShortlist(item.sareeId);
                 const saree = sareeMap.get(item.sareeId);
-                const grad = saree?.grad || ["#E8E0D4", "#D4A843"];
                 return (
                   <button
                     key={item._id}
@@ -262,10 +262,14 @@ export default function TabletCataloguePage() {
                         : "border-wf-border bg-wf-card text-wf-text hover:border-wf-primary/40"
                     }`}
                   >
-                    <div
-                      className="w-8 h-8 rounded flex-shrink-0"
-                      style={{ background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})` }}
-                    />
+                    <div className="w-8 h-8 rounded flex-shrink-0 overflow-hidden">
+                      <SareeThumb
+                        name={saree?.name || ""}
+                        fileId={saree?.imageIds?.[0]}
+                        grad={saree?.grad}
+                        gradientAngle={135}
+                      />
+                    </div>
                     <div className="min-w-0">
                       <div className="truncate">{saree?.name || "Saree"}</div>
                       <div className="text-[10px] text-wf-muted mt-0.5">
@@ -296,7 +300,6 @@ export default function TabletCataloguePage() {
         ) : (
           <div className="grid grid-cols-3 gap-3">
             {filteredSarees.map((saree) => {
-              const grad = saree.grad || ["#E8E0D4", "#D4A843"];
               const inShortlist = isInShortlist(saree._id);
 
               return (
@@ -304,17 +307,17 @@ export default function TabletCataloguePage() {
                   key={saree._id}
                   className="bg-wf-card rounded-lg border border-wf-border overflow-hidden hover:border-wf-primary/40 transition-colors"
                 >
-                  {/* Gradient placeholder */}
                   <button
                     onClick={() => router.push(`/tablet/catalogue/${saree._id}`)}
-                    className="w-full h-32 cursor-pointer relative"
-                    style={{
-                      background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})`,
-                    }}
+                    className="w-full h-32 cursor-pointer relative overflow-hidden"
                   >
-                    {saree.emoji && (
-                      <span className="absolute top-2 left-2 text-2xl">{saree.emoji}</span>
-                    )}
+                    <SareeThumb
+                      name={saree.name}
+                      fileId={saree.imageIds?.[0]}
+                      grad={saree.grad}
+                      emoji={saree.emoji}
+                      gradientAngle={135}
+                    />
                     {saree.tag && (
                       <div className="absolute top-2 right-2">
                         <Badge status={saree.tag === "Premium" ? "active" : saree.tag === "Trending" ? "progress" : "pending"}>

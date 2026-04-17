@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { SareeThumb } from "@/components/SareeThumb";
 
 /* ═══ CONFIG ═══ */
 const CFG = {
@@ -65,6 +66,7 @@ interface SareeItem {
   region?: string;
   tag?: string;
   stock: number;
+  imageIds?: Id<"_storage">[];
 }
 
 interface TrialRoomData {
@@ -1549,7 +1551,6 @@ function SareeCard({ saree, onTap, onCheck, isSelected, isInTrial, isInWardrobe 
   saree: SareeItem; onTap: () => void; onCheck?: () => void; isSelected: boolean; isInTrial: boolean; isInWardrobe: boolean;
 }) {
   const disabled = isInTrial || isInWardrobe;
-  const grad = saree.grad || ["#E8E0D4", "#D4A843"];
   const label = isInWardrobe ? "In Wardrobe" : isInTrial ? "In Trial" : isSelected ? "Selected" : null;
   const labelBg = isInWardrobe ? "var(--k-maroon)" : isInTrial ? "var(--k-gold)" : isSelected ? "var(--k-green)" : "";
   const discount = saree.mrp && saree.mrp > saree.price ? Math.round(((saree.mrp - saree.price) / saree.mrp) * 100) : 0;
@@ -1586,27 +1587,23 @@ function SareeCard({ saree, onTap, onCheck, isSelected, isInTrial, isInWardrobe 
 
       {/* Image area */}
       <div className="k-silk" style={{
-        position: "relative", width: "100%", paddingTop: "130%",
-        background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
+        position: "relative", width: "100%", paddingTop: "130%", overflow: "hidden",
       }}>
-        {saree.emoji && (
-          <span style={{
-            position: "absolute", top: "50%", left: "50%",
-            transform: "translate(-50%, -50%)", fontSize: 36, opacity: 0.7,
-          }}>{saree.emoji}</span>
-        )}
+        <div style={{ position: "absolute", inset: 0 }}>
+          <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={36} />
+        </div>
         {label && (
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0, background: labelBg,
             padding: "6px 0", textAlign: "center", fontSize: 11, fontWeight: 700,
-            color: "#fff", letterSpacing: "0.5px",
+            color: "#fff", letterSpacing: "0.5px", zIndex: 2,
           }}>{label}</div>
         )}
         {discount > 0 && !label && (
           <div style={{
             position: "absolute", bottom: 8, left: 8, padding: "3px 8px",
             borderRadius: "var(--k-r-pill)", background: "var(--k-green)", color: "#fff",
-            fontSize: 11, fontWeight: 700,
+            fontSize: 11, fontWeight: 700, zIndex: 2,
           }}>-{discount}%</div>
         )}
       </div>
@@ -1636,7 +1633,6 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
   trialCount: number; wardrobeCount: number; cartCount: number;
 }) {
   const [selColor, setSelColor] = useState(0);
-  const grad = product.grad || ["#E8E0D4", "#D4A843"];
   const disc = product.mrp && product.mrp > product.price ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
   const similar = allSarees.filter((s) => s.occasion === product.occasion && s._id !== product._id).slice(0, 6);
 
@@ -1650,15 +1646,12 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
           {/* Left: product image */}
           <div className="k-silk" style={{
             width: "38%", maxWidth: 360, position: "relative", borderRadius: "var(--k-r-lg)",
-            overflow: "hidden", background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
-            boxShadow: "var(--k-shadow-md)", flexShrink: 0,
+            overflow: "hidden", boxShadow: "var(--k-shadow-md)", flexShrink: 0,
+            minHeight: 320,
           }}>
-            {product.emoji && (
-              <span style={{
-                position: "absolute", top: "50%", left: "50%",
-                transform: "translate(-50%, -50%)", fontSize: 72, opacity: 0.6,
-              }}>{product.emoji}</span>
-            )}
+            <div style={{ position: "absolute", inset: 0 }}>
+              <SareeThumb name={product.name} fileId={product.imageIds?.[0]} grad={product.grad} emoji={product.emoji} emojiSize={72} />
+            </div>
             {/* Tag */}
             {product.tag && (
               <div style={{
@@ -1782,7 +1775,6 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
   };
 
   const current = items[selIdx] || items[0];
-  const grad = current?.grad || ["#E8E0D4", "#D4A843"];
 
   if (items.length === 0) return (
     <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
@@ -1831,7 +1823,6 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
           {items.map((saree, idx) => {
             const active = idx === selIdx;
             const selW = selForWard.has(saree._id);
-            const sg = saree.grad || ["#E8E0D4", "#D4A843"];
             return (
               <div key={saree._id} onClick={() => setSelIdx(idx)} style={{
                 display: "flex", gap: 10, padding: "12px 10px", marginBottom: 8,
@@ -1852,10 +1843,9 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
                 {/* Thumbnail */}
                 <div style={{
                   width: 56, height: 56, borderRadius: "var(--k-r-sm)", flexShrink: 0,
-                  background: `linear-gradient(135deg, ${sg[0]}, ${sg[1] || sg[0]})`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  overflow: "hidden",
                 }}>
-                  {saree.emoji && <span style={{ fontSize: 22 }}>{saree.emoji}</span>}
+                  <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={22} gradientAngle={135} />
                 </div>
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -1886,12 +1876,8 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
         {/* RIGHT panel — preview */}
         <div style={{ flex: 1, position: "relative", height: "100%" }}>
           {current && (
-            <div style={{
-              position: "absolute", inset: 0,
-              background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {current.emoji && <span style={{ fontSize: 120, opacity: 0.4 }}>{current.emoji}</span>}
+            <div style={{ position: "absolute", inset: 0 }}>
+              <SareeThumb name={current.name} fileId={current.imageIds?.[0]} grad={current.grad} emoji={current.emoji} emojiSize={120} gradientAngle={135} />
             </div>
           )}
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 50%, rgba(245,240,234,.9) 90%)" }} />
@@ -1959,11 +1945,14 @@ function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, 
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
             {items.map((saree) => {
-              const g = saree.grad || ["#E8E0D4", "#D4A843"];
               const selC = selForCart.has(saree._id);
               return (
                 <div key={saree._id} className="k-product-card" style={{ border: selC ? "2px solid var(--k-green)" : undefined }}>
-                  <div style={{ position: "relative", width: "100%", paddingTop: "120%", background: `linear-gradient(135deg, ${g[0]}, ${g[1] || g[0]})` }}>{saree.emoji && <span style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 32 }}>{saree.emoji}</span>}</div>
+                  <div style={{ position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden" }}>
+                    <div style={{ position: "absolute", inset: 0 }}>
+                      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={32} gradientAngle={135} />
+                    </div>
+                  </div>
                   <div style={{ padding: "8px 10px" }}>
                     <div style={{ fontSize: 12, fontWeight: 600 }}>{saree.name}</div>
                     <div className="k-mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(saree.price)}</div>
@@ -2009,7 +1998,6 @@ function OrderScreen({ cart, setCart, onCheckout, onFindTailor, onBack }: {
         <div style={{ width: "100%", maxWidth: 640 }}>
           {/* Cart items */}
           {cart.map((item, idx) => {
-            const g = item.grad || ["#E8E0D4", "#D4A843"];
             return (
               <div key={idx} className="k-slideUp" style={{
                 display: "flex", gap: 16, padding: "16px", background: "var(--k-card)",
@@ -2018,10 +2006,10 @@ function OrderScreen({ cart, setCart, onCheckout, onFindTailor, onBack }: {
               }}>
                 {/* Thumbnail */}
                 <div style={{
-                  width: 64, height: 64, borderRadius: "var(--k-r-sm)", flexShrink: 0,
-                  background: `linear-gradient(135deg, ${g[0]}, ${g[1] || g[0]})`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>{item.emoji && <span style={{ fontSize: 28 }}>{item.emoji}</span>}</div>
+                  width: 64, height: 64, borderRadius: "var(--k-r-sm)", flexShrink: 0, overflow: "hidden",
+                }}>
+                  <SareeThumb name={item.name} fileId={item.imageIds?.[0]} grad={item.grad} emoji={item.emoji} emojiSize={28} gradientAngle={135} />
+                </div>
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{item.name}</div>

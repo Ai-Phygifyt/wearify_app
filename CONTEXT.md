@@ -202,6 +202,14 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Shared `SareeThumb` — end image-invisibility across tablet + kiosk
+
+- **Problem:** Image uploaded via `/store/inventory/add` (written to `sarees.imageIds[]`) never appeared in `/tablet/catalogue` or kiosk. Root cause: only `/store/inventory` had any code to render images — tablet and kiosk both drew gradient-only placeholders because they were built before the upload flow existed.
+- **Fix:** extracted [`components/SareeThumb.tsx`](components/SareeThumb.tsx) as the single source of truth. Three-tier fallback: local `SAREE_IMAGE` map (seeded saree names → `/public/inventory/*` files shipped with the repo) → `api.files.getUrl({ fileId: imageIds[0] })` via Convex Storage → gradient placeholder (with optional centered emoji overlay). Fills parent; size/position controlled by wrapper div.
+- **Call sites wired:** `/store/inventory` (grid thumb), `/tablet/catalogue` (grid + previous-shortlist 8x8 pills), `/tablet/catalogue/[id]` (detail hero), kiosk `SareeCard` (home grid, 130% aspect), kiosk `ProductDetailScreen` (38% hero), kiosk `TrialRoomScreen` (56x56 list thumb + full-bleed right-panel preview), kiosk `WardrobeScreen` (2-col grid), kiosk `OrderScreen` (64x64 cart thumb).
+- **Schema note:** added `imageIds?: Id<"_storage">[]` to the kiosk-local `SareeItem` type (was missing even though the DB row has it).
+- **Not touched:** `/c/looks`, `/c/wishlist` — those have a different priority chain (`look.imageFileId` takes precedence over `saree.imageIds[0]`) documented earlier in this log; leave them alone.
+
 ### Kiosk retention — body scan + wardrobe + trial cart per (customer, store)
 
 - **Problem:** Returning customer `9061890670` at kiosk never saw the "Welcome back" screen, and trial room + wardrobe were empty every visit.

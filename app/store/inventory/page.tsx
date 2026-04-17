@@ -4,39 +4,9 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { SareeThumb } from "@/components/SareeThumb";
 
 type FilterKey = "all" | "approved" | "pending" | "low_stock";
-
-const SAREE_IMAGE: Record<string, string> = {
-  "Chanderi Floral":           "/inventory/Chanderi-Floral.jpeg",
-  "Chiffon Rose Garden":       "/inventory/Chiffon-Rose-Garden.webp",
-  "Cotton Handloom Daily":     "/inventory/Cotton-Handloom-Daily.webp",
-  "Georgette Sequin Party":    "/inventory/Georgette-Sequin-Party.webp",
-  "Kanjeevaram Temple Border": "/inventory/Kanjeevaram-Temple-Border.webp",
-  "Linen Summer Fresh":        "/inventory/Linen-Summer-Fresh.jpeg",
-  "Organza Pastel Dream":      "/inventory/Organza-Pastel-Dream.jpeg",
-  "Paithani Heritage":         "/inventory/Paithani-Heritage.webp",
-  "Tussar Geometric":          "/inventory/Tussar-Geometric.webp",
-};
-
-function SareeThumb({ name, fileId, grad }: { name: string; fileId?: Id<"_storage">; grad: string[] }) {
-  const localSrc = SAREE_IMAGE[name];
-  const url = useQuery(api.files.getUrl, !localSrc && fileId ? { fileId } : "skip");
-
-  if (localSrc) {
-    return <img src={localSrc} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
-  }
-  if (url) {
-    return <img src={url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
-  }
-  return (
-    <div style={{
-      width: "100%", height: "100%",
-      background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
-    }} />
-  );
-}
 
 function StatusDot({ status }: { status: string }) {
   const color =
