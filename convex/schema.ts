@@ -12,6 +12,8 @@ export default defineSchema({
     role: v.string(), // "store_owner" | "customer" | "tailor" | "staff"
     storeId: v.optional(v.string()), // for store_owner/staff
     tailorId: v.optional(v.string()), // for tailor
+    // Deprecated: sessions now live in userSessions table to support multi-device login.
+    // Kept optional so existing rows remain valid; no longer written.
     sessionToken: v.optional(v.string()),
     sessionExpiry: v.optional(v.number()),
     lastLogin: v.optional(v.number()),
@@ -20,6 +22,19 @@ export default defineSchema({
     .index("by_phone_and_role", ["phone", "role"])
     .index("by_sessionToken", ["sessionToken"])
     .index("by_role", ["role"]),
+
+  // Per-device session tokens. One row per active login so multiple devices
+  // can stay signed in concurrently for the same user.
+  userSessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    role: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    lastSeenAt: v.optional(v.number()),
+  })
+    .index("by_token", ["token"])
+    .index("by_userId", ["userId"]),
 
   // ============================
   // STORES
@@ -81,6 +96,11 @@ export default defineSchema({
     // Subscription
     subscriptionPlan: v.optional(v.string()), // "Starter" | "Professional" | "Enterprise"
     essentialMode: v.optional(v.boolean()),
+    nextBillingDate: v.optional(v.string()), // ISO date, set by admin
+    // Notification channels (store owner preferences)
+    notifyWhatsApp: v.optional(v.boolean()),
+    notifyEmail: v.optional(v.boolean()),
+    notifySms: v.optional(v.boolean()),
     // Retailer settings
     digitisedPercent: v.optional(v.number()),
     catalogueCount: v.optional(v.number()),
@@ -166,6 +186,18 @@ export default defineSchema({
     phone: v.string(),
     name: v.string(),
     initials: v.optional(v.string()),
+    // Core profile (required for production; added 2026-04)
+    dateOfBirth: v.optional(v.string()), // ISO YYYY-MM-DD; age computed from this
+    gender: v.optional(v.string()), // "male" | "female" | "other" | "prefer_not_to_say"
+    heightCm: v.optional(v.number()), // canonical height stored in cm
+    heightUnit: v.optional(v.string()), // "cm" | "ftin" — display preference only
+    email: v.optional(v.string()),
+    city: v.optional(v.string()),
+    photoFileId: v.optional(v.id("_storage")),
+    profileComplete: v.optional(v.boolean()), // gate for /c
+    // Engagement counters
+    // totalVisits: DEPRECATED — UI now derives from visitHistory row count.
+    // Kept for seeded data backwards-compat; do not read or write new values.
     totalVisits: v.optional(v.number()),
     totalLooks: v.optional(v.number()),
     totalStores: v.optional(v.number()),
@@ -621,7 +653,8 @@ export default defineSchema({
     price: v.optional(v.number()),
     addedAt: v.number(),
   })
-    .index("by_sessionId", ["sessionId"]),
+    .index("by_sessionId", ["sessionId"])
+    .index("by_customerId", ["customerId"]),
 
   // ============================
   // ORDERS (purchase orders from mirror/checkout)

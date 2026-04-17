@@ -6,21 +6,35 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
-function SareeImage({ fileId, fallbackEmoji, fallbackGrad }: {
-  fileId?: Id<"_storage">; fallbackEmoji: string; fallbackGrad: string[];
+const SAREE_IMAGE: Record<string, string> = {
+  "Chanderi Floral":           "/inventory/Chanderi-Floral.jpeg",
+  "Chiffon Rose Garden":       "/inventory/Chiffon-Rose-Garden.webp",
+  "Cotton Handloom Daily":     "/inventory/Cotton-Handloom-Daily.webp",
+  "Georgette Sequin Party":    "/inventory/Georgette-Sequin-Party.webp",
+  "Kanjeevaram Temple Border": "/inventory/Kanjeevaram-Temple-Border.webp",
+  "Linen Summer Fresh":        "/inventory/Linen-Summer-Fresh.jpeg",
+  "Organza Pastel Dream":      "/inventory/Organza-Pastel-Dream.jpeg",
+  "Paithani Heritage":         "/inventory/Paithani-Heritage.webp",
+  "Tussar Geometric":          "/inventory/Tussar-Geometric.webp",
+};
+
+function SareeImage({ name, fileId, fallbackGrad }: {
+  name: string; fileId?: Id<"_storage">; fallbackGrad: string[];
 }) {
-  const url = useQuery(api.files.getUrl, fileId ? { fileId } : "skip");
-  if (fileId && url) {
-    return <img src={url} alt="Saree" style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+  const localSrc = SAREE_IMAGE[name];
+  const url = useQuery(api.files.getUrl, !localSrc && fileId ? { fileId } : "skip");
+
+  if (localSrc) {
+    return <img src={localSrc} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+  }
+  if (url) {
+    return <img src={url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
   }
   return (
     <div style={{
       width: "100%", height: "100%",
       background: `linear-gradient(145deg, ${fallbackGrad[0]}, ${fallbackGrad[1] || fallbackGrad[0]})`,
-      display: "flex", alignItems: "center", justifyContent: "center",
-    }}>
-      <span style={{ fontSize: 96 }}>{fallbackEmoji}</span>
-    </div>
+    }} />
   );
 }
 
@@ -32,7 +46,7 @@ export default function SareeDetailPage() {
   const router = useRouter();
   const sareeId = params.id as Id<"sarees">;
 
-  const saree = useQuery(api.sarees.getById, { id: sareeId });
+  const saree = useQuery(api.sarees.getById, sareeId ? { id: sareeId } : "skip");
   const updateSaree = useMutation(api.sarees.update);
   const updateStock = useMutation(api.sarees.updateStock);
   const deleteSaree = useMutation(api.sarees.remove);
@@ -169,7 +183,7 @@ export default function SareeDetailPage() {
 
       {/* ── Hero image ── */}
       <div className="w-detail-hero">
-        <SareeImage fileId={saree.imageIds?.[photoTab]} fallbackEmoji={saree.emoji || "👗"} fallbackGrad={grad} />
+        <SareeImage name={saree.name} fileId={saree.imageIds?.[photoTab]} fallbackGrad={grad} />
         {saree.tag && (
           <span className="w-detail-hero-tag">{saree.tag}</span>
         )}

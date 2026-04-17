@@ -630,8 +630,8 @@ export default function KioskPage() {
   const TopBar = ({ onLogout }: { onLogout?: () => void }) => (
     <div className="k-topbar">
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div className="k-topbar-logo">PF</div>
-        <span className="k-brand" style={{ fontSize: 18, color: "var(--k-text)" }}>
+        <div className="k-topbar-logo">W</div>
+        <span className="k-brand" style={{ fontSize: 17, color: "var(--k-text)", textTransform: "uppercase", letterSpacing: 0.5 }}>
           {config.storeName}
         </span>
       </div>
@@ -641,15 +641,19 @@ export default function KioskPage() {
           className="k-press"
           style={{
             background: "none",
-            border: "none",
-            fontSize: 20,
+            border: "1px solid var(--k-border)",
+            borderRadius: "var(--k-r-pill)",
+            fontSize: 12,
+            fontWeight: 600,
             cursor: "pointer",
             color: "var(--k-text-muted)",
-            padding: "6px 10px",
+            padding: "6px 14px",
+            fontFamily: "Roboto, sans-serif",
+            letterSpacing: 0.5,
           }}
           title="Log out"
         >
-          ⏻
+          End Session
         </button>
       )}
     </div>
@@ -708,7 +712,7 @@ export default function KioskPage() {
     return (
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", marginBottom: 10 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 700, color: "var(--k-text)", margin: 0 }}>{title}</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--k-text)", margin: 0, fontFamily: "Montserrat, sans-serif", textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</h3>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => scroll(-1)} className="k-press" style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--k-text)" }}>←</button>
             <button onClick={() => scroll(1)} className="k-press" style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--k-text)" }}>→</button>
@@ -906,54 +910,53 @@ export default function KioskPage() {
             padding: "0 24px",
           }}
         >
-          {/* Touch to Start pill */}
-          <div
-            className="k-press k-slideUp"
-            style={{
-              background: "var(--k-maroon)",
-              color: "#fff",
-              borderRadius: "var(--k-r-pill)",
-              padding: "20px 56px",
-              fontSize: 22,
-              fontWeight: 700,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              boxShadow: "var(--k-shadow-lg)",
-              marginBottom: 48,
-            }}
-          >
-            <span style={{ fontSize: 28 }}>👆</span>
-            Touch to Start
-          </div>
-
-          {/* Bottom text */}
-          <div className="k-slideUp k-d3">
+          {/* Main heading */}
+          <div className="k-slideUp" style={{ marginBottom: 48, textAlign: "center" }}>
             <p
               className="k-brand"
               style={{
-                fontSize: 28,
+                fontSize: 30,
                 color: "var(--k-text)",
                 textTransform: "uppercase",
-                letterSpacing: 2,
-                margin: "0 0 8px",
-                fontStyle: "normal",
-                fontWeight: 600,
+                letterSpacing: 3,
+                margin: "0 0 10px",
+                fontWeight: 700,
               }}
             >
-              See Yourself In This Beautiful Saree
+              Experience the Art of the Saree
             </p>
             <p
               style={{
                 fontSize: 13,
                 color: "var(--k-text-muted)",
                 textTransform: "uppercase",
-                letterSpacing: 1.5,
-                margin: 0,
+                letterSpacing: 2,
+                margin: "0 0 40px",
+                fontFamily: "Roboto, sans-serif",
               }}
             >
-              Experience Our Curated Collection With Virtual Try-On
+              Curated Collection · Virtual Try-On
             </p>
+
+            {/* Touch to Start */}
+            <div
+              className="k-press k-slideUp k-d2"
+              style={{
+                display: "inline-block",
+                background: "var(--k-maroon)",
+                color: "#fff",
+                borderRadius: "var(--k-r-pill)",
+                padding: "20px 64px",
+                fontSize: 20,
+                fontWeight: 700,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+                boxShadow: "var(--k-shadow-lg)",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              Touch Anywhere to Begin
+            </div>
           </div>
         </div>
       </div>
@@ -982,9 +985,11 @@ export default function KioskPage() {
           {authStep === "consent" && (
             <div className="k-overlay k-fadeIn">
               <div className="k-modal k-scaleIn">
-                <div style={{ fontSize: 42, marginBottom: 16 }}>👗</div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>
-                  Start your try-on
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--k-maroon)", margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: "#fff", fontFamily: "Montserrat, sans-serif", letterSpacing: 1 }}>W</span>
+                </div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px", fontFamily: "Montserrat, sans-serif" }}>
+                  Start Your Try-On
                 </h2>
                 <p style={{ fontSize: 14, color: "var(--k-text-mid)", lineHeight: 1.5, margin: "0 0 24px" }}>
                   We need your phone number for verification and updates. Your data is safe and never shared.
@@ -1068,8 +1073,7 @@ export default function KioskPage() {
                     marginBottom: 16,
                   }}
                 >
-                  <span style={{ fontSize: 20 }}>📞</span>
-                  <span style={{ fontSize: 16, color: "var(--k-text-muted)", fontWeight: 600 }}>+91</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--k-text-muted)", background: "var(--k-bg)", padding: "4px 8px", borderRadius: 6, fontFamily: "Roboto, sans-serif" }}>IN +91</span>
                   <span style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", letterSpacing: 3, fontFamily: "'DM Mono', monospace", flex: 1 }}>
                     {phoneDigits || "••••••••••"}
                   </span>
@@ -1301,7 +1305,7 @@ export default function KioskPage() {
         {/* Search bar */}
         <div style={{ padding: "12px 18px", display: "flex", gap: 8 }}>
           <div style={{ flex: 1, position: "relative" }}>
-            <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "var(--k-text-muted)" }}>🔍</span>
+            <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, color: "var(--k-text-muted)", flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input
               type="text"
               value={searchTerm}
@@ -1331,12 +1335,11 @@ export default function KioskPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 18,
               cursor: "pointer",
               color: "var(--k-text)",
             }}
           >
-            ⌸
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="17" x2="13" y2="17"/></svg>
           </button>
         </div>
 
@@ -1423,8 +1426,8 @@ export default function KioskPage() {
   if (currentScreen === "PRODUCT" && selectedSareeId && !selectedSaree) {
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: 36, color: "var(--k-text-muted)", marginBottom: 12 }}>⏳</div>
-        <p style={{ fontSize: 16, color: "var(--k-text-muted)" }}>Loading saree details...</p>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid var(--k-border)", borderTopColor: "var(--k-maroon)", animation: "k-spin 0.8s linear infinite", marginBottom: 16 }} />
+        <p style={{ fontSize: 15, color: "var(--k-text-muted)", fontFamily: "Roboto, sans-serif" }}>Loading...</p>
       </div>
     );
   }
@@ -1446,7 +1449,7 @@ export default function KioskPage() {
               grad={selectedSaree.grad || GRADIENT_PRESETS[0]}
               style={{ width: "100%", height: "55vh", borderRadius: 0 }}
             >
-              <span style={{ color: "rgba(255,255,255,.2)", fontSize: 72 }}>👗</span>
+              <div style={{ width: 60, height: 80, borderRadius: 4, background: "rgba(255,255,255,0.12)", border: "1.5px solid rgba(255,255,255,0.2)" }} />
             </GradientBox>
             <div className="k-heart" style={{ top: 14, right: 14, width: 38, height: 38 }}>
               <span style={{ fontSize: 18, color: "var(--k-text-muted)" }}>♡</span>
@@ -1455,7 +1458,7 @@ export default function KioskPage() {
 
           {/* Info panel */}
           <div style={{ padding: "18px 18px 0" }}>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px" }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px", fontFamily: "Montserrat, sans-serif" }}>
               {selectedSaree.name}
             </h1>
             <p style={{ fontSize: 13, color: "var(--k-text-muted)", margin: "0 0 10px" }}>
@@ -1578,7 +1581,7 @@ export default function KioskPage() {
         <TopBar />
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 18px" }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px", textAlign: "center" }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px", textAlign: "center", fontFamily: "Montserrat, sans-serif" }}>
             Create Your Digital Look
           </h2>
           <p style={{ fontSize: 14, color: "var(--k-text-mid)", margin: "0 0 20px", textAlign: "center" }}>
@@ -1657,8 +1660,7 @@ export default function KioskPage() {
           {/* Timer pill for countdown/scanning */}
           {(scanPhase === "countdown" || scanPhase === "scanning") && (
             <div className="k-timer" style={{ marginTop: 16 }}>
-              <span style={{ color: "var(--k-green)" }}>⏱</span>
-              {scanPhase === "countdown" ? `${scanCountdown}s` : "10s"}
+              {scanPhase === "countdown" ? `${scanCountdown}s` : "Scanning..."}
             </div>
           )}
 
@@ -1719,10 +1721,10 @@ export default function KioskPage() {
           grad={selectedSaree?.grad || GRADIENT_PRESETS[0]}
           style={{ position: "absolute", inset: 0, borderRadius: 0 }}
         >
-          <div style={{ textAlign: "center", color: "rgba(255,255,255,.35)" }}>
-            <span style={{ fontSize: 72, display: "block", marginBottom: 8 }}>👗</span>
-            <p style={{ fontSize: 18, fontWeight: 600 }}>Your Try-On Look</p>
-            <p style={{ fontSize: 13, marginTop: 4 }}>{selectedSaree?.name} · {drapeStyle} Style</p>
+          <div style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>
+            <div style={{ width: 60, height: 80, borderRadius: 6, background: "rgba(255,255,255,0.12)", border: "1.5px solid rgba(255,255,255,0.2)", margin: "0 auto 16px" }} />
+            <p style={{ fontSize: 18, fontWeight: 600, margin: "0 0 4px", fontFamily: "Montserrat, sans-serif" }}>Your Try-On Look</p>
+            <p style={{ fontSize: 13, margin: 0 }}>{selectedSaree?.name} · {drapeStyle} Style</p>
           </div>
         </GradientBox>
 
@@ -1736,7 +1738,7 @@ export default function KioskPage() {
             ← Back
           </button>
           <div className="k-timer" style={{ background: tryOnTimer <= 30 ? "var(--k-red)" : "var(--k-card)", color: tryOnTimer <= 30 ? "#fff" : "var(--k-text)" }}>
-            ⏱ {formatTime(tryOnTimer)}
+            {formatTime(tryOnTimer)}
           </div>
         </div>
 
@@ -1900,8 +1902,8 @@ export default function KioskPage() {
 
           {/* Small icon buttons */}
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => goToScreen("HOME")} className="k-press" style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 12, color: "var(--k-text)" }}>⌂</button>
-            <button onClick={() => goToScreen("WARDROBE")} className="k-press" style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 12, color: "var(--k-text)" }}>👤</button>
+            <button onClick={() => goToScreen("HOME")} className="k-press" style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "1px solid var(--k-border)", background: "var(--k-card)", cursor: "pointer", fontSize: 10, fontWeight: 600, color: "var(--k-text-muted)", fontFamily: "Roboto, sans-serif" }}>HOME</button>
+            <button onClick={() => goToScreen("WARDROBE")} className="k-press" style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "none", background: "var(--k-maroon)", cursor: "pointer", fontSize: 10, fontWeight: 600, color: "#fff", fontFamily: "Roboto, sans-serif" }}>SAVE</button>
           </div>
         </div>
 
@@ -1980,8 +1982,8 @@ export default function KioskPage() {
         {/* Header pill */}
         <div style={{ padding: "12px 18px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button onClick={() => goToScreen("HOME")} className="k-press" style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--k-text)" }}>←</button>
-          <div style={{ background: "var(--k-card)", border: "1px solid var(--k-border)", borderRadius: "var(--k-r-pill)", padding: "8px 20px", fontSize: 16, fontWeight: 700, color: "var(--k-text)", boxShadow: "var(--k-shadow)" }}>
-            My Wardrobe ♥
+          <div style={{ background: "var(--k-card)", border: "1px solid var(--k-border)", borderRadius: "var(--k-r-pill)", padding: "8px 24px", fontSize: 14, fontWeight: 700, color: "var(--k-text)", boxShadow: "var(--k-shadow)", fontFamily: "Montserrat, sans-serif", textTransform: "uppercase", letterSpacing: 1 }}>
+            My Wardrobe
           </div>
           <div style={{ width: 30 }} />
         </div>
@@ -2035,9 +2037,16 @@ export default function KioskPage() {
               grad={["#1A1A1A", "#333333"]}
               style={{ width: "100%", height: "100%", borderRadius: "var(--k-r)" }}
             >
-              <div style={{ textAlign: "center", color: "rgba(255,255,255,.25)" }}>
-                <span style={{ fontSize: 56, display: "block", marginBottom: 6 }}>👤</span>
-                <p style={{ fontSize: 14 }}>Your Look</p>
+              <div style={{ textAlign: "center", color: "rgba(255,255,255,0.3)" }}>
+                <svg viewBox="0 0 60 120" width="50" height="100" style={{ display: "block", margin: "0 auto 10px", opacity: 0.4 }}>
+                  <ellipse cx="30" cy="18" rx="11" ry="14" fill="currentColor"/>
+                  <rect x="18" y="30" width="24" height="40" rx="6" fill="currentColor"/>
+                  <rect x="10" y="33" width="8" height="30" rx="4" fill="currentColor"/>
+                  <rect x="42" y="33" width="8" height="30" rx="4" fill="currentColor"/>
+                  <rect x="19" y="70" width="9" height="35" rx="4.5" fill="currentColor"/>
+                  <rect x="32" y="70" width="9" height="35" rx="4.5" fill="currentColor"/>
+                </svg>
+                <p style={{ fontSize: 13, fontFamily: "Roboto, sans-serif", fontWeight: 500, margin: 0 }}>Your Look</p>
               </div>
             </GradientBox>
           </div>
@@ -2084,7 +2093,6 @@ export default function KioskPage() {
                 className={`k-look-tab ${wardrobeLookTab === tab ? "active" : ""}`}
                 onClick={() => setWardrobeLookTab(tab)}
               >
-                <span style={{ fontSize: 16 }}>{tab === "Blouse" ? "👗" : tab === "Jewelry" ? "💍" : "🧣"}</span>
                 <span>{tab}</span>
               </div>
             ))}
@@ -2167,7 +2175,7 @@ export default function KioskPage() {
               gap: 8,
             }}
           >
-            <span>🛒</span> Move to Cart
+            Move to Cart
           </button>
         </div>
 
@@ -2215,7 +2223,7 @@ export default function KioskPage() {
         <SubHeader onBack={() => goToScreen("WARDROBE")} onHome={() => goToScreen("HOME")} />
 
         <div style={{ flex: 1, overflowY: "auto", padding: "0 18px" }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "16px 0 4px" }}>Checkout</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "16px 0 4px", fontFamily: "Montserrat, sans-serif" }}>Checkout</h2>
           <p style={{ fontSize: 13, color: "var(--k-text-muted)", margin: "0 0 16px" }}>{wardrobeItems.length} Items In Your Checklist</p>
 
           {/* Item list */}
@@ -2324,7 +2332,7 @@ export default function KioskPage() {
               gap: 8,
             }}
           >
-            🪡 Find Tailor →
+            Find a Tailor
           </button>
 
           {/* Proceed to Checkout button */}
@@ -2510,7 +2518,7 @@ export default function KioskPage() {
                     <span style={{ fontSize: 11, color: "var(--k-text-muted)" }}>×84 Happy Clients</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 12, color: "var(--k-text-muted)" }}>📍 {tailor.area || tailor.city}</span>
+                    <span style={{ fontSize: 12, color: "var(--k-text-muted)" }}>{tailor.area || tailor.city}</span>
                     <span style={{ fontSize: 11, color: "var(--k-text-light)" }}>· 2.5 km</span>
                   </div>
                 </div>
@@ -2568,8 +2576,8 @@ export default function KioskPage() {
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
               {[
                 { icon: "✓", label: "Verified Professionals" },
-                { icon: "🚚", label: "2-3 Day Delivery" },
-                { icon: "⭐", label: "Quality Guaranteed" },
+                { icon: "→", label: "2-3 Day Delivery" },
+                { icon: "★", label: "Quality Guaranteed" },
               ].map((badge) => (
                 <div
                   key={badge.label}
@@ -2583,8 +2591,8 @@ export default function KioskPage() {
                     boxShadow: "var(--k-shadow)",
                   }}
                 >
-                  <span style={{ fontSize: 22, display: "block", marginBottom: 6 }}>{badge.icon}</span>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text)", margin: 0 }}>{badge.label}</p>
+                  <span style={{ fontSize: 20, fontWeight: 700, display: "block", marginBottom: 6, color: "var(--k-maroon)" }}>{badge.icon}</span>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text)", margin: 0, fontFamily: "Roboto, sans-serif" }}>{badge.label}</p>
                 </div>
               ))}
             </div>
@@ -2642,8 +2650,8 @@ export default function KioskPage() {
   if (currentScreen === "TAILOR_DETAIL" && selectedTailorId && !selectedTailor) {
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: 36, color: "var(--k-text-muted)", marginBottom: 12 }}>⏳</div>
-        <p style={{ fontSize: 16, color: "var(--k-text-muted)" }}>Loading tailor details...</p>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid var(--k-border)", borderTopColor: "var(--k-maroon)", animation: "k-spin 0.8s linear infinite", marginBottom: 16 }} />
+        <p style={{ fontSize: 15, color: "var(--k-text-muted)", fontFamily: "Roboto, sans-serif" }}>Loading...</p>
       </div>
     );
   }
@@ -2685,7 +2693,7 @@ export default function KioskPage() {
                 <span style={{ fontSize: 13, color: "var(--k-gold)", fontWeight: 600 }}>
                   {"\u2605".repeat(Math.round(selectedTailor.rating))} {selectedTailor.rating.toFixed(1)}
                 </span>
-                <span style={{ fontSize: 12, color: "var(--k-text-muted)" }}>📍 {selectedTailor.area || selectedTailor.city}</span>
+                <span style={{ fontSize: 12, color: "var(--k-text-muted)" }}>{selectedTailor.area || selectedTailor.city}</span>
               </div>
               {selectedTailor.experience && (
                 <p style={{ fontSize: 12, color: "var(--k-text-mid)", marginTop: 4 }}>{selectedTailor.experience} years experience</p>
@@ -2792,9 +2800,11 @@ export default function KioskPage() {
       return (
         <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center" }}>
           <div className="k-popIn" style={{ textAlign: "center" }}>
-            <span style={{ fontSize: 64, color: "var(--k-green)", display: "block", marginBottom: 12 }}>✓</span>
-            <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>Thank You!</h2>
-            <p style={{ fontSize: 15, color: "var(--k-text-muted)" }}>Your feedback helps us improve</p>
+            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "var(--k-green)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+              <span style={{ fontSize: 32, color: "#fff", fontWeight: 700 }}>✓</span>
+            </div>
+            <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px", fontFamily: "Montserrat, sans-serif" }}>Thank You!</h2>
+            <p style={{ fontSize: 15, color: "var(--k-text-muted)", fontFamily: "Roboto, sans-serif" }}>Your feedback helps us improve</p>
           </div>
         </div>
       );
@@ -2803,8 +2813,8 @@ export default function KioskPage() {
     return (
       <div className="k-overlay k-fadeIn">
         <div className="k-modal k-scaleIn" style={{ maxWidth: 420 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px" }}>
-            Try-on Feedback
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--k-text)", margin: "0 0 4px", fontFamily: "Montserrat, sans-serif" }}>
+            Rate Your Experience
           </h2>
           <p style={{ fontSize: 13, color: "var(--k-text-muted)", margin: "0 0 20px" }}>
             Please rate your experience below
@@ -2899,7 +2909,7 @@ export default function KioskPage() {
                 color: "var(--k-text)",
               }}
             >
-              ⌂ Home
+              Home
             </button>
             <button
               onClick={() => goToScreen("DATA_SAVE")}
@@ -2916,7 +2926,7 @@ export default function KioskPage() {
                 color: "var(--k-text)",
               }}
             >
-              ↪ Log out
+              End Session
             </button>
           </div>
         </div>
@@ -2990,9 +3000,11 @@ export default function KioskPage() {
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "var(--k-bg)", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <div className="k-scaleIn" style={{ textAlign: "center", maxWidth: 400 }}>
-          <span style={{ fontSize: 56, color: "var(--k-green)", display: "block", marginBottom: 16 }}>✓</span>
-          <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px" }}>
-            Session Ended
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--k-green)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+            <span style={{ fontSize: 28, color: "#fff", fontWeight: 700 }}>✓</span>
+          </div>
+          <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--k-text)", margin: "0 0 8px", fontFamily: "Montserrat, sans-serif" }}>
+            Session Complete
           </h2>
           <p style={{ fontSize: 14, color: "var(--k-text-mid)", lineHeight: 1.5, margin: "0 0 6px" }}>
             All camera data has been cleared. Your privacy is protected.

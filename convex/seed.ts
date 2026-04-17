@@ -477,6 +477,25 @@ export const seedRelational = internalMutation({
       await ctx.db.insert("wishlist", { customerId: c5._id, sareeId: st001Sarees[0]._id, storeId: "ST-001", sareeName: st001Sarees[0].name, price: st001Sarees[0].price, addedAt: now - 3 * DAY });
     }
 
+    // ===================== WARDROBE (kiosk mirror session saves) =====================
+    // Each wardrobe entry represents a look the customer saved from the smart mirror
+    // during a try-on session. /c/wishlist -> Wardrobe tab reads this.
+    if (c1 && st001Sarees.length >= 3) {
+      await ctx.db.insert("wardrobe", { sessionId: "SS-10001", customerId: c1._id, sareeId: st001Sarees[0]._id, sareeName: st001Sarees[0].name, drapeStyle: "Nivi", accessories: ["Gold necklace", "Maang tikka"], neckline: "Round", price: st001Sarees[0].price, addedAt: now - 9 * DAY });
+      await ctx.db.insert("wardrobe", { sessionId: "SS-10002", customerId: c1._id, sareeId: st001Sarees[2]._id, sareeName: st001Sarees[2].name, drapeStyle: "Gujarati", accessories: ["Jhumkas"], neckline: "V-neck", price: st001Sarees[2].price, addedAt: now - 21 * DAY });
+    }
+    if (c2 && st001Sarees.length >= 10) {
+      await ctx.db.insert("wardrobe", { sessionId: "SS-10004", customerId: c2._id, sareeId: st001Sarees[7]._id, sareeName: st001Sarees[7].name, drapeStyle: "Nivi", accessories: ["Statement earrings"], neckline: "Halter", price: st001Sarees[7].price, addedAt: now - 5 * DAY });
+      await ctx.db.insert("wardrobe", { sessionId: "SS-10004", customerId: c2._id, sareeId: st001Sarees[9]._id, sareeName: st001Sarees[9].name, drapeStyle: "Nivi", accessories: ["Pearl set"], neckline: "Boat", price: st001Sarees[9].price, addedAt: now - 5 * DAY + 200000 });
+    }
+    if (c3 && st002Sarees.length >= 2) {
+      await ctx.db.insert("wardrobe", { sessionId: "SS-10005", customerId: c3._id, sareeId: st002Sarees[0]._id, sareeName: st002Sarees[0].name, drapeStyle: "Bengali", accessories: ["Shakha pola", "Red bindi"], neckline: "Round", price: st002Sarees[0].price, addedAt: now - 8 * DAY });
+    }
+    if (c5 && st001Sarees.length >= 9) {
+      await ctx.db.insert("wardrobe", { sessionId: "SS-10007", customerId: c5._id, sareeId: st001Sarees[8]._id, sareeName: st001Sarees[8].name, drapeStyle: "Seedha Pallu", accessories: ["Temple jewellery", "Nose ring"], neckline: "Sweetheart", price: st001Sarees[8].price, addedAt: now - 3 * DAY });
+      await ctx.db.insert("wardrobe", { sessionId: "SS-10007", customerId: c5._id, sareeId: st001Sarees[0]._id, sareeName: st001Sarees[0].name, drapeStyle: "Nivi", accessories: ["Diamond earrings"], neckline: "Round", price: st001Sarees[0].price, addedAt: now - 3 * DAY + 180000 });
+    }
+
     // ===================== VISIT HISTORY =====================
     const visits = [];
     if (c1) {
