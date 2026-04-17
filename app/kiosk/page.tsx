@@ -551,6 +551,8 @@ export default function KioskPage() {
             cartCount={cartItems.length}
             maxTrial={CFG.maxTrial}
             showToast={showToast}
+            storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
           />
         );
       case "productDetail":
@@ -595,6 +597,8 @@ export default function KioskPage() {
             cartCount={cartItems.length}
             maxWardrobe={CFG.maxWardrobe}
             showToast={showToast}
+            storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
           />
         );
       case "order":
@@ -1355,10 +1359,38 @@ function AIProcessingScreen({ onDone }: { onDone: () => void }) {
 }
 
 /* ── HEADER ── */
-function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogout, navigate, onBack }: {
+function StoreBrand({ storeName, logoFileId }: { storeName: string; logoFileId?: Id<"_storage"> }) {
+  const url = useQuery(api.files.getUrl, logoFileId ? { fileId: logoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, maxWidth: "50%" }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: "50%", flexShrink: 0, overflow: "hidden",
+        background: url ? "var(--k-card)" : "var(--k-maroon)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        border: "1.5px solid var(--k-border)",
+      }}>
+        {url ? (
+          <img src={url} alt={storeName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>{initial}</span>
+        )}
+      </div>
+      <span className="k-brand" style={{
+        fontSize: 17, color: "var(--k-text)", fontWeight: 700, letterSpacing: 0.3,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>
+        {storeName}
+      </span>
+    </div>
+  );
+}
+
+function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogout, navigate, onBack, storeName, storeLogoFileId }: {
   trialCount: number; wardrobeCount: number; cartCount: number;
   goHome: () => void; triggerLogout: () => void;
   navigate: (s: Screen) => void; onBack?: () => void;
+  storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const iconBtn = (onClick: () => void, emoji: string, count?: number, countBg?: string) => (
     <button onClick={onClick} className="k-press" style={{
@@ -1389,6 +1421,8 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
           width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--k-border)",
           background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
         }}><span style={{ fontSize: 22 }}>&#8249;</span></button>
+      ) : storeName ? (
+        <StoreBrand storeName={storeName} logoFileId={storeLogoFileId} />
       ) : <div style={{ width: 44 }} />}
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         {iconBtn(() => navigate("trialRoom"), "👗", trialCount, "var(--k-gold)")}
@@ -1402,12 +1436,13 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
 }
 
 /* ── HOME ── */
-function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToTrial, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxTrial, showToast }: {
+function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToTrial, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxTrial, showToast, storeName, storeLogoFileId }: {
   sarees: SareeItem[]; trialItems: SareeItem[]; wardrobeItems: SareeItem[];
   onProductTap: (p: SareeItem) => void; onSendToTrial: (items: SareeItem[]) => void;
   navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxTrial: number;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
+  storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1922,18 +1957,19 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
 }
 
 /* ── WARDROBE ── */
-function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, showToast }: {
+function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, showToast, storeName, storeLogoFileId }: {
   items: SareeItem[]; onMoveToCart: (items: SareeItem[]) => void;
   navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxWardrobe: number;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
+  storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [selForCart, setSelForCart] = useState<Set<string>>(new Set());
   const toggleSel = (id: string) => { setSelForCart((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
   const moveToCart = () => { const sel = items.filter((s) => selForCart.has(s._id)); if (sel.length === 0) { showToast("Select sarees first", "warning"); return; } onMoveToCart(sel); setSelForCart(new Set()); };
   return (
     <div className="k-shell">
-      <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} />
+      <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
       <div style={{ textAlign: "center", padding: "8px 0" }}><div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--k-maroon-d)", color: "#fff", padding: "6px 16px", borderRadius: "var(--k-r-pill)", fontSize: 14, fontWeight: 600 }}>My Wardrobe ({items.length}/{maxWardrobe})</div></div>
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 18px", paddingBottom: 80 }}>
         {items.length === 0 ? (
