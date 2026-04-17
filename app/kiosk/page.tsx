@@ -640,7 +640,7 @@ export default function KioskPage() {
             cartCount={cartItems.length}
             maxTrial={CFG.maxTrial}
             showToast={showToast}
-            storeName={storeName}
+            storeName={storeData?.name || storeName}
             storeLogoFileId={storeData?.logoFileId}
           />
         );
@@ -698,7 +698,7 @@ export default function KioskPage() {
             cartCount={cartItems.length}
             maxWardrobe={CFG.maxWardrobe}
             showToast={showToast}
-            storeName={storeName}
+            storeName={storeData?.name || storeName}
             storeLogoFileId={storeData?.logoFileId}
           />
         );
@@ -1522,9 +1522,9 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
           width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--k-border)",
           background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
         }}><span style={{ fontSize: 22 }}>&#8249;</span></button>
-      ) : storeName ? (
-        <StoreBrand storeName={storeName} logoFileId={storeLogoFileId} />
-      ) : <div style={{ width: 44 }} />}
+      ) : (
+        <StoreBrand storeName={storeName ?? ""} logoFileId={storeLogoFileId} />
+      )}
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         {iconBtn(() => navigate("trialRoom"), "👗", trialCount, "var(--k-gold)")}
         {iconBtn(() => navigate("wardrobe"), "👜", wardrobeCount, "var(--k-maroon)")}
