@@ -207,6 +207,12 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### `/c/looks` = try-on history (trial entry, not wardrobe save)
+
+- **Problem:** `/c/looks` only showed sarees that were moved to wardrobe — items tried but not saved never appeared. Root cause: `createLook` was only called from `onAddToWardrobe`. Every wardrobe item first passes through trial, but trial-only items were invisible to the Looks feed.
+- **Semantic fix:** a "look" is a **try-on event**, not a save commitment. Trial entry IS the try-on — that's when the saree is shown on the mirror. So `createLook` now fires at all three trial-add sites in [app/kiosk/page.tsx](app/kiosk/page.tsx): `onSendToTrial` (home grid multi-select), `onAddToTrial` (product detail single-add), and the `codeEntry` shortlist load (tablet-curated items). Removed the now-redundant `createLook` in `onAddToWardrobe`.
+- **Dedupe:** `createLook` in [convex/sessionOps.ts](convex/sessionOps.ts) now short-circuits when a row already exists for `(customerId, sessionId, sareeId)`, using the `by_sessionId` index plus a customerId/sareeId filter. Idempotent across trial add → remove → re-add in the same session. Different sessions still produce distinct looks (each visit is a new try-on occasion).
+
 ### Kiosk session persistence + store logo upload
 
 - **Refresh-logs-out problem:** kiosk customer state (`customerId`, `sessionId`, `customerName`, `phone`, `lang`, `hasBodyScan`) lived only in React `useState`, so any browser refresh dumped the user back at idle. Fixed with a `wearify_kiosk_session` localStorage record. On mount, a `useEffect` in [app/kiosk/page.tsx](app/kiosk/page.tsx) restores the session and lands directly on `home` (skipping login/scan). `handleWipe` deletes the key. Writes happen at OTP verify, tablet code entry, and new-customer register; `hasBodyScan` is re-persisted when `BodyScanScreen` completes so a mid-session refresh doesn't force a rescan.

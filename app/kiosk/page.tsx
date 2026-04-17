@@ -492,6 +492,16 @@ export default function KioskPage() {
                 if (data.customer) {
                   for (const item of resolved) {
                     addTrialCartItem({ customerId: data.customer._id, storeId, sareeId: item._id });
+                    createLook({
+                      sessionId: data.trialRoom.sessionId,
+                      storeId,
+                      customerId: data.customer._id,
+                      sareeId: item._id,
+                      sareeName: item.name,
+                      fabric: item.fabric,
+                      price: item.price,
+                      grad: item.grad,
+                    });
                   }
                 }
               }
@@ -586,16 +596,6 @@ export default function KioskPage() {
                   sareeName: item.name,
                   price: item.price,
                 });
-                createLook({
-                  sessionId,
-                  storeId,
-                  customerId: customerId ?? undefined,
-                  sareeId: item._id,
-                  sareeName: item.name,
-                  fabric: item.fabric,
-                  price: item.price,
-                  grad: item.grad,
-                });
               }
               showToast(`Added ${items.length} to wardrobe`, "success");
             }}
@@ -618,6 +618,16 @@ export default function KioskPage() {
               if (customerId) {
                 for (const item of items) {
                   addTrialCartItem({ customerId, storeId, sareeId: item._id });
+                  createLook({
+                    sessionId,
+                    storeId,
+                    customerId,
+                    sareeId: item._id,
+                    sareeName: item.name,
+                    fabric: item.fabric,
+                    price: item.price,
+                    grad: item.grad,
+                  });
                 }
               }
               navigate("aiProcessing");
@@ -647,7 +657,19 @@ export default function KioskPage() {
                 return;
               }
               setTrialItems((prev) => [...prev, selectedProduct]);
-              if (customerId) addTrialCartItem({ customerId, storeId, sareeId: selectedProduct._id });
+              if (customerId) {
+                addTrialCartItem({ customerId, storeId, sareeId: selectedProduct._id });
+                createLook({
+                  sessionId,
+                  storeId,
+                  customerId,
+                  sareeId: selectedProduct._id,
+                  sareeName: selectedProduct.name,
+                  fabric: selectedProduct.fabric,
+                  price: selectedProduct.price,
+                  grad: selectedProduct.grad,
+                });
+              }
               showToast("Added to Trial Room", "success");
             }}
             onBack={goBack}

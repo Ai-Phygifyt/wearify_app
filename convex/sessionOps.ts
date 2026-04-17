@@ -311,6 +311,21 @@ export const createLook = mutation({
     grad: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    // Idempotency: one look per (customer, session, saree). Re-adds in the
+    // same session don't create duplicate entries in /c/looks.
+    if (args.customerId && args.sessionId) {
+      const existing = await ctx.db
+        .query("looks")
+        .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("customerId"), args.customerId),
+            q.eq(q.field("sareeId"), args.sareeId),
+          ),
+        )
+        .first();
+      if (existing) return existing._id;
+    }
     const id = await ctx.db.insert("looks", {
       sessionId: args.sessionId,
       storeId: args.storeId,
