@@ -6,6 +6,12 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SareeThumb } from "@/components/SareeThumb";
+import {
+  ChevronLeft, ChevronRight,
+  Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
+  Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
+  Minus, Plus, Delete, Loader2, ShieldCheck,
+} from "lucide-react";
 
 /* ═══ CONFIG ═══ */
 const CFG = {
@@ -828,21 +834,33 @@ function IdleScreen({ storeName, onStart }: { storeName: string; onStart: () => 
   return (
     <div onClick={onStart} className="k-shell" style={{ cursor: "pointer", justifyContent: "flex-end" }}>
       <div className="k-idle-bg" />
-      <div style={{ position: "absolute", top: 16, left: 18, zIndex: 10 }}>
-        <div className="k-brand" style={{ fontSize: 28 }}>{storeName}</div>
+      <div style={{ position: "absolute", top: 20, left: 24, zIndex: 10 }}>
+        <div className="k-brand" style={{ fontSize: 22, color: "var(--k-maroon)" }}>{storeName}</div>
+        <div style={{ height: 2, width: 44, background: "var(--k-gold)", marginTop: 6, borderRadius: 2 }} />
       </div>
-      <div style={{ position: "absolute", top: "40%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 10 }}>
-        <div className="k-scaleIn" style={{
-          display: "inline-flex", alignItems: "center", gap: 12,
-          background: "rgba(60,50,50,.6)", backdropFilter: "blur(8px)",
-          padding: "16px 32px", borderRadius: "var(--k-r)",
-        }}>
-          <span style={{ fontSize: 20, fontWeight: 600, color: "#fff" }}>Touch to Start</span>
+      <div style={{ position: "absolute", top: "42%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 10 }}>
+        <div className="k-idle-tag k-scaleIn k-glow">
+          <span style={{ fontSize: 18 }}>Touch to Start</span>
+          <ChevronRight size={20} />
         </div>
       </div>
-      <div style={{ position: "relative", zIndex: 10, textAlign: "center", padding: "0 24px 64px" }}>
-        <h1 className="k-brand k-slideUp" style={{ fontSize: 28, textTransform: "uppercase" }}>{slides[slideIdx].h}</h1>
-        <p className="k-slideUp k-d2" style={{ fontSize: 14, color: "var(--k-text-mid)", marginTop: 8 }}>{slides[slideIdx].s}</p>
+      <div key={slideIdx} style={{ position: "relative", zIndex: 10, textAlign: "center", padding: "0 24px 72px" }}>
+        <h1 className="k-display k-slideUp" style={{ fontSize: 30, color: "var(--k-text)", lineHeight: 1.2 }}>
+          {slides[slideIdx].h}
+        </h1>
+        <div className="k-divider-gold" />
+        <p className="k-slideUp k-d2" style={{ fontSize: 15, color: "var(--k-text-mid)", marginTop: 6, letterSpacing: "0.01em" }}>
+          {slides[slideIdx].s}
+        </p>
+        <div className="k-slideUp k-d3" style={{ display: "inline-flex", gap: 6, marginTop: 18 }}>
+          {slides.map((_, i) => (
+            <span key={i} style={{
+              width: i === slideIdx ? 28 : 8, height: 3, borderRadius: 2,
+              background: i === slideIdx ? "var(--k-maroon)" : "var(--k-border)",
+              transition: "width .35s ease, background .35s ease",
+            }} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -855,53 +873,54 @@ function ModeSelectScreen({ storeName, onStoreCode, onCustomerLogin, onBack }: {
   return (
     <div className="k-shell">
       <div className="k-topbar">
-        <button onClick={onBack} className="k-press" style={{
-          width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--k-border)",
-          background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-        }}>
-          <span style={{ fontSize: 18 }}>&#8249;</span>
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={20} />
         </button>
-        <div className="k-brand" style={{ fontSize: 22 }}>{storeName}</div>
-        <div style={{ width: 36 }} />
+        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
+        <div style={{ width: 44 }} />
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 20px", gap: 16 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>How would you like to start?</h2>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 20, textAlign: "center" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 20px", gap: 16, maxWidth: 480, margin: "0 auto", width: "100%" }}>
+        <h2 className="k-display k-slideUp" style={{ fontSize: 26, marginBottom: 4 }}>How would you like to start?</h2>
+        <p className="k-slideUp k-d1" style={{ fontSize: 14, color: "var(--k-text-muted)", marginBottom: 20, textAlign: "center", lineHeight: 1.55 }}>
           Choose store code if your assistant shared one, or login with your phone number
         </p>
 
-        <button onClick={onStoreCode} className="k-press k-slideUp" style={{
-          width: "100%", maxWidth: 320, padding: "20px 24px", borderRadius: "var(--k-r)",
-          background: "var(--k-card)", border: "1.5px solid var(--k-border)", boxShadow: "var(--k-shadow)",
+        <button onClick={onStoreCode} className="k-press k-slideUp k-d2 k-card-hover" style={{
+          width: "100%", padding: "20px 24px", borderRadius: "var(--k-r)",
+          background: "var(--k-card)", border: "1px solid var(--k-border)", boxShadow: "var(--k-shadow)",
           display: "flex", alignItems: "center", gap: 16, cursor: "pointer", textAlign: "left",
         }}>
           <div style={{
-            width: 48, height: 48, borderRadius: "var(--k-r-sm)", background: "var(--k-maroon)",
+            width: 52, height: 52, borderRadius: 14, background: "var(--k-maroon)",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            color: "#fff", boxShadow: "0 6px 14px rgba(104,38,42,.25)",
           }}>
-            <span style={{ fontSize: 22, color: "#fff" }}>#</span>
+            <Hash size={24} strokeWidth={2.25} />
           </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--k-text)" }}>Store Code</div>
-            <div style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 2 }}>Enter 6-digit code from your assistant</div>
+          <div style={{ flex: 1 }}>
+            <div className="k-heading" style={{ fontSize: 17, color: "var(--k-text)" }}>Store Code</div>
+            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 3 }}>Enter 6-digit code from your assistant</div>
           </div>
+          <ChevronRight size={20} color="var(--k-text-muted)" />
         </button>
 
-        <button onClick={onCustomerLogin} className="k-press k-slideUp k-d2" style={{
-          width: "100%", maxWidth: 320, padding: "20px 24px", borderRadius: "var(--k-r)",
-          background: "var(--k-card)", border: "1.5px solid var(--k-border)", boxShadow: "var(--k-shadow)",
+        <button onClick={onCustomerLogin} className="k-press k-slideUp k-d3 k-card-hover" style={{
+          width: "100%", padding: "20px 24px", borderRadius: "var(--k-r)",
+          background: "var(--k-card)", border: "1px solid var(--k-border)", boxShadow: "var(--k-shadow)",
           display: "flex", alignItems: "center", gap: 16, cursor: "pointer", textAlign: "left",
         }}>
           <div style={{
-            width: 48, height: 48, borderRadius: "var(--k-r-sm)", background: "var(--k-gold)",
+            width: 52, height: 52, borderRadius: 14, background: "var(--k-gold)",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            color: "#fff", boxShadow: "0 6px 14px rgba(201,148,26,.3)",
           }}>
-            <span style={{ fontSize: 22, color: "#fff" }}>📱</span>
+            <Phone size={22} strokeWidth={2.25} />
           </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--k-text)" }}>Phone Login</div>
-            <div style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 2 }}>Login with your mobile number</div>
+          <div style={{ flex: 1 }}>
+            <div className="k-heading" style={{ fontSize: 17, color: "var(--k-text)" }}>Phone Login</div>
+            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 3 }}>Login with your mobile number</div>
           </div>
+          <ChevronRight size={20} color="var(--k-text-muted)" />
         </button>
       </div>
     </div>
@@ -926,46 +945,50 @@ function PhoneAuthScreen({ storeName, onSubmitPhone, onBack }: {
   return (
     <div className="k-shell">
       <div className="k-topbar">
-        <button onClick={onBack} className="k-press" style={{
-          width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--k-border)",
-          background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-        }}>
-          <span style={{ fontSize: 18 }}>&#8249;</span>
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={20} />
         </button>
-        <div className="k-brand" style={{ fontSize: 22 }}>{storeName}</div>
-        <div style={{ width: 36 }} />
+        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
+        <div style={{ width: 44 }} />
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px" }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Enter Mobile Number</h2>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 20 }}>OTP will be sent to verify</p>
+      <div className="k-form-col">
+        <h2 className="k-display k-slideUp" style={{ fontSize: 22, marginBottom: 4 }}>Enter Mobile Number</h2>
+        <p className="k-slideUp k-d1" style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 16 }}>OTP will be sent to verify</p>
 
         {/* Phone display */}
-        <div style={{
-          width: "100%", maxWidth: 320, padding: "14px 16px", borderRadius: "var(--k-r)",
-          border: `1.5px solid ${error ? "var(--k-red)" : "var(--k-border)"}`, background: "var(--k-card)",
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 8,
+        <div className="k-slideUp k-d2" style={{
+          width: "100%", padding: "14px 16px", borderRadius: 12,
+          border: `1.5px solid ${error ? "var(--k-red)" : inp ? "var(--k-maroon)" : "var(--k-border)"}`,
+          background: "var(--k-card)",
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 8,
+          boxShadow: inp ? "0 0 0 3px rgba(104,38,42,.08)" : "none",
+          transition: "all .2s ease",
         }}>
-          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 16, color: "var(--k-text-muted)" }}>+91</span>
-          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, fontWeight: 500, flex: 1, letterSpacing: "0.1em" }}>
+          <Phone size={18} color="var(--k-text-muted)" />
+          <span className="k-mono" style={{ fontSize: 16, color: "var(--k-text-muted)" }}>+91</span>
+          <span className="k-mono" style={{ fontSize: 18, fontWeight: 500, flex: 1, letterSpacing: "0.12em" }}>
             {inp || <span style={{ color: "var(--k-text-light)" }}>Phone number</span>}
           </span>
         </div>
 
         {error && <div style={{ fontSize: 13, color: "var(--k-red)", marginBottom: 8, fontWeight: 500 }}>{error}</div>}
 
-        <div className="k-numpad" style={{ width: "100%", maxWidth: 320, marginTop: 8 }}>
+        <div className="k-numpad k-slideUp k-d3" style={{ width: "100%", marginTop: 8 }}>
           {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
             if (k === "") return <div key={i} />;
-            if (k === "del") return <button key={i} className="k-num-back" onClick={handleDel}>&#9003;</button>;
+            if (k === "del") return (
+              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
+                <Delete size={22} />
+              </button>
+            );
             return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
           })}
         </div>
 
-        <button onClick={handleSubmit} disabled={inp.length !== 10} className="k-press" style={{
-          width: "100%", maxWidth: 320, marginTop: 12, padding: "14px",
-          borderRadius: "var(--k-r-pill)", background: inp.length === 10 ? "var(--k-maroon)" : "var(--k-border)",
-          color: "#fff", fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer",
-        }}>Continue</button>
+        <button onClick={handleSubmit} disabled={inp.length !== 10} className="k-btn k-btn-primary k-btn-pill k-slideUp k-d4" style={{ width: "100%", marginTop: 18, fontSize: 16, fontWeight: 600 }}>
+          Continue
+          <ChevronRight size={18} />
+        </button>
       </div>
     </div>
   );
@@ -1019,31 +1042,29 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
 
   const maskedPhone = phone ? phone.slice(0, 2) + "****" + phone.slice(-4) : "";
 
+  const activeIdx = otp.length;
+
   return (
     <div className="k-shell">
       <div className="k-topbar">
-        <button onClick={onBack} className="k-press" style={{
-          width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--k-border)",
-          background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-        }}>
-          <span style={{ fontSize: 18 }}>&#8249;</span>
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={20} />
         </button>
-        <div className="k-brand" style={{ fontSize: 22 }}>{storeName}</div>
-        <div style={{ width: 36 }} />
+        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
+        <div style={{ width: 44 }} />
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px" }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Enter OTP</h2>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 20 }}>OTP sent to +91 {maskedPhone}</p>
+      <div className="k-form-col">
+        <h2 className="k-display k-slideUp" style={{ fontSize: 22, marginBottom: 4 }}>Enter OTP</h2>
+        <p className="k-slideUp k-d1" style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 16 }}>
+          OTP sent to +91 {maskedPhone}
+        </p>
 
         {/* OTP boxes */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <div className="k-slideUp k-d2" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} style={{
-              width: 44, height: 52, borderRadius: "var(--k-r-sm)",
-              background: "var(--k-card)", border: `1.5px solid ${otp[i] ? "var(--k-maroon)" : "var(--k-border)"}`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 24, fontWeight: 700, fontFamily: "'DM Mono', monospace",
-            }}>{otp[i] || ""}</div>
+            <div key={i} className={`k-codebox ${otp[i] ? "filled" : ""} ${i === activeIdx ? "active" : ""}`}>
+              {otp[i] || ""}
+            </div>
           ))}
         </div>
 
@@ -1056,25 +1077,28 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
               background: "none", border: "none", textDecoration: "underline",
             }}>Resend OTP</button>
           ) : (
-            <div style={{ fontSize: 12, color: "var(--k-text-muted)" }}>
-              Resend in <span className="k-mono" style={{ color: "var(--k-maroon)" }}>{timer}s</span>
+            <div style={{ fontSize: 13, color: "var(--k-text-muted)" }}>
+              Resend in <span className="k-mono" style={{ color: "var(--k-maroon)", fontWeight: 600 }}>{timer}s</span>
             </div>
           )}
         </div>
 
-        <div className="k-numpad" style={{ width: "100%", maxWidth: 320, marginTop: 4 }}>
+        <div className="k-numpad k-slideUp k-d3" style={{ width: "100%", marginTop: 4 }}>
           {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
             if (k === "") return <div key={i} />;
-            if (k === "del") return <button key={i} className="k-num-back" onClick={handleDel}>&#9003;</button>;
+            if (k === "del") return (
+              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
+                <Delete size={22} />
+              </button>
+            );
             return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
           })}
         </div>
 
-        <button onClick={handleSubmit} disabled={otp.length !== 6} className="k-press" style={{
-          width: "100%", maxWidth: 320, marginTop: 12, padding: "14px",
-          borderRadius: "var(--k-r-pill)", background: otp.length === 6 ? "var(--k-maroon)" : "var(--k-border)",
-          color: "#fff", fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer",
-        }}>Continue</button>
+        <button onClick={handleSubmit} disabled={otp.length !== 6} className="k-btn k-btn-primary k-btn-pill k-slideUp k-d4" style={{ width: "100%", marginTop: 18, fontSize: 16, fontWeight: 600 }}>
+          Continue
+          <ChevronRight size={18} />
+        </button>
       </div>
     </div>
   );
@@ -1133,25 +1157,22 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
   return (
     <div className="k-shell">
       <div className="k-topbar">
-        <button onClick={onBack} className="k-press" style={{
-          width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--k-border)",
-          background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-        }}>
-          <span style={{ fontSize: 18 }}>&#8249;</span>
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={20} />
         </button>
-        <div className="k-brand" style={{ fontSize: 22 }}>{storeName}</div>
-        <div style={{ width: 36 }} />
+        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
+        <div style={{ width: 44 }} />
       </div>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Welcome to Wearify</h2>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 24, textAlign: "center" }}>
+      <div className="k-form-col" style={{ maxWidth: 480 }}>
+        <h2 className="k-display k-slideUp" style={{ fontSize: 24, marginBottom: 4 }}>Welcome to Wearify</h2>
+        <p className="k-slideUp k-d1" style={{ fontSize: 14, color: "var(--k-text-muted)", marginBottom: 28, textAlign: "center" }}>
           Quick setup — complete the rest later on the Wearify app.
         </p>
 
-        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="k-slideUp k-d2" style={{ width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--k-text)", marginBottom: 6 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--k-text)", marginBottom: 6 }}>
               Full Name
             </label>
             <input
@@ -1159,17 +1180,12 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
               value={name}
               onChange={(e) => { setName(e.target.value); setError(""); }}
               placeholder="e.g. Ananya Mehta"
-              style={{
-                width: "100%", padding: "14px 16px", borderRadius: "var(--k-r-sm)",
-                border: "1.5px solid var(--k-border)", background: "var(--k-card)",
-                fontSize: 16, color: "var(--k-text)", outline: "none",
-                boxSizing: "border-box", fontFamily: "inherit",
-              }}
+              className="k-input"
             />
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--k-text)", marginBottom: 6 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--k-text)", marginBottom: 6 }}>
               Date of Birth
             </label>
             <input
@@ -1177,12 +1193,7 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
               value={dob}
               max={maxDob}
               onChange={(e) => { setDob(e.target.value); setError(""); }}
-              style={{
-                width: "100%", padding: "14px 16px", borderRadius: "var(--k-r-sm)",
-                border: "1.5px solid var(--k-border)", background: "var(--k-card)",
-                fontSize: 16, color: "var(--k-text)", outline: "none",
-                boxSizing: "border-box", fontFamily: "inherit",
-              }}
+              className="k-input"
             />
           </div>
         </div>
@@ -1196,19 +1207,13 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="k-press"
-          style={{
-            width: "100%", marginTop: 20, padding: "14px",
-            borderRadius: "var(--k-r-pill)",
-            background: saving ? "var(--k-border)" : "var(--k-maroon)",
-            color: "#fff", fontSize: 16, fontWeight: 700, border: "none",
-            cursor: saving ? "not-allowed" : "pointer",
-          }}
+          className="k-btn k-btn-primary k-btn-pill k-slideUp k-d3"
+          style={{ width: "100%", marginTop: 24, fontSize: 16, fontWeight: 600 }}
         >
-          {saving ? "Creating..." : "Continue"}
+          {saving ? (<><Loader2 size={18} className="k-spin" /> Creating…</>) : (<>Continue <ChevronRight size={18} /></>)}
         </button>
 
-        <p style={{ fontSize: 11, color: "var(--k-text-muted)", marginTop: 16, textAlign: "center" }}>
+        <p className="k-slideUp k-d4" style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 18, textAlign: "center" }}>
           Your try-on history and wardrobe will be saved to your phone number.
         </p>
       </div>
@@ -1222,27 +1227,27 @@ function ScanChoiceScreen({ customerName, onUsePrevious, onRescan }: {
 }) {
   return (
     <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-modal k-scaleIn" style={{ maxWidth: 360 }}>
-        <div style={{ fontSize: 40, marginBottom: 8 }}>👋</div>
-        <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
-          Welcome back{customerName ? `, ${customerName.split(" ")[0]}` : ""}!
+      <div className="k-modal k-scaleIn" style={{ maxWidth: 380 }}>
+        <div className="k-popIn" style={{
+          width: 64, height: 64, margin: "0 auto 12px",
+          borderRadius: "50%", background: "rgba(104,38,42,.08)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--k-maroon)",
+        }}>
+          <Hand size={30} strokeWidth={2} />
+        </div>
+        <h3 className="k-display" style={{ fontSize: 22, marginBottom: 6 }}>
+          Welcome back{customerName ? `, ${customerName.split(" ")[0]}` : ""}
         </h3>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", lineHeight: 1.6, marginBottom: 20 }}>
+        <p style={{ fontSize: 14, color: "var(--k-text-muted)", lineHeight: 1.6, marginBottom: 24 }}>
           We found your previous body scan. Our AI can use it for your try-on, or you can take a fresh scan.
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <button onClick={onUsePrevious} className="k-press" style={{
-            width: "100%", padding: "14px", borderRadius: "var(--k-r-pill)",
-            background: "var(--k-maroon)", color: "#fff", border: "none",
-            fontSize: 15, fontWeight: 700, cursor: "pointer",
-          }}>
+          <button onClick={onUsePrevious} className="k-btn k-btn-primary k-btn-pill" style={{ width: "100%", fontSize: 15 }}>
             Use Previous Scan
+            <ChevronRight size={18} />
           </button>
-          <button onClick={onRescan} className="k-press" style={{
-            width: "100%", padding: "12px", borderRadius: "var(--k-r-pill)",
-            background: "transparent", border: "1.5px solid var(--k-border)",
-            fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--k-text)",
-          }}>
+          <button onClick={onRescan} className="k-btn k-btn-secondary k-btn-pill" style={{ width: "100%", fontSize: 14 }}>
             Take Fresh Scan
           </button>
         </div>
@@ -1281,44 +1286,44 @@ function CodeEntryScreen({
     setLoading(false);
   };
 
+  const activeIdx = code.length;
+
   return (
     <div className="k-shell">
       <div className="k-topbar">
-        <button onClick={onBack} className="k-press" style={{
-          width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--k-border)",
-          background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-        }}>
-          <span style={{ fontSize: 18 }}>&#8249;</span>
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={20} />
         </button>
-        <div className="k-brand" style={{ fontSize: 22 }}>{storeName}</div>
-        <div style={{ width: 36 }} />
+        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
+        <div style={{ width: 44 }} />
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px" }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Enter Trial Room Code</h2>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 20 }}>6-digit code from your store assistant</p>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+      <div className="k-form-col">
+        <h2 className="k-display k-slideUp" style={{ fontSize: 22, marginBottom: 4 }}>Enter Trial Room Code</h2>
+        <p className="k-slideUp k-d1" style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 16 }}>
+          6-digit code from your store assistant
+        </p>
+        <div className="k-slideUp k-d2" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} style={{
-              width: 44, height: 52, borderRadius: "var(--k-r-sm)",
-              background: "var(--k-card)", border: `1.5px solid ${code[i] ? "var(--k-maroon)" : "var(--k-border)"}`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 24, fontWeight: 700, fontFamily: "'DM Mono', monospace",
-            }}>{code[i] || ""}</div>
+            <div key={i} className={`k-codebox ${code[i] ? "filled" : ""} ${i === activeIdx ? "active" : ""}`}>
+              {code[i] || ""}
+            </div>
           ))}
         </div>
         {error && <div style={{ fontSize: 13, color: "var(--k-red)", marginBottom: 8, fontWeight: 500 }}>{error}</div>}
-        <div className="k-numpad" style={{ width: "100%", maxWidth: 320, marginTop: 8 }}>
+        <div className="k-numpad k-slideUp k-d3" style={{ width: "100%", marginTop: 8 }}>
           {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
             if (k === "") return <div key={i} />;
-            if (k === "del") return <button key={i} className="k-num-back" onClick={handleDel}>&#9003;</button>;
+            if (k === "del") return (
+              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
+                <Delete size={22} />
+              </button>
+            );
             return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
           })}
         </div>
-        <button onClick={handleSubmit} disabled={code.length !== 6 || loading} className="k-press" style={{
-          width: "100%", maxWidth: 320, marginTop: 12, padding: "14px",
-          borderRadius: "var(--k-r-pill)", background: code.length === 6 ? "var(--k-maroon)" : "var(--k-border)",
-          color: "#fff", fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer",
-        }}>{loading ? "Verifying..." : "Continue"}</button>
+        <button onClick={handleSubmit} disabled={code.length !== 6 || loading} className="k-btn k-btn-primary k-btn-pill k-slideUp k-d4" style={{ width: "100%", marginTop: 18, fontSize: 16, fontWeight: 600 }}>
+          {loading ? (<><Loader2 size={18} className="k-spin" /> Verifying…</>) : (<>Continue <ChevronRight size={18} /></>)}
+        </button>
       </div>
     </div>
   );
@@ -1327,24 +1332,27 @@ function CodeEntryScreen({
 /* ── LANGUAGE ── */
 function LangScreen({ lang, onSelect, storeName }: { lang: string; onSelect: (c: string) => void; storeName: string }) {
   return (
-    <div className="k-shell" style={{ alignItems: "center" }}>
-      <div style={{ marginTop: 48, textAlign: "center" }}>
-        <div className="k-brand" style={{ fontSize: 28 }}>{storeName}</div>
-        <div style={{ width: 120, height: 1, margin: "12px auto", background: "linear-gradient(90deg, transparent, var(--k-gold), transparent)" }} />
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 12 }}>Select Your Language</h2>
+    <div className="k-shell" style={{ alignItems: "center", padding: "0 20px" }}>
+      <div className="k-slideUp" style={{ marginTop: 56, textAlign: "center" }}>
+        <div className="k-brand" style={{ fontSize: 22, color: "var(--k-maroon)" }}>{storeName}</div>
+        <div className="k-divider-gold" />
+        <h2 className="k-display" style={{ fontSize: 22, marginTop: 12 }}>Select Your Language</h2>
+        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Choose your preferred language</p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, padding: "24px 20px", width: "100%", marginTop: 16 }}>
-        {LANGS.map((l) => (
-          <button key={l.c} onClick={() => onSelect(l.c)} className="k-press" style={{
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, padding: "28px 0", width: "100%", maxWidth: 560, marginTop: 8 }}>
+        {LANGS.map((l, i) => (
+          <button key={l.c} onClick={() => onSelect(l.c)} className={`k-press k-slideUp k-d${Math.min((i % 8) + 1, 8)}`} style={{
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "16px 8px", borderRadius: "var(--k-r-sm)",
+            padding: "18px 8px", borderRadius: 14,
             background: lang === l.c ? "var(--k-maroon)" : "var(--k-card)",
             color: lang === l.c ? "#fff" : "var(--k-text)",
             border: `1px solid ${lang === l.c ? "var(--k-maroon)" : "var(--k-border)"}`,
-            boxShadow: "var(--k-shadow)", cursor: "pointer", minHeight: 64,
+            boxShadow: lang === l.c ? "0 6px 16px rgba(104,38,42,.22)" : "var(--k-shadow-xs)",
+            cursor: "pointer", minHeight: 72,
+            transition: "all .2s ease",
           }}>
-            <span style={{ fontSize: 18, fontWeight: 700 }}>{l.v}</span>
-            <span style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>{l.n}</span>
+            <span className="k-heading" style={{ fontSize: 18 }}>{l.v}</span>
+            <span style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>{l.n}</span>
           </button>
         ))}
       </div>
@@ -1357,20 +1365,25 @@ function ConsentScreen({ onAllow, onSkip }: { onAllow: () => void; onSkip: () =>
   return (
     <div className="k-overlay">
       <div className="k-modal k-scaleIn">
-        <div style={{ fontSize: 32, marginBottom: 8 }}>📷</div>
-        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Start Your Try-On</h3>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", lineHeight: 1.6, textAlign: "left", marginBottom: 16 }}>
+        <div className="k-popIn" style={{
+          width: 60, height: 60, margin: "0 auto 12px",
+          borderRadius: "50%", background: "rgba(104,38,42,.08)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--k-maroon)",
+        }}>
+          <Camera size={28} strokeWidth={2} />
+        </div>
+        <h3 className="k-display" style={{ fontSize: 20, marginBottom: 8 }}>Start Your Try-On</h3>
+        <p style={{ fontSize: 14, color: "var(--k-text-muted)", lineHeight: 1.6, marginBottom: 20 }}>
           Photo processed by on-device AI. Images saved securely. Delete anytime.
         </p>
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onSkip} className="k-press" style={{
-            flex: 1, padding: 12, borderRadius: "var(--k-r-pill)",
-            background: "transparent", border: "1px solid var(--k-border)", fontSize: 14, fontWeight: 600, cursor: "pointer",
-          }}>Skip</button>
-          <button onClick={onAllow} className="k-press" style={{
-            flex: 1, padding: 12, borderRadius: "var(--k-r-pill)",
-            background: "var(--k-maroon)", color: "#fff", border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer",
-          }}>Allow</button>
+          <button onClick={onSkip} className="k-btn k-btn-secondary k-btn-pill" style={{ flex: 1, fontSize: 14 }}>
+            Skip
+          </button>
+          <button onClick={onAllow} className="k-btn k-btn-primary k-btn-pill" style={{ flex: 1, fontSize: 14 }}>
+            Allow
+          </button>
         </div>
       </div>
     </div>
@@ -1446,14 +1459,23 @@ function AIProcessingScreen({ onDone }: { onDone: () => void }) {
     return () => clearTimeout(t);
   }, [cd, onDone]);
   return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <h2 style={{ fontSize: 20, fontWeight: 600 }}>Creating your look...</h2>
-      <div style={{ width: "70%", height: 4, borderRadius: "var(--k-r-pill)", background: "var(--k-border-l)", marginTop: 16, overflow: "hidden" }}>
+    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
+      <div className="k-popIn k-breathe" style={{
+        width: 80, height: 80, borderRadius: "50%",
+        background: "linear-gradient(135deg, rgba(104,38,42,.1), rgba(201,148,26,.12))",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "var(--k-maroon)", marginBottom: 20,
+      }}>
+        <Sparkles size={36} strokeWidth={2} />
+      </div>
+      <h2 className="k-display" style={{ fontSize: 22 }}>Creating your look</h2>
+      <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Our AI is tailoring it just for you</p>
+      <div style={{ width: "min(70%, 420px)", height: 5, borderRadius: "var(--k-r-pill)", background: "var(--k-border-l)", marginTop: 20, overflow: "hidden" }}>
         <div style={{ width: `${prog}%`, height: "100%", background: "linear-gradient(90deg, var(--k-maroon), var(--k-gold))", borderRadius: "var(--k-r-pill)", transition: "width .8s ease" }} />
       </div>
-      <div className="k-mono" style={{ fontSize: 16, color: "var(--k-text-muted)", marginTop: 12 }}>{cd}s</div>
-      <div className="k-slideUp k-d3" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24, padding: "8px 20px", borderRadius: "var(--k-r-pill)", background: "var(--k-green-bg)" }}>
-        <span style={{ fontSize: 12, color: "var(--k-green)", fontWeight: 500 }}>🔒 Securely saved</span>
+      <div className="k-mono" style={{ fontSize: 16, color: "var(--k-text-muted)", marginTop: 14 }}>{cd}s</div>
+      <div className="k-chip k-chip-green k-slideUp k-d3" style={{ marginTop: 24 }}>
+        <ShieldCheck size={14} /> Securely saved
       </div>
     </div>
   );
@@ -1493,20 +1515,19 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
   navigate: (s: Screen) => void; onBack?: () => void;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
-  const iconBtn = (onClick: () => void, emoji: string, count?: number, countBg?: string) => (
-    <button onClick={onClick} className="k-press" style={{
-      position: "relative", width: 44, height: 44, borderRadius: "50%",
-      border: "1.5px solid var(--k-border)", background: "var(--k-card)",
-      display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-    }}>
-      <span style={{ fontSize: 20 }}>{emoji}</span>
+  const iconBtn = (
+    onClick: () => void,
+    Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>,
+    label: string,
+    count?: number,
+    badgeBg?: string,
+  ) => (
+    <button onClick={onClick} className="k-iconbtn k-press" aria-label={label}>
+      <Icon size={20} strokeWidth={2} />
       {count !== undefined && count > 0 && (
-        <span style={{
-          position: "absolute", top: -2, right: -2, background: countBg || "var(--k-maroon)",
-          color: "#fff", borderRadius: "50%", width: 20, height: 20,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 11, fontWeight: 700,
-        }}>{count}</span>
+        <span className="k-iconbtn-badge" style={{ background: badgeBg || "var(--k-maroon)" }}>
+          {count}
+        </span>
       )}
     </button>
   );
@@ -1514,23 +1535,22 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "12px 24px", background: "var(--k-card)",
+      padding: "14px 24px", background: "var(--k-card)",
       borderBottom: "1px solid var(--k-border-l)", flexShrink: 0, zIndex: 40,
     }}>
       {onBack ? (
-        <button onClick={onBack} className="k-press" style={{
-          width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--k-border)",
-          background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-        }}><span style={{ fontSize: 22 }}>&#8249;</span></button>
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={22} />
+        </button>
       ) : (
         <StoreBrand storeName={storeName ?? ""} logoFileId={storeLogoFileId} />
       )}
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        {iconBtn(() => navigate("trialRoom"), "👗", trialCount, "var(--k-gold)")}
-        {iconBtn(() => navigate("wardrobe"), "👜", wardrobeCount, "var(--k-maroon)")}
-        {cartCount > 0 && iconBtn(() => navigate("order"), "🛒", cartCount, "var(--k-green)")}
-        {iconBtn(goHome, "🏠")}
-        {iconBtn(triggerLogout, "⏻")}
+        {iconBtn(() => navigate("trialRoom"), Shirt, "Trial room", trialCount, "var(--k-gold)")}
+        {iconBtn(() => navigate("wardrobe"), ShoppingBag, "Wardrobe", wardrobeCount, "var(--k-maroon)")}
+        {cartCount > 0 && iconBtn(() => navigate("order"), ShoppingCart, "Cart", cartCount, "var(--k-green)")}
+        {iconBtn(goHome, Home, "Home")}
+        {iconBtn(triggerLogout, LogOut, "Logout")}
       </div>
     </div>
   );
@@ -1583,14 +1603,23 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
         <div style={{ padding: "16px 24px 8px", display: "flex", gap: 10 }}>
           <div style={{
             flex: 1, display: "flex", alignItems: "center", gap: 10,
-            padding: "14px 18px", borderRadius: "var(--k-r)",
-            border: "1.5px solid var(--k-border)", background: "var(--k-card)",
+            padding: "14px 18px", borderRadius: 14,
+            border: "1px solid var(--k-border)", background: "var(--k-card)",
+            transition: "border-color .2s ease, box-shadow .2s ease",
           }}>
-            <span style={{ fontSize: 18 }}>🔍</span>
+            <Search size={18} color="var(--k-text-muted)" />
             <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by name, occasion, fabric..."
-              style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 16, color: "var(--k-text)" }} />
-            {query && <span onClick={() => setQuery("")} style={{ cursor: "pointer", fontSize: 18, color: "var(--k-text-muted)" }}>✕</span>}
+              style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 16, color: "var(--k-text)", fontFamily: "inherit" }} />
+            {query && (
+              <button onClick={() => setQuery("")} aria-label="Clear" style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                color: "var(--k-text-muted)", padding: 4,
+              }}>
+                <X size={18} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -1598,24 +1627,23 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
         {selectedIds.size > 0 && (
           <div className="k-slideUp" style={{
             margin: "8px 24px 12px", padding: "14px 20px", borderRadius: "var(--k-r)",
-            background: "linear-gradient(135deg, rgba(201,148,26,.08), rgba(242,212,212,.4))",
-            border: "1.5px solid rgba(201,148,26,.3)",
+            background: "linear-gradient(135deg, rgba(201,148,26,.1), rgba(104,38,42,.06))",
+            border: "1px solid rgba(201,148,26,.3)",
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>{selectedIds.size} saree(s) selected</span>
-            <button onClick={sendToTrial} className="k-press" style={{
-              padding: "10px 24px", borderRadius: "var(--k-r-pill)",
-              background: "var(--k-gold)", color: "#fff", border: "none",
-              fontSize: 15, fontWeight: 700, cursor: "pointer",
-            }}>Send to Trial Room</button>
+            <span className="k-heading" style={{ fontSize: 16 }}>{selectedIds.size} saree{selectedIds.size > 1 ? "s" : ""} selected</span>
+            <button onClick={sendToTrial} className="k-btn k-btn-pill k-press" style={{
+              background: "var(--k-gold)", color: "#fff", boxShadow: "0 4px 12px rgba(201,148,26,.3)",
+              padding: "10px 22px", fontSize: 14, fontWeight: 600,
+            }}>Send to Trial Room <ChevronRight size={16} /></button>
           </div>
         )}
 
         {/* Content */}
         {filtered ? (
           <div style={{ padding: "8px 24px" }}>
-            <div style={{ fontSize: 14, color: "var(--k-text-muted)", marginBottom: 12 }}>{filtered.length} results</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 12 }}>{filtered.length} results</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
               {filtered.map((s) => (
                 <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} onCheck={() => toggleSelect(s)}
                   isSelected={selectedIds.has(s._id)} isInTrial={isInTrial(s._id)} isInWardrobe={isInWardrobe(s._id)} />
@@ -1658,26 +1686,22 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
 function ScrollSection({ title, children }: { title: string; children: React.ReactNode }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", marginBottom: 12 }}>
-        <div style={{ fontSize: 20, fontWeight: 700 }}>{title}</div>
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", marginBottom: 14 }}>
+        <div className="k-display" style={{ fontSize: 20 }}>{title}</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })} className="k-press" style={{
-            width: 36, height: 36, borderRadius: "50%", border: "1.5px solid var(--k-border)",
-            background: "var(--k-card)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 16,
-          }}>‹</button>
-          <button onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })} className="k-press" style={{
-            width: 36, height: 36, borderRadius: "50%", border: "1.5px solid var(--k-border)",
-            background: "var(--k-card)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 16,
-          }}>›</button>
+          <button onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })} className="k-iconbtn k-press" aria-label="Scroll left">
+            <ChevronLeft size={18} />
+          </button>
+          <button onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })} className="k-iconbtn k-press" aria-label="Scroll right">
+            <ChevronRight size={18} />
+          </button>
         </div>
       </div>
       <div ref={scrollRef} className="k-no-scroll" style={{
-        display: "grid", gridAutoFlow: "column", gridAutoColumns: "220px",
-        gap: 16, overflowX: "auto", scrollSnapType: "x mandatory",
-        paddingLeft: 24, paddingRight: 24, paddingBottom: 4,
+        display: "grid", gridAutoFlow: "column", gridAutoColumns: "170px",
+        gap: 14, overflowX: "auto", scrollSnapType: "x mandatory",
+        paddingLeft: 24, paddingRight: 24, paddingBottom: 6, paddingTop: 4,
       }}>{children}</div>
     </div>
   );
@@ -1701,13 +1725,15 @@ function SareeCard({ saree, onTap, onCheck, isSelected, isInTrial, isInWardrobe 
       {onCheck && !disabled && (
         <div onClick={(e) => { e.stopPropagation(); onCheck(); }} style={{
           position: "absolute", top: 10, left: 10, zIndex: 3, width: 30, height: 30,
-          borderRadius: 6, border: `2px solid ${isSelected ? "var(--k-gold)" : "rgba(255,255,255,.9)"}`,
-          background: isSelected ? "var(--k-gold)" : "rgba(255,255,255,.75)",
+          borderRadius: 7, border: `2px solid ${isSelected ? "var(--k-gold)" : "rgba(255,255,255,.95)"}`,
+          background: isSelected ? "var(--k-gold)" : "rgba(255,255,255,.82)",
           backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          boxShadow: "0 1px 4px rgba(0,0,0,.1)",
+          boxShadow: "0 2px 6px rgba(0,0,0,.12)",
+          transition: "all .15s ease",
+          color: "#fff",
         }}>
-          {isSelected && <span style={{ color: "#fff", fontSize: 16, fontWeight: 700 }}>✓</span>}
+          {isSelected && <Check size={16} strokeWidth={3} />}
         </div>
       )}
 
@@ -1722,16 +1748,14 @@ function SareeCard({ saree, onTap, onCheck, isSelected, isInTrial, isInWardrobe 
       )}
 
       {/* Image area */}
-      <div className="k-silk" style={{
-        position: "relative", width: "100%", paddingTop: "130%", overflow: "hidden",
-      }}>
+      <div style={{ position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0 }}>
           <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={36} />
         </div>
         {label && (
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0, background: labelBg,
-            padding: "6px 0", textAlign: "center", fontSize: 11, fontWeight: 700,
+            padding: "5px 0", textAlign: "center", fontSize: 10, fontWeight: 700,
             color: "#fff", letterSpacing: "0.5px", zIndex: 2,
           }}>{label}</div>
         )}
@@ -1739,21 +1763,23 @@ function SareeCard({ saree, onTap, onCheck, isSelected, isInTrial, isInWardrobe 
           <div style={{
             position: "absolute", bottom: 8, left: 8, padding: "3px 8px",
             borderRadius: "var(--k-r-pill)", background: "var(--k-green)", color: "#fff",
-            fontSize: 11, fontWeight: 700, zIndex: 2,
+            fontSize: 10, fontWeight: 700, zIndex: 2,
           }}>-{discount}%</div>
         )}
       </div>
 
       {/* Info */}
-      <div style={{ padding: "12px 14px" }}>
-        <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 2,
+      <div style={{ padding: "10px 12px" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, marginBottom: 2,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>{saree.name}</div>
-        <div style={{ fontSize: 12, color: "var(--k-text-muted)", marginBottom: 6 }}>{saree.fabric} · {saree.occasion}</div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span className="k-mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(saree.price)}</span>
+        <div style={{ fontSize: 11, color: "var(--k-text-muted)", marginBottom: 6,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>{saree.fabric} · {saree.occasion}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 5, flexWrap: "wrap" }}>
+          <span className="k-mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(saree.price)}</span>
           {saree.mrp && saree.mrp > saree.price && (
-            <span className="k-mono" style={{ fontSize: 12, color: "var(--k-text-light)", textDecoration: "line-through" }}>₹{fmtPrice(saree.mrp)}</span>
+            <span className="k-mono" style={{ fontSize: 11, color: "var(--k-text-light)", textDecoration: "line-through" }}>₹{fmtPrice(saree.mrp)}</span>
           )}
         </div>
       </div>
@@ -1780,10 +1806,9 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
         {/* Hero section — image left, details right */}
         <div style={{ display: "flex", padding: "24px", gap: 28, minHeight: 320 }}>
           {/* Left: product image */}
-          <div className="k-silk" style={{
+          <div style={{
             width: "38%", maxWidth: 360, position: "relative", borderRadius: "var(--k-r-lg)",
-            overflow: "hidden", boxShadow: "var(--k-shadow-md)", flexShrink: 0,
-            minHeight: 320,
+            overflow: "hidden", boxShadow: "var(--k-shadow-md)", flexShrink: 0, aspectRatio: "3/4",
           }}>
             <div style={{ position: "absolute", inset: 0 }}>
               <SareeThumb name={product.name} fileId={product.imageIds?.[0]} grad={product.grad} emoji={product.emoji} emojiSize={72} />
@@ -1860,14 +1885,10 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
             </div>
 
             {/* CTA */}
-            <button onClick={onAddToTrial} disabled={isInTrial || isInWardrobe} className="k-press" style={{
-              width: "100%", maxWidth: 360, padding: "16px 24px", borderRadius: "var(--k-r-pill)",
-              background: isInTrial || isInWardrobe ? "var(--k-border)" : "var(--k-maroon)",
-              color: "#fff", border: "none", fontSize: 18, fontWeight: 700, cursor: "pointer",
-              boxShadow: isInTrial || isInWardrobe ? "none" : "0 4px 16px rgba(107,26,26,.3)",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            <button onClick={onAddToTrial} disabled={isInTrial || isInWardrobe} className="k-btn k-btn-primary k-btn-pill k-press" style={{
+              width: "100%", maxWidth: 360, padding: "18px 24px", fontSize: 17, fontWeight: 600,
             }}>
-              <span style={{ fontSize: 20 }}>{isInWardrobe ? "👜" : isInTrial ? "👗" : "✨"}</span>
+              {isInWardrobe ? <ShoppingBag size={20} /> : isInTrial ? <Shirt size={20} /> : <Sparkles size={20} />}
               {isInWardrobe ? "Already in Wardrobe" : isInTrial ? "Already in Trial Room" : "Add to Trial Room"}
             </button>
           </div>
@@ -1914,9 +1935,19 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
 
   if (items.length === 0) return (
     <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <span style={{ fontSize: 64 }}>👗</span>
-      <h2 style={{ fontSize: 24, fontWeight: 600, color: "var(--k-text-muted)", marginTop: 16 }}>Trial Room Empty</h2>
-      <button onClick={onGoHome} className="k-press" style={{ marginTop: 20, padding: "16px 36px", borderRadius: "var(--k-r-pill)", background: "var(--k-maroon)", color: "#fff", border: "none", fontSize: 18, fontWeight: 600, cursor: "pointer" }}>Browse Sarees</button>
+      <div className="k-popIn" style={{
+        width: 110, height: 110, borderRadius: "50%",
+        background: "linear-gradient(135deg, rgba(104,38,42,.08), rgba(201,148,26,.1))",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "var(--k-maroon)",
+      }}>
+        <Shirt size={52} strokeWidth={1.6} />
+      </div>
+      <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, color: "var(--k-text)", marginTop: 18 }}>Trial Room Empty</h2>
+      <p className="k-slideUp k-d3" style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Select sarees from the catalog to get started</p>
+      <button onClick={onGoHome} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp k-d4" style={{ marginTop: 22, padding: "14px 32px", fontSize: 16, fontWeight: 600 }}>
+        Browse Sarees <ChevronRight size={18} />
+      </button>
     </div>
   );
 
@@ -1929,21 +1960,21 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
         padding: "16px 24px",
         background: "linear-gradient(180deg, rgba(245,240,234,.95), transparent)",
       }}>
-        <button onClick={onGoHome} className="k-press" style={{
-          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.85)",
+        <button onClick={onGoHome} className="k-press" aria-label="Home" style={{
+          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          border: "none", boxShadow: "var(--k-shadow)",
-        }}><span style={{ fontSize: 22 }}>🏠</span></button>
-        <div className="k-timer" style={{ padding: "10px 24px", fontSize: 20, fontWeight: 700 }}>
+          border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
+        }}><Home size={20} /></button>
+        <div className="k-timer" style={{ padding: "10px 22px", fontSize: 20, fontWeight: 700 }}>
           <span style={{ color: timer <= 30 ? "var(--k-red)" : "var(--k-text)" }}>
             {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
           </span>
         </div>
-        <button onClick={onLogout} className="k-press" style={{
-          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.85)",
+        <button onClick={onLogout} className="k-press" aria-label="Logout" style={{
+          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          border: "none", boxShadow: "var(--k-shadow)",
-        }}><span style={{ fontSize: 22 }}>⏻</span></button>
+          border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
+        }}><LogOut size={20} /></button>
       </div>
 
       <div style={{ display: "flex", width: "100%", height: "100vh", paddingTop: 72 }}>
@@ -1969,12 +2000,13 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
               }}>
                 {/* Checkbox — large touch target */}
                 <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
-                  width: 32, height: 32, borderRadius: 6, flexShrink: 0, alignSelf: "center",
+                  width: 32, height: 32, borderRadius: 7, flexShrink: 0, alignSelf: "center",
                   border: `2px solid ${selW ? "var(--k-green)" : "var(--k-text-light)"}`,
                   background: selW ? "var(--k-green)" : "transparent",
                   display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                  transition: "all .15s ease", color: "#fff",
                 }}>
-                  {selW && <span style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>✓</span>}
+                  {selW && <Check size={18} strokeWidth={3} />}
                 </div>
                 {/* Thumbnail */}
                 <div style={{
@@ -1989,22 +2021,20 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
                   <div className="k-mono" style={{ fontSize: 13, color: "var(--k-maroon)", fontWeight: 600 }}>₹{fmtPrice(saree.price)}</div>
                 </div>
                 {/* Remove button — bigger touch target */}
-                <button onClick={(e) => { e.stopPropagation(); onRemoveItem(saree._id); }} style={{
+                <button onClick={(e) => { e.stopPropagation(); onRemoveItem(saree._id); }} aria-label="Remove" style={{
                   width: 32, height: 32, borderRadius: "50%", cursor: "pointer",
                   background: "var(--k-red-bg)", border: "none",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 16, color: "var(--k-red)", fontWeight: 700, flexShrink: 0, alignSelf: "center",
-                }}>✕</button>
+                  color: "var(--k-red)", flexShrink: 0, alignSelf: "center",
+                }}><X size={16} strokeWidth={2.5} /></button>
               </div>
             );
           })}
           {selForWard.size > 0 && (
-            <button onClick={moveToWardrobe} className="k-press" style={{
-              width: "100%", padding: "14px", borderRadius: "var(--k-r-pill)", marginTop: 12,
-              background: "var(--k-maroon)", color: "#fff", border: "none",
-              fontSize: 16, fontWeight: 700, cursor: "pointer",
+            <button onClick={moveToWardrobe} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp" style={{
+              width: "100%", marginTop: 12, fontSize: 15, fontWeight: 600,
             }}>
-              Add to Wardrobe ({selForWard.size})
+              <ShoppingBag size={18} /> Add to Wardrobe ({selForWard.size})
             </button>
           )}
         </div>
@@ -2071,29 +2101,51 @@ function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, 
   return (
     <div className="k-shell">
       <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
-      <div style={{ textAlign: "center", padding: "8px 0" }}><div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--k-maroon-d)", color: "#fff", padding: "6px 16px", borderRadius: "var(--k-r-pill)", fontSize: 14, fontWeight: 600 }}>My Wardrobe ({items.length}/{maxWardrobe})</div></div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 18px", paddingBottom: 80 }}>
+      <div style={{ textAlign: "center", padding: "12px 0 6px" }}>
+        <div className="k-chip k-chip-maroon k-slideDown" style={{ background: "var(--k-maroon)", color: "#fff", borderColor: "var(--k-maroon)", padding: "7px 18px", fontSize: 14, fontWeight: 600 }}>
+          <ShoppingBag size={14} /> My Wardrobe ({items.length}/{maxWardrobe})
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px", paddingBottom: 100 }}>
         {items.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "48px 0", color: "var(--k-text-muted)" }}>
-            <span style={{ fontSize: 48 }}>👜</span>
-            <div style={{ marginTop: 12, fontSize: 14 }}>Your wardrobe is empty</div>
-            <button onClick={goHome} className="k-press" style={{ marginTop: 16, padding: "10px 20px", borderRadius: "var(--k-r-pill)", background: "var(--k-maroon)", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Browse Sarees</button>
+          <div style={{ textAlign: "center", padding: "64px 0", color: "var(--k-text-muted)" }}>
+            <div className="k-popIn" style={{
+              width: 96, height: 96, margin: "0 auto",
+              borderRadius: "50%", background: "rgba(104,38,42,.08)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--k-maroon)",
+            }}>
+              <ShoppingBag size={42} strokeWidth={1.6} />
+            </div>
+            <div className="k-slideUp k-d2" style={{ marginTop: 16, fontSize: 15 }}>Your wardrobe is empty</div>
+            <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp k-d3" style={{ marginTop: 18, fontSize: 14 }}>
+              Browse Sarees <ChevronRight size={16} />
+            </button>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, maxWidth: 960, margin: "0 auto" }}>
             {items.map((saree) => {
               const selC = selForCart.has(saree._id);
               return (
-                <div key={saree._id} className="k-product-card" style={{ border: selC ? "2px solid var(--k-green)" : undefined }}>
+                <div key={saree._id} className="k-product-card k-slideUp" style={{ border: selC ? "2px solid var(--k-green)" : undefined }}>
                   <div style={{ position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden" }}>
                     <div style={{ position: "absolute", inset: 0 }}>
                       <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={32} gradientAngle={135} />
                     </div>
                   </div>
-                  <div style={{ padding: "8px 10px" }}>
-                    <div style={{ fontSize: 12, fontWeight: 600 }}>{saree.name}</div>
-                    <div className="k-mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(saree.price)}</div>
-                    <button onClick={() => toggleSel(saree._id)} className="k-press" style={{ width: "100%", marginTop: 6, padding: "6px", borderRadius: "var(--k-r-sm)", fontSize: 10, fontWeight: 600, cursor: "pointer", background: selC ? "var(--k-green)" : "transparent", color: selC ? "#fff" : "var(--k-text)", border: `1px solid ${selC ? "var(--k-green)" : "var(--k-border)"}` }}>{selC ? "✓ Selected" : "Add to Cart"}</button>
+                  <div style={{ padding: "10px 12px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{saree.name}</div>
+                    <div className="k-mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(saree.price)}</div>
+                    <button onClick={() => toggleSel(saree._id)} className="k-press" style={{
+                      width: "100%", marginTop: 8, padding: "8px", borderRadius: 10,
+                      fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      background: selC ? "var(--k-green)" : "transparent",
+                      color: selC ? "#fff" : "var(--k-text)",
+                      border: `1px solid ${selC ? "var(--k-green)" : "var(--k-border)"}`,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    }}>
+                      {selC ? (<><Check size={14} strokeWidth={3} /> Selected</>) : "Add to Cart"}
+                    </button>
                   </div>
                 </div>
               );
@@ -2101,7 +2153,15 @@ function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, 
           </div>
         )}
       </div>
-      {selForCart.size > 0 && <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 50 }}><button onClick={moveToCart} className="k-press" style={{ padding: "12px 32px", borderRadius: "var(--k-r-pill)", background: "var(--k-maroon)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "var(--k-shadow-lg)" }}>Move to Cart ({selForCart.size})</button></div>}
+      {selForCart.size > 0 && (
+        <div className="k-slideUp" style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 50 }}>
+          <button onClick={moveToCart} className="k-btn k-btn-primary k-btn-pill k-press" style={{
+            padding: "14px 32px", fontSize: 14, fontWeight: 600, boxShadow: "var(--k-shadow-lg)",
+          }}>
+            <ShoppingCart size={16} /> Move to Cart ({selForCart.size})
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2122,12 +2182,13 @@ function OrderScreen({ cart, setCart, onCheckout, onFindTailor, onBack }: {
     <div className="k-shell">
       {/* Header */}
       <div className="k-topbar" style={{ padding: "16px 24px" }}>
-        <button onClick={onBack} className="k-press" style={{
-          width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--k-border)",
-          background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-        }}><span style={{ fontSize: 20 }}>&#8249;</span></button>
-        <div style={{ fontSize: 22, fontWeight: 700 }}>Your Cart</div>
-        <div style={{ fontSize: 14, color: "var(--k-text-muted)" }}>{cart.length} {cart.length === 1 ? "item" : "items"}</div>
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={22} />
+        </button>
+        <div className="k-display" style={{ fontSize: 22 }}>Your Cart</div>
+        <div className="k-chip" style={{ fontSize: 12 }}>
+          <ShoppingCart size={12} /> {cart.length} {cart.length === 1 ? "item" : "items"}
+        </div>
       </div>
 
       {/* Content — centered column layout */}
@@ -2155,25 +2216,21 @@ function OrderScreen({ cart, setCart, onCheckout, onFindTailor, onBack }: {
                 </div>
                 {/* Qty controls */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => updateQty(idx, -1)} className="k-press" style={{
-                    width: 36, height: 36, borderRadius: "50%", border: "1.5px solid var(--k-border)",
-                    background: "var(--k-card)", cursor: "pointer", fontSize: 20,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>−</button>
+                  <button onClick={() => updateQty(idx, -1)} className="k-iconbtn k-press" aria-label="Decrease" style={{ width: 36, height: 36 }}>
+                    <Minus size={16} />
+                  </button>
                   <span className="k-mono" style={{ fontSize: 18, fontWeight: 700, minWidth: 28, textAlign: "center" }}>{item.qty}</span>
-                  <button onClick={() => updateQty(idx, 1)} className="k-press" style={{
-                    width: 36, height: 36, borderRadius: "50%", border: "1.5px solid var(--k-border)",
-                    background: "var(--k-card)", cursor: "pointer", fontSize: 20,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>+</button>
+                  <button onClick={() => updateQty(idx, 1)} className="k-iconbtn k-press" aria-label="Increase" style={{ width: 36, height: 36 }}>
+                    <Plus size={16} />
+                  </button>
                 </div>
                 {/* Remove */}
-                <button onClick={() => removeItem(idx)} className="k-press" style={{
+                <button onClick={() => removeItem(idx)} className="k-press" aria-label="Remove" style={{
                   width: 36, height: 36, borderRadius: "50%", cursor: "pointer",
                   background: "var(--k-red-bg)", border: "none",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 16, color: "var(--k-red)", fontWeight: 700,
-                }}>✕</button>
+                  color: "var(--k-red)",
+                }}><X size={16} strokeWidth={2.5} /></button>
               </div>
             );
           })}
@@ -2203,29 +2260,29 @@ function OrderScreen({ cart, setCart, onCheckout, onFindTailor, onBack }: {
           {/* Actions */}
           {!showQR ? (
             <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-              <button onClick={async () => { await onCheckout(); setShowQR(true); }} className="k-press" style={{
-                flex: 1, padding: 18, borderRadius: "var(--k-r-pill)",
-                background: "var(--k-maroon)", color: "#fff", border: "none",
-                fontSize: 18, fontWeight: 700, cursor: "pointer",
-                boxShadow: "0 4px 16px rgba(107,26,26,.3)",
-              }}>Checkout</button>
-              <button onClick={onFindTailor} className="k-press" style={{
-                padding: "18px 28px", borderRadius: "var(--k-r-pill)",
-                background: "var(--k-card)", border: "1.5px solid var(--k-border)",
-                fontSize: 16, fontWeight: 600, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 8,
-              }}>✂️ Find Tailor</button>
+              <button onClick={async () => { await onCheckout(); setShowQR(true); }} className="k-btn k-btn-primary k-btn-pill k-press" style={{
+                flex: 1, padding: 18, fontSize: 17, fontWeight: 600,
+              }}>
+                <ShoppingCart size={18} /> Checkout
+              </button>
+              <button onClick={onFindTailor} className="k-btn k-btn-secondary k-btn-pill k-press" style={{
+                padding: "18px 28px", fontSize: 15,
+              }}>
+                <Scissors size={16} /> Find Tailor
+              </button>
             </div>
           ) : (
-            <div className="k-slideUp" style={{ textAlign: "center", marginTop: 24 }}>
-              <div style={{
-                width: 200, height: 200, margin: "0 auto 12px",
+            <div className="k-slideUp" style={{ textAlign: "center", marginTop: 28 }}>
+              <div className="k-popIn" style={{
+                width: 220, height: 220, margin: "0 auto 14px",
                 background: "var(--k-card)", borderRadius: "var(--k-r-lg)",
                 boxShadow: "var(--k-shadow-md)", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 64, border: "1px solid var(--k-border-l)",
-              }}>📱</div>
-              <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>Show to Store Team</div>
-              <div className="k-mono" style={{ fontSize: 16, color: "var(--k-text-muted)" }}>
+                border: "1px solid var(--k-border)", color: "var(--k-maroon)",
+              }}>
+                <QrCode size={140} strokeWidth={1.4} />
+              </div>
+              <div className="k-heading" style={{ fontSize: 18, marginBottom: 4 }}>Show to Store Team</div>
+              <div className="k-mono" style={{ fontSize: 15, color: "var(--k-text-muted)" }}>
                 Expires in {Math.floor(qrExp / 60)}:{String(qrExp % 60).padStart(2, "0")}
               </div>
             </div>
@@ -2242,23 +2299,50 @@ function TailorScreen({ storeCity, onBack, showToast }: { storeCity: string; onB
   return (
     <div className="k-shell">
       <div className="k-topbar">
-        <button onClick={onBack} className="k-press" style={{ width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--k-border)", background: "var(--k-card)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><span style={{ fontSize: 18 }}>&#8249;</span></button>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>Expert Tailors</div>
-        <div style={{ width: 36 }} />
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={20} />
+        </button>
+        <div className="k-display" style={{ fontSize: 18 }}>Expert Tailors</div>
+        <div style={{ width: 44 }} />
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", maxWidth: 720, margin: "0 auto", width: "100%" }}>
         {!tailors || tailors.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "48px 0", color: "var(--k-text-muted)", fontSize: 14 }}>No tailors found in this area</div>
+          <div style={{ textAlign: "center", padding: "64px 0", color: "var(--k-text-muted)" }}>
+            <div className="k-popIn" style={{
+              width: 80, height: 80, margin: "0 auto 12px",
+              borderRadius: "50%", background: "rgba(104,38,42,.08)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--k-maroon)",
+            }}>
+              <Scissors size={34} strokeWidth={1.6} />
+            </div>
+            <div style={{ fontSize: 14 }}>No tailors found in this area</div>
+          </div>
         ) : (
-          tailors.map((t) => (
-            <div key={t._id} className="k-tailor-card k-slideUp" style={{ display: "flex", gap: 12 }}>
-              <div style={{ width: 56, height: 56, borderRadius: "var(--k-r-sm)", flexShrink: 0, background: "linear-gradient(135deg, #E8E0D4, #D4A843)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>✂️</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{t.name}</div>
-                <div style={{ fontSize: 11, color: "var(--k-text-muted)" }}>{t.specialties?.join(", ") || "General"}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--k-text-muted)" }}>⭐ {t.rating} · {t.city}</div>
-                <button onClick={() => showToast("Tailor connection coming soon", "info")} className="k-press" style={{ marginTop: 6, padding: "6px 14px", borderRadius: "var(--k-r-pill)", background: "var(--k-maroon)", color: "#fff", border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Connect</button>
+          tailors.map((t, i) => (
+            <div key={t._id} className={`k-tailor-card k-slideUp k-d${Math.min((i % 6) + 1, 6)}`} style={{ display: "flex", gap: 14, alignItems: "center" }}>
+              <div className="k-silk" style={{
+                width: 60, height: 60, borderRadius: 12, flexShrink: 0,
+                background: "linear-gradient(135deg, #E8E0D4, #D4A843)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#fff",
+              }}>
+                <Scissors size={24} strokeWidth={1.8} />
               </div>
+              <div style={{ flex: 1 }}>
+                <div className="k-heading" style={{ fontSize: 15 }}>{t.name}</div>
+                <div style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 2 }}>
+                  {t.specialties?.join(", ") || "General"}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--k-text-muted)", marginTop: 3 }}>
+                  <Star size={12} color="var(--k-gold)" fill="var(--k-gold)" /> {t.rating}
+                  <span style={{ opacity: 0.5 }}>·</span>
+                  {t.city}
+                </div>
+              </div>
+              <button onClick={() => showToast("Tailor connection coming soon", "info")} className="k-btn k-btn-primary k-btn-pill k-press" style={{
+                padding: "8px 16px", fontSize: 12, fontWeight: 600, minHeight: 36,
+              }}>Connect</button>
             </div>
           ))
         )}
@@ -2272,18 +2356,47 @@ function FeedbackScreen({ onSubmit, onHome, onLogout }: { onSubmit: (rating: num
   const [rating, setRating] = useState(0);
   const [done, setDone] = useState(false);
   useEffect(() => { if (done) { const t = setTimeout(() => onSubmit(rating), 3000); return () => clearTimeout(t); } }, [done, onSubmit, rating]);
-  if (done) return <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}><span className="k-popIn" style={{ fontSize: 64 }}>⭐</span><h2 className="k-slideUp k-d2" style={{ fontSize: 22, fontWeight: 700, marginTop: 12 }}>Thank you!</h2></div>;
+  if (done) return (
+    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
+      <div className="k-popIn" style={{
+        width: 100, height: 100, borderRadius: "50%",
+        background: "linear-gradient(135deg, rgba(201,148,26,.15), rgba(201,148,26,.05))",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "var(--k-gold)",
+      }}>
+        <Star size={48} fill="var(--k-gold)" strokeWidth={1.6} />
+      </div>
+      <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, marginTop: 18 }}>Thank you!</h2>
+      <p className="k-slideUp k-d3" style={{ fontSize: 14, color: "var(--k-text-muted)", marginTop: 4 }}>We appreciate your feedback</p>
+    </div>
+  );
   return (
     <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-modal k-scaleIn" style={{ maxWidth: 340 }}>
-        <h3 style={{ fontSize: 20, fontWeight: 700 }}>How was your experience?</h3>
-        <div style={{ display: "flex", justifyContent: "center", gap: 8, margin: "16px 0" }}>
-          {[1, 2, 3, 4, 5].map((n) => <span key={n} onClick={() => setRating(n)} className="k-star k-press" style={{ color: n <= rating ? "var(--k-gold)" : "var(--k-border)" }}>★</span>)}
+      <div className="k-modal k-scaleIn" style={{ maxWidth: 380 }}>
+        <h3 className="k-display" style={{ fontSize: 20 }}>How was your experience?</h3>
+        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Tap a star to rate</p>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, margin: "22px 0" }}>
+          {[1, 2, 3, 4, 5].map((n) => {
+            const active = n <= rating;
+            return (
+              <span key={n} onClick={() => setRating(n)} className="k-star k-press" aria-label={`${n} star`}>
+                <Star size={36} strokeWidth={1.6}
+                  color={active ? "var(--k-gold)" : "var(--k-border)"}
+                  fill={active ? "var(--k-gold)" : "transparent"} />
+              </span>
+            );
+          })}
         </div>
-        <button onClick={() => setDone(true)} disabled={rating === 0} className="k-press" style={{ width: "100%", padding: 14, borderRadius: "var(--k-r-pill)", background: rating > 0 ? "var(--k-maroon)" : "var(--k-border)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Submit</button>
+        <button onClick={() => setDone(true)} disabled={rating === 0} className="k-btn k-btn-primary k-btn-pill" style={{ width: "100%", fontSize: 14 }}>
+          Submit
+        </button>
         <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-          <button onClick={onHome} className="k-press" style={{ flex: 1, padding: 10, borderRadius: "var(--k-r-pill)", background: "transparent", border: "1px solid var(--k-border)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Home</button>
-          <button onClick={onLogout} className="k-press" style={{ flex: 1, padding: 10, borderRadius: "var(--k-r-pill)", background: "transparent", border: "1px solid var(--k-border)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Logout</button>
+          <button onClick={onHome} className="k-btn k-btn-secondary k-btn-pill" style={{ flex: 1, fontSize: 12, minHeight: 40, padding: "8px 14px" }}>
+            <Home size={14} /> Home
+          </button>
+          <button onClick={onLogout} className="k-btn k-btn-secondary k-btn-pill" style={{ flex: 1, fontSize: 12, minHeight: 40, padding: "8px 14px" }}>
+            <LogOut size={14} /> Logout
+          </button>
         </div>
       </div>
     </div>
@@ -2294,13 +2407,30 @@ function FeedbackScreen({ onSubmit, onHome, onLogout }: { onSubmit: (rating: num
 function DataSaveScreen({ onSave, onDelete }: { onSave: () => void; onDelete: () => void }) {
   return (
     <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-modal k-scaleIn" style={{ maxWidth: 340 }}>
-        <span style={{ fontSize: 40 }}>🔒</span>
-        <h3 style={{ fontSize: 18, fontWeight: 700, margin: "8px 0" }}>Save your looks?</h3>
-        <p style={{ fontSize: 12, color: "var(--k-text-muted)", lineHeight: 1.6, textAlign: "left", marginBottom: 16 }}>Saved to your Wearify profile. Access anytime from your phone.</p>
-        <button onClick={onSave} className="k-press" style={{ width: "100%", padding: 14, borderRadius: "var(--k-r-pill)", background: "var(--k-maroon)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>Save</button>
-        <div style={{ fontSize: 10, color: "var(--k-text-muted)", marginBottom: 8 }}>OR</div>
-        <button onClick={onDelete} className="k-press" style={{ width: "100%", padding: 12, borderRadius: "var(--k-r-pill)", background: "transparent", border: "1px solid var(--k-red)", color: "var(--k-red)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete All</button>
+      <div className="k-modal k-scaleIn" style={{ maxWidth: 380 }}>
+        <div className="k-popIn" style={{
+          width: 60, height: 60, margin: "0 auto 12px",
+          borderRadius: "50%", background: "rgba(104,38,42,.08)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--k-maroon)",
+        }}>
+          <Lock size={28} strokeWidth={2} />
+        </div>
+        <h3 className="k-display" style={{ fontSize: 20, margin: "4px 0 8px" }}>Save your looks?</h3>
+        <p style={{ fontSize: 13, color: "var(--k-text-muted)", lineHeight: 1.6, marginBottom: 20 }}>
+          Saved to your Wearify profile. Access anytime from your phone.
+        </p>
+        <button onClick={onSave} className="k-btn k-btn-primary k-btn-pill" style={{ width: "100%", fontSize: 15 }}>
+          <ShieldCheck size={16} /> Save
+        </button>
+        <div style={{ fontSize: 10, color: "var(--k-text-muted)", margin: "10px 0", letterSpacing: "0.1em" }}>OR</div>
+        <button onClick={onDelete} className="k-btn k-btn-pill" style={{
+          width: "100%", background: "transparent",
+          border: "1px solid var(--k-red)", color: "var(--k-red)",
+          fontSize: 13, fontWeight: 500,
+        }}>
+          <X size={15} /> Delete All
+        </button>
       </div>
     </div>
   );
@@ -2311,11 +2441,22 @@ function SessionEndScreen({ onDone }: { onDone: () => void }) {
   const [cd, setCd] = useState(3);
   useEffect(() => { if (cd <= 0) { onDone(); return; } const t = setTimeout(() => setCd((v) => v - 1), 1000); return () => clearTimeout(t); }, [cd, onDone]);
   return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center", background: "var(--k-maroon-d)" }}>
-      <span className="k-popIn" style={{ fontSize: 64 }}>🔒</span>
-      <h2 className="k-slideUp k-d2" style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginTop: 16 }}>Session Ended</h2>
-      <p className="k-slideUp k-d3" style={{ fontSize: 14, color: "rgba(255,255,255,.6)", marginTop: 8 }}>Your privacy is protected.</p>
-      <div className="k-mono k-slideUp k-d4" style={{ fontSize: 13, color: "rgba(255,255,255,.4)", marginTop: 16 }}>{cd}...</div>
+    <div className="k-shell" style={{
+      alignItems: "center", justifyContent: "center",
+      background: "linear-gradient(160deg, var(--k-maroon) 0%, var(--k-maroon-d) 100%)",
+    }}>
+      <div className="k-popIn k-breathe" style={{
+        width: 100, height: 100, borderRadius: "50%",
+        background: "rgba(255,255,255,.08)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "#fff", backdropFilter: "blur(8px)",
+        border: "1px solid rgba(255,255,255,.15)",
+      }}>
+        <Lock size={44} strokeWidth={1.8} />
+      </div>
+      <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, color: "#fff", marginTop: 18 }}>Session Ended</h2>
+      <p className="k-slideUp k-d3" style={{ fontSize: 14, color: "rgba(255,255,255,.65)", marginTop: 6 }}>Your privacy is protected.</p>
+      <div className="k-mono k-slideUp k-d4" style={{ fontSize: 13, color: "rgba(255,255,255,.45)", marginTop: 18 }}>{cd}…</div>
     </div>
   );
 }

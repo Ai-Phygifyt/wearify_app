@@ -207,6 +207,18 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Kiosk design-system alignment — maroon + Montserrat/Roboto + Lucide icons + inventory-image thumbs
+
+- **Driver:** client-supplied "Modern Design System — Virtual Saree Try-on Kiosk" PDF. Kiosk must feel premium/elegant, be responsive, use icons instead of emojis, and include subtle animation.
+- **Palette shift** in [app/kiosk/kiosk-theme.css](app/kiosk/kiosk-theme.css): `--k-maroon` `#6B1A1A` → `#68262A`, `--k-bg` `#F5F0EA` → `#FDF6EE`, `--k-border` → `#C9C9C9`, `--k-text` → `#222222`. Brand font: Cormorant Garamond italic → **Montserrat** (headings/CTA/`.k-brand`/`.k-display`/`.k-heading`); body DM Sans → **Roboto**; mono DM Mono → **Roboto Mono**. Google Fonts `<link>` in [app/kiosk/layout.tsx](app/kiosk/layout.tsx) updated.
+- **New CSS primitives** (use instead of inline styles): `.k-btn` + `.k-btn-primary` / `.k-btn-secondary` / `.k-btn-ghost` / `.k-btn-pill` (min-height 48px per touch spec), `.k-input`, `.k-codebox` (OTP/code boxes with `.filled` and `.active` states), `.k-iconbtn` + `.k-iconbtn-badge` (44px round header buttons with count badge), `.k-chip` + `.k-chip-maroon` / `.k-chip-gold` / `.k-chip-green`, `.k-card` / `.k-card-hover`, `.k-divider-gold`, `.k-idle-tag`, `.k-form-col` (scrollable flex:1 + min-height:0 + overflow-y:auto — used by PhoneAuth/OTP/CodeEntry/NewCustomer so the Continue button stays reachable on short desktop viewports).
+- **Animations:** `k-breathe`, `k-glow`, `k-spin`, `k-float` + refined `k-popIn`/`k-slideUp`/`k-scaleIn`. Staggered entry via `k-d1…k-d8` delay classes.
+- **Icons:** all emojis removed from [app/kiosk/page.tsx](app/kiosk/page.tsx), replaced with `lucide-react` (`Phone`, `Hash`, `Hand`, `Camera`, `Lock`, `ShieldCheck`, `Shirt`, `ShoppingBag`, `ShoppingCart`, `Home`, `LogOut`, `Search`, `X`, `Check`, `Sparkles`, `Scissors`, `Star` filled/outline, `QrCode`, `ChevronLeft`/`Right`, `Delete`, `Minus`/`Plus`, `Loader2`).
+- **Card sizing:** home grid `repeat(4, 1fr)` → `repeat(auto-fill, minmax(160px, 1fr))`; horizontal rails `220px` → `170px`; card aspect `130%` → `120%`; inner text trimmed (name 14→13, meta 12→11, price 16→14). Cards pack tighter and wrap responsively.
+- **Inventory images wired in:** all saree thumbnails (SareeCard, ProductDetail hero, TrialRoom list + full-bleed preview, Wardrobe card, Cart row) route through the **shared** [components/SareeThumb.tsx](components/SareeThumb.tsx) — `{ name, fileId, grad, emoji, emojiSize, gradientAngle }`. Its three-tier fallback (local `/inventory/*` by name → Convex Storage URL → gradient+emoji) is the single source of truth; do NOT duplicate the `INVENTORY_IMAGES` map inline.
+- **Responsive:** `@media (max-width: 820px)` and `(max-width: 520px)` rules shrink numpad buttons, codeboxes, iconbtns, and modal padding for portrait tablets.
+- **Pre-existing lint warnings** (`set-state-in-effect` in countdown timers, a few unused vars) were NOT fixed — they predate this pass.
+
 ### `/c/looks` = try-on history (trial entry, not wardrobe save)
 
 - **Problem:** `/c/looks` only showed sarees that were moved to wardrobe — items tried but not saved never appeared. Root cause: `createLook` was only called from `onAddToWardrobe`. Every wardrobe item first passes through trial, but trial-only items were invisible to the Looks feed.
@@ -255,7 +267,6 @@ Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When
 - **Convex:** all `convex/*` files byte-identical to main after merge — no logic loss.
 - **Commits:** `182d92a` (merge) + `57f52a0` (missed Staff & Roles onClick wiring).
 - **State:** local only; not pushed.
-
 ### Visit count consistency — `/c/me` + per-store breakdown
 
 - **Problem:** `/c/me` showed "0 Visits" while `/c/me/history` showed "1 visit" for the same customer. `/c/me` was reading the denormalised `customers.totalVisits` column; nothing bumps it. `/c/me/history` reads the `visitHistory` table directly.
