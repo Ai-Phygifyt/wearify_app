@@ -12,6 +12,13 @@ import {
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
   Minus, Plus, Delete, Loader2, ShieldCheck,
 } from "lucide-react";
+import { ScanChoiceScreen } from "./screens/ScanChoiceScreen";
+import { ConsentScreen } from "./screens/ConsentScreen";
+import { BodyScanScreen } from "./screens/BodyScanScreen";
+import { AIProcessingScreen } from "./screens/AIProcessingScreen";
+import { FeedbackScreen } from "./screens/FeedbackScreen";
+import { DataSaveScreen } from "./screens/DataSaveScreen";
+import { SessionEndScreen } from "./screens/SessionEndScreen";
 
 /* ═══ CONFIG ═══ */
 const CFG = {
@@ -1304,39 +1311,6 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
 }
 
 /* ── SCAN CHOICE (returning customer with existing body scan) ── */
-function ScanChoiceScreen({ customerName, onUsePrevious, onRescan }: {
-  customerName: string; onUsePrevious: () => void; onRescan: () => void;
-}) {
-  return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-modal k-scaleIn" style={{ maxWidth: 380 }}>
-        <div className="k-popIn" style={{
-          width: 64, height: 64, margin: "0 auto 12px",
-          borderRadius: "50%", background: "rgba(104,38,42,.08)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "var(--k-maroon)",
-        }}>
-          <Hand size={30} strokeWidth={2} />
-        </div>
-        <h3 className="k-display" style={{ fontSize: 22, marginBottom: 6 }}>
-          Welcome back{customerName ? `, ${customerName.split(" ")[0]}` : ""}
-        </h3>
-        <p style={{ fontSize: 14, color: "var(--k-text-muted)", lineHeight: 1.6, marginBottom: 24 }}>
-          We found your previous body scan. Our AI can use it for your try-on, or you can take a fresh scan.
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <button onClick={onUsePrevious} className="k-btn k-btn-primary k-btn-pill" style={{ width: "100%", fontSize: 15 }}>
-            Use Previous Scan
-            <ChevronRight size={18} />
-          </button>
-          <button onClick={onRescan} className="k-btn k-btn-secondary k-btn-pill" style={{ width: "100%", fontSize: 14 }}>
-            Take Fresh Scan
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ── CODE ENTRY ── */
 function CodeEntryScreen({
@@ -1442,126 +1416,6 @@ function LangScreen({ lang, onSelect, storeName }: { lang: string; onSelect: (c:
   );
 }
 
-/* ── CONSENT ── */
-function ConsentScreen({ onAllow, onSkip }: { onAllow: () => void; onSkip: () => void }) {
-  return (
-    <div className="k-overlay">
-      <div className="k-modal k-scaleIn">
-        <div className="k-popIn" style={{
-          width: 60, height: 60, margin: "0 auto 12px",
-          borderRadius: "50%", background: "rgba(104,38,42,.08)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "var(--k-maroon)",
-        }}>
-          <Camera size={28} strokeWidth={2} />
-        </div>
-        <h3 className="k-display" style={{ fontSize: 20, marginBottom: 8 }}>Start Your Try-On</h3>
-        <p style={{ fontSize: 14, color: "var(--k-text-muted)", lineHeight: 1.6, marginBottom: 20 }}>
-          Photo processed by on-device AI. Images saved securely. Delete anytime.
-        </p>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onSkip} className="k-btn k-btn-secondary k-btn-pill" style={{ flex: 1, fontSize: 14 }}>
-            Skip
-          </button>
-          <button onClick={onAllow} className="k-btn k-btn-primary k-btn-pill" style={{ flex: 1, fontSize: 14 }}>
-            Allow
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── BODY SCAN ── */
-function BodyScanScreen({ storeName, onCapture, onBack }: { storeName: string; onCapture: () => void; onBack: () => void }) {
-  const [detected, setDetected] = useState(false);
-  const [phase, setPhase] = useState<"position" | "countdown">("position");
-  const [countdown, setCountdown] = useState(10);
-
-  useEffect(() => { const t = setTimeout(() => setDetected(true), 2500); return () => clearTimeout(t); }, []);
-  useEffect(() => {
-    if (phase !== "countdown") return;
-    if (countdown <= 0) { onCapture(); return; }
-    const t = setTimeout(() => setCountdown((v) => v - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, countdown, onCapture]);
-
-  return (
-    <div className="k-shell">
-      <div style={{ textAlign: "center", padding: "16px 0" }}>
-        <div className="k-brand" style={{ fontSize: 22 }}>{storeName}</div>
-      </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 16px" }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Create Your Digital Look</h2>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 8 }}>Stand inside the frame</p>
-        <div className="k-scan-frame" style={{
-          width: "100%", flex: 1, maxHeight: "60vh", borderRadius: "var(--k-r)", overflow: "hidden",
-          background: "linear-gradient(180deg, rgba(200,190,175,.3), rgba(200,190,175,.15))", position: "relative",
-        }}>
-          <div className="k-scan-corner tl" /><div className="k-scan-corner tr" /><div className="k-scan-corner bl" /><div className="k-scan-corner br" />
-          {phase === "countdown" && <div className="k-scan-line" />}
-          {phase === "countdown" && (
-            <div style={{
-              position: "absolute", top: "4%", left: "50%", transform: "translateX(-50%)",
-              background: "rgba(255,255,255,.85)", padding: "4px 16px", borderRadius: "var(--k-r-sm)",
-              fontFamily: "'DM Mono', monospace", fontSize: 20, fontWeight: 600, zIndex: 5,
-            }}>{countdown}s</div>
-          )}
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3 }}>
-            <svg viewBox="0 0 200 400" style={{ height: "70%", opacity: detected ? 0.7 : 0.4 }}>
-              <ellipse cx="100" cy="55" rx="28" ry="32" fill="none" stroke={detected ? "var(--k-green)" : "var(--k-text-light)"} strokeWidth="1.5" />
-              <path d="M72 87C60 95 40 115 38 160L38 250Q38 260 48 260L65 260L65 200L75 200L75 350Q75 360 85 360L92 360L95 210L105 210L108 360L115 360Q125 360 125 350L125 200L135 200L135 260L152 260Q162 260 162 250L162 160C160 115 140 95 128 87" fill="none" stroke={detected ? "var(--k-green)" : "var(--k-text-light)"} strokeWidth="1.5" />
-            </svg>
-          </div>
-          {phase === "position" && detected && (
-            <div style={{ position: "absolute", bottom: "4%", left: "50%", transform: "translateX(-50%)", zIndex: 5, display: "flex", gap: 10 }}>
-              <button onClick={() => { setPhase("countdown"); setCountdown(10); }} className="k-press" style={{
-                padding: "12px 24px", borderRadius: "var(--k-r-pill)",
-                background: "rgba(255,255,255,.85)", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer",
-              }}>Capture My Look</button>
-            </div>
-          )}
-        </div>
-        <button onClick={onBack} className="k-press" style={{
-          marginTop: 8, padding: "8px 20px", background: "transparent", border: "1px solid var(--k-border)",
-          borderRadius: "var(--k-r-pill)", fontSize: 13, fontWeight: 500, cursor: "pointer", color: "var(--k-text-muted)",
-        }}>Back</button>
-      </div>
-    </div>
-  );
-}
-
-/* ── AI PROCESSING ── */
-function AIProcessingScreen({ onDone }: { onDone: () => void }) {
-  const [cd, setCd] = useState(6);
-  const [prog, setProg] = useState(0);
-  useEffect(() => {
-    if (cd <= 0) { onDone(); return; }
-    const t = setTimeout(() => { setCd((v) => v - 1); setProg((v) => Math.min(100, v + 17)); }, 1000);
-    return () => clearTimeout(t);
-  }, [cd, onDone]);
-  return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
-      <div className="k-popIn k-breathe" style={{
-        width: 80, height: 80, borderRadius: "50%",
-        background: "linear-gradient(135deg, rgba(104,38,42,.1), rgba(201,148,26,.12))",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "var(--k-maroon)", marginBottom: 20,
-      }}>
-        <Sparkles size={36} strokeWidth={2} />
-      </div>
-      <h2 className="k-display" style={{ fontSize: 22 }}>Creating your look</h2>
-      <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Our AI is tailoring it just for you</p>
-      <div style={{ width: "min(70%, 420px)", height: 5, borderRadius: "var(--k-r-pill)", background: "var(--k-border-l)", marginTop: 20, overflow: "hidden" }}>
-        <div style={{ width: `${prog}%`, height: "100%", background: "linear-gradient(90deg, var(--k-maroon), var(--k-gold))", borderRadius: "var(--k-r-pill)", transition: "width .8s ease" }} />
-      </div>
-      <div className="k-mono" style={{ fontSize: 16, color: "var(--k-text-muted)", marginTop: 14 }}>{cd}s</div>
-      <div className="k-chip k-chip-green k-slideUp k-d3" style={{ marginTop: 24 }}>
-        <ShieldCheck size={14} /> Securely saved
-      </div>
-    </div>
-  );
-}
 
 /* ── HEADER ── */
 function StoreBrand({ storeName, logoFileId }: { storeName: string; logoFileId?: Id<"_storage"> }) {
@@ -2540,111 +2394,3 @@ function TailorScreen({
 }
 
 /* ── FEEDBACK ── */
-function FeedbackScreen({ onSubmit, onHome, onLogout }: { onSubmit: (rating: number) => void; onHome: () => void; onLogout: () => void }) {
-  const [rating, setRating] = useState(0);
-  const [done, setDone] = useState(false);
-  useEffect(() => { if (done) { const t = setTimeout(() => onSubmit(rating), 3000); return () => clearTimeout(t); } }, [done, onSubmit, rating]);
-  if (done) return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-popIn" style={{
-        width: 100, height: 100, borderRadius: "50%",
-        background: "linear-gradient(135deg, rgba(201,148,26,.15), rgba(201,148,26,.05))",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "var(--k-gold)",
-      }}>
-        <Star size={48} fill="var(--k-gold)" strokeWidth={1.6} />
-      </div>
-      <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, marginTop: 18 }}>Thank you!</h2>
-      <p className="k-slideUp k-d3" style={{ fontSize: 14, color: "var(--k-text-muted)", marginTop: 4 }}>We appreciate your feedback</p>
-    </div>
-  );
-  return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-modal k-scaleIn" style={{ maxWidth: 380 }}>
-        <h3 className="k-display" style={{ fontSize: 20 }}>How was your experience?</h3>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Tap a star to rate</p>
-        <div style={{ display: "flex", justifyContent: "center", gap: 10, margin: "22px 0" }}>
-          {[1, 2, 3, 4, 5].map((n) => {
-            const active = n <= rating;
-            return (
-              <span key={n} onClick={() => setRating(n)} className="k-star k-press" aria-label={`${n} star`}>
-                <Star size={36} strokeWidth={1.6}
-                  color={active ? "var(--k-gold)" : "var(--k-border)"}
-                  fill={active ? "var(--k-gold)" : "transparent"} />
-              </span>
-            );
-          })}
-        </div>
-        <button onClick={() => setDone(true)} disabled={rating === 0} className="k-btn k-btn-primary k-btn-pill" style={{ width: "100%", fontSize: 14 }}>
-          Submit
-        </button>
-        <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-          <button onClick={onHome} className="k-btn k-btn-secondary k-btn-pill" style={{ flex: 1, fontSize: 12, minHeight: 40, padding: "8px 14px" }}>
-            <Home size={14} /> Home
-          </button>
-          <button onClick={onLogout} className="k-btn k-btn-secondary k-btn-pill" style={{ flex: 1, fontSize: 12, minHeight: 40, padding: "8px 14px" }}>
-            <LogOut size={14} /> Logout
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── DATA SAVE ── */
-function DataSaveScreen({ onSave, onDelete }: { onSave: () => void; onDelete: () => void }) {
-  return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-modal k-scaleIn" style={{ maxWidth: 380 }}>
-        <div className="k-popIn" style={{
-          width: 60, height: 60, margin: "0 auto 12px",
-          borderRadius: "50%", background: "rgba(104,38,42,.08)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "var(--k-maroon)",
-        }}>
-          <Lock size={28} strokeWidth={2} />
-        </div>
-        <h3 className="k-display" style={{ fontSize: 20, margin: "4px 0 8px" }}>Save your looks?</h3>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", lineHeight: 1.6, marginBottom: 20 }}>
-          Saved to your Wearify profile. Access anytime from your phone.
-        </p>
-        <button onClick={onSave} className="k-btn k-btn-primary k-btn-pill" style={{ width: "100%", fontSize: 15 }}>
-          <ShieldCheck size={16} /> Save
-        </button>
-        <div style={{ fontSize: 10, color: "var(--k-text-muted)", margin: "10px 0", letterSpacing: "0.1em" }}>OR</div>
-        <button onClick={onDelete} className="k-btn k-btn-pill" style={{
-          width: "100%", background: "transparent",
-          border: "1px solid var(--k-red)", color: "var(--k-red)",
-          fontSize: 13, fontWeight: 500,
-        }}>
-          <X size={15} /> Delete All
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ── SESSION END ── */
-function SessionEndScreen({ onDone }: { onDone: () => void }) {
-  const [cd, setCd] = useState(3);
-  useEffect(() => { if (cd <= 0) { onDone(); return; } const t = setTimeout(() => setCd((v) => v - 1), 1000); return () => clearTimeout(t); }, [cd, onDone]);
-  return (
-    <div className="k-shell" style={{
-      alignItems: "center", justifyContent: "center",
-      background: "linear-gradient(160deg, var(--k-maroon) 0%, var(--k-maroon-d) 100%)",
-    }}>
-      <div className="k-popIn k-breathe" style={{
-        width: 100, height: 100, borderRadius: "50%",
-        background: "rgba(255,255,255,.08)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "#fff", backdropFilter: "blur(8px)",
-        border: "1px solid rgba(255,255,255,.15)",
-      }}>
-        <Lock size={44} strokeWidth={1.8} />
-      </div>
-      <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, color: "#fff", marginTop: 18 }}>Session Ended</h2>
-      <p className="k-slideUp k-d3" style={{ fontSize: 14, color: "rgba(255,255,255,.65)", marginTop: 6 }}>Your privacy is protected.</p>
-      <div className="k-mono k-slideUp k-d4" style={{ fontSize: 13, color: "rgba(255,255,255,.45)", marginTop: 18 }}>{cd}…</div>
-    </div>
-  );
-}
