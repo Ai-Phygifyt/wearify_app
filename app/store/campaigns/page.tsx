@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 type CampaignStatus = "sent" | "completed" | "scheduled" | "draft";
 type Channel = "whatsapp" | "sms" | "email";
@@ -46,6 +47,33 @@ const CHANNEL_COLOR: Record<string, string> = {
 export default function CampaignsPage() {
   const [storeId, setStoreId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const dispatchCampaign = useAction(api.campaignOps.dispatchCampaign);
+  const [dispatchingId, setDispatchingId] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function handleSend(campaignId: Id<"campaigns">) {
+    setDispatchingId(campaignId);
+    setBanner(null);
+    try {
+      const r = await dispatchCampaign({ id: campaignId });
+      const parts: string[] = [];
+      if (r.sent) parts.push(`${r.sent} sent`);
+      if (r.simulated) parts.push(`${r.simulated} simulated`);
+      if (r.failed) parts.push(`${r.failed} failed`);
+      if (r.skipped) parts.push(`${r.skipped} skipped (no contact)`);
+      const total = r.sent + r.simulated + r.failed + r.skipped;
+      setBanner({
+        kind: "ok",
+        text: total === 0
+          ? "No recipients matched — add customers to this segment first."
+          : `Dispatched: ${parts.join(", ")}`,
+      });
+    } catch (e) {
+      setBanner({ kind: "err", text: e instanceof Error ? e.message : "Dispatch failed" });
+    } finally {
+      setDispatchingId(null);
+    }
+  }
 
   useEffect(() => {
     try {
@@ -88,6 +116,22 @@ export default function CampaignsPage() {
           New Campaign
         </button>
       </div>
+
+      {banner && (
+        <div
+          onClick={() => setBanner(null)}
+          className="w-card"
+          style={{
+            padding: "10px 14px", cursor: "pointer",
+            background: banner.kind === "ok" ? "rgba(30,92,47,.08)" : "rgba(180,35,35,.08)",
+            border: `1px solid ${banner.kind === "ok" ? "rgba(30,92,47,.35)" : "rgba(180,35,35,.35)"}`,
+            color: banner.kind === "ok" ? "var(--w-teal, #1E5C2F)" : "var(--w-red, #B42323)",
+            fontSize: 13, fontWeight: 500,
+          }}
+        >
+          {banner.text} <span style={{ opacity: 0.6, fontSize: 11, marginLeft: 8 }}>(tap to dismiss)</span>
+        </div>
+      )}
 
       {/* ── Stats bar ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
@@ -209,6 +253,32 @@ export default function CampaignsPage() {
                       Created {campaign.createdAt}
                     </div>
                   </div>
+
+                  {/* Send button — only while unsent */}
+                  {!isSent && (
+                    <button
+                      onClick={() => handleSend(campaign._id)}
+                      disabled={dispatchingId === campaign._id}
+                      className="w-btn w-btn-primary"
+                      style={{
+                        flexShrink: 0, fontSize: 12, padding: "8px 14px",
+                        opacity: dispatchingId === campaign._id ? 0.6 : 1,
+                        display: "flex", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      {dispatchingId === campaign._id ? (
+                        "Sending…"
+                      ) : (
+                        <>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13" />
+                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                          </svg>
+                          Send Now
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Metrics */}

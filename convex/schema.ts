@@ -634,6 +634,25 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   // ============================
+  // CAMPAIGN SENDS (per-recipient dispatch log)
+  // One row per (campaign, recipient) — written by the dispatch pipeline.
+  // status: "sent" (real provider accepted), "simulated" (no API key), "failed".
+  // ============================
+  campaignSends: defineTable({
+    campaignId: v.id("campaigns"),
+    storeId: v.string(),
+    customerId: v.optional(v.id("customers")),
+    channel: v.string(), // "whatsapp" | "sms" | "email"
+    recipient: v.string(), // phone (E.164-ish) or email
+    status: v.string(), // "sent" | "simulated" | "failed"
+    error: v.optional(v.string()),
+    sentAt: v.number(),
+  })
+    .index("by_campaignId", ["campaignId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_customerId", ["customerId"]),
+
+  // ============================
   // CUSTOMER SEGMENTS
   // ============================
   customerSegments: defineTable({
