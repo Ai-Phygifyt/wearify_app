@@ -209,6 +209,32 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Customer route rename — /c/wishlist → /c/wardrobe
+
+- **Why:** Wardrobe (kiosk try-on saves) is the headline customer flow; Wishlist (hearted items) is secondary. Route name now matches what the feature is named everywhere else in the UI (home tile "My Wardrobe", kiosk "Wardrobe" screen). The page keeps both tabs; just the hero title flips per active tab.
+- **Changes:** folder renamed ([app/c/wardrobe/page.tsx](app/c/wardrobe/page.tsx)); bottom-nav entry label+href updated in [app/c/layout.tsx](app/c/layout.tsx); home-tile router.push updated in [app/c/page.tsx](app/c/page.tsx); seed comment updated in [convex/seed.ts](convex/seed.ts).
+- **No redirect shim** added from `/c/wishlist` — it just 404s. Fine for the current demo. If real customers ever bookmark it, add a `redirect()` page.
+
+### /store/orders page — surface kiosk checkouts to the merchant
+
+- **Why:** `sessionOps.createOrder` has always written `orders` rows on kiosk checkout; `listOrdersByStore` existed but no UI consumed it → merchants had zero visibility on kiosk-generated revenue. Caught by the cross-module connectivity audit (2026-04-20).
+- **Surface:** new [app/store/orders/page.tsx](app/store/orders/page.tsx) + "Orders" entry in the store sidebar ([app/store/layout.tsx](app/store/layout.tsx)). Stats strip (count / pending / paid / revenue), status filter pills, expandable per-order rows with line items + subtotal/GST/total + session attribution.
+- **Not an admin view** — admin already drills into stores, so admin can see per-store orders transitively. Skipped building `/admin/orders` to keep scope tight. Revisit if we ever want cross-store order reporting.
+
+### Campaigns dispatch pipeline (SendGrid/Twilio + demo fallback)
+
+- **Why:** `/store/campaigns` was a silent write-only page — campaigns got created but never actually sent; `sendCampaign` just patched a field. The audit flagged this as "dead-end write". Now the loop is real.
+- **New table `campaignSends`** ([convex/schema.ts](convex/schema.ts)) — one row per (campaign, recipient) with `status: "sent" | "simulated" | "failed"`, `error?`, `sentAt`. Kept out of the `campaigns` row because per-recipient status is unbounded and useful for audit / resend logic.
+- **Action `dispatchCampaign`** ([convex/campaignOps.ts](convex/campaignOps.ts)) — resolves recipients from `customerStoreLinks` filtered by `segment` (case-insensitive; `"all"` or missing = everyone), then per recipient tries the real provider if env keys are set, else records `"simulated"`. Idempotent: refuses to run if `campaign.status === "sent"`. This is the first Convex action in the codebase — uses `ctx.runQuery`/`ctx.runMutation` to keep DB access out of the action itself.
+- **Provider keys** (set in Convex deployment env; absence = simulated mode):
+  - `SENDGRID_API_KEY` + `SENDGRID_FROM` — email
+  - `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_WHATSAPP_FROM` — whatsapp
+  - `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_SMS_FROM` — sms
+- **Template substitution:** `{name}` (first name from customer row) and `{store}` are the only supported vars. Add more here if marketing asks — keep the substitution list in sync with the template editor UI.
+- **Internal helpers** (`_getCampaign`, `_resolveRecipients`, `_writeSend`, `_markCampaignSent`) are underscore-prefixed so the dispatch action is the only public entry — don't call the helpers directly from the UI, always go through `dispatchCampaign`.
+- **UI** ([app/store/campaigns/page.tsx](app/store/campaigns/page.tsx)): Send Now button per unsent campaign + result banner showing sent / simulated / failed / skipped counts. `useAction(api.campaignOps.dispatchCampaign)`.
+- **Verified:** ST-001 campaign dispatched to 14 customers, all `simulated` (no provider keys in this deployment). Re-dispatch correctly rejected. `listSendsByCampaign` query returned all 14 rows.
+
 ### Kiosk cart persistence + always-on cart icon
 
 - **Problem 1:** Kiosk cart was pure React state (`useState<Array<SareeItem & { qty }>>`), so moving wardrobe items → cart, adjusting qty, or anything else was lost on logout. Inconsistent with wardrobe/trial-room which already persist per `(customer, store)`.
