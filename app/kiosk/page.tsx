@@ -2392,6 +2392,13 @@ function TailorScreen({
     name: string;
     phone: string;
   }) {
+    // Phone-check first: if we can't actually open WhatsApp, don't spam
+    // the tailor with a referral row they can't fulfill.
+    const phoneDigits = (t.phone || "").replace(/[^0-9]/g, "");
+    if (!phoneDigits) {
+      showToast("Tailor contact not available", "warning");
+      return;
+    }
     setConnecting(t._id);
     try {
       if (customerId && customerName && customerPhone) {
@@ -2407,11 +2414,6 @@ function TailorScreen({
             date: new Date().toISOString().slice(0, 10),
           });
         } catch { /* analytics-level failure, don't block WhatsApp handoff */ }
-      }
-      const phoneDigits = (t.phone || "").replace(/[^0-9]/g, "");
-      if (!phoneDigits) {
-        showToast("Tailor contact not available", "warning");
-        return;
       }
       const intro = customerName ? `Hi ${t.name}, I'm ${customerName}` : `Hi ${t.name}`;
       const storeLine = storeName ? ` at ${storeName}` : "";

@@ -213,12 +213,18 @@ export const updateVerification = mutation({
     if (args.kycRejectionReason !== undefined) {
       updates.kycRejectionReason = args.kycRejectionReason ?? undefined;
     }
-    // Auto-promote status to "verified" once all three docs are approved.
-    const approvedNow =
+    // Recompute status from the post-update flag set so rejections demote
+    // a previously-verified tailor (one bad doc shouldn't leave them
+    // appearing "verified" in discovery).
+    const fullyVerifiedAfter =
       (args.aadhaarVerified ?? tailor.aadhaarVerified) &&
       (args.panVerified ?? tailor.panVerified) &&
       (args.addressVerified ?? tailor.addressVerified);
-    if (approvedNow) updates.status = "verified";
+    if (fullyVerifiedAfter) {
+      updates.status = "verified";
+    } else if (tailor.status === "verified") {
+      updates.status = "pending";
+    }
     await ctx.db.patch(tailor._id, updates);
   },
 });
