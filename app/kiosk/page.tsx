@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SareeThumb } from "@/components/SareeThumb";
 import {
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ChevronDown,
   Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
   Minus, Plus, Delete, Loader2, ShieldCheck,
@@ -606,6 +606,7 @@ export default function KioskPage() {
               showToast(`Added ${items.length} to wardrobe`, "success");
             }}
             onGoHome={goHome}
+            onGoToWardrobe={() => navigate("wardrobe")}
             onLogout={triggerLogout}
             showToast={showToast}
             maxTrial={CFG.maxTrial}
@@ -677,6 +678,7 @@ export default function KioskPage() {
                 });
               }
               showToast("Added to Trial Room", "success");
+              navigate("trialRoom");
             }}
             onBack={goBack}
             onProductTap={(p) => navigate("productDetail", p)}
@@ -820,44 +822,85 @@ function KioskToast({ msg, type, onClose }: { msg: string; type: string; onClose
 }
 
 /* ── IDLE ── */
+const IDLE_SLIDES = [
+  {
+    img: "/inventory/Chanderi-Floral.jpeg",
+    h: "See Yourself in This Beautiful Saree",
+    s: "Experience our curated collection with virtual try-on",
+  },
+  {
+    img: "/inventory/Kanjeevaram-Temple-Border.webp",
+    h: "New Bridal Collection",
+    s: "Kanjivaram & Banarasi silks, handpicked for your big day",
+  },
+  {
+    img: "/inventory/Paithani-Heritage.webp",
+    h: "Festival Specials",
+    s: "Celebrate every occasion in exclusive weaves",
+  },
+  {
+    img: "/inventory/Organza-Pastel-Dream.jpeg",
+    h: "Light. Luxurious. Effortless.",
+    s: "Explore organzas and chiffons for every day",
+  },
+];
+
 function IdleScreen({ storeName, onStart }: { storeName: string; onStart: () => void }) {
   const [slideIdx, setSlideIdx] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setSlideIdx((i) => (i + 1) % 3), 5000);
+    const t = setInterval(() => setSlideIdx((i) => (i + 1) % IDLE_SLIDES.length), 5500);
     return () => clearInterval(t);
   }, []);
-  const slides = [
-    { h: "See Yourself in This Beautiful Saree", s: "Virtual Try-On Experience" },
-    { h: "New Bridal Collection", s: "Kanjivaram & Banarasi Silks" },
-    { h: "Festival Specials", s: "Exclusive Sarees" },
-  ];
+  const slide = IDLE_SLIDES[slideIdx];
+
   return (
-    <div onClick={onStart} className="k-shell" style={{ cursor: "pointer", justifyContent: "flex-end" }}>
-      <div className="k-idle-bg" />
-      <div style={{ position: "absolute", top: 20, left: 24, zIndex: 10 }}>
-        <div className="k-brand" style={{ fontSize: 22, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ height: 2, width: 44, background: "var(--k-gold)", marginTop: 6, borderRadius: 2 }} />
+    <div onClick={onStart} className="k-shell k-idle-shell" style={{ cursor: "pointer" }}>
+      {/* Cycling image backdrop */}
+      <div className="k-idle-stage">
+        {IDLE_SLIDES.map((s, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={s.img} src={s.img} alt="" aria-hidden
+            className={`k-idle-img ${i === slideIdx ? "active" : ""}`} />
+        ))}
+        <div className="k-idle-veil" />
       </div>
-      <div style={{ position: "absolute", top: "42%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 10 }}>
-        <div className="k-idle-tag k-scaleIn k-glow">
-          <span style={{ fontSize: 18 }}>Touch to Start</span>
-          <ChevronRight size={20} />
+
+      {/* Top bar */}
+      <div className="k-idle-top">
+        <div className="k-brand" style={{ fontSize: 20, color: "var(--k-text)" }}>{storeName}</div>
+        <div className="k-idle-lang" onClick={(e) => { e.stopPropagation(); onStart(); }}>
+          <span>Eng</span>
+          <ChevronDown size={14} />
         </div>
       </div>
-      <div key={slideIdx} style={{ position: "relative", zIndex: 10, textAlign: "center", padding: "0 24px 72px" }}>
-        <h1 className="k-display k-slideUp" style={{ fontSize: 30, color: "var(--k-text)", lineHeight: 1.2 }}>
-          {slides[slideIdx].h}
+
+      {/* Center glassmorphic CTA */}
+      <div className="k-idle-cta-wrap">
+        <div className="k-idle-cta k-scaleIn">
+          <span className="k-idle-cta-icon">
+            <Hand size={22} strokeWidth={2} />
+          </span>
+          <span className="k-idle-cta-label">Touch to Start</span>
+        </div>
+      </div>
+
+      {/* Bottom copy */}
+      <div key={slideIdx} className="k-idle-copy">
+        <h1 className="k-display k-slideUp" style={{ fontSize: 28, lineHeight: 1.25, letterSpacing: "0.01em" }}>
+          {slide.h}
         </h1>
-        <div className="k-divider-gold" />
-        <p className="k-slideUp k-d2" style={{ fontSize: 15, color: "var(--k-text-mid)", marginTop: 6, letterSpacing: "0.01em" }}>
-          {slides[slideIdx].s}
+        <p className="k-slideUp k-d2" style={{
+          fontSize: 14, color: "var(--k-text-mid)", marginTop: 8,
+          letterSpacing: "0.05em", textTransform: "uppercase",
+        }}>
+          {slide.s}
         </p>
         <div className="k-slideUp k-d3" style={{ display: "inline-flex", gap: 6, marginTop: 18 }}>
-          {slides.map((_, i) => (
+          {IDLE_SLIDES.map((_, i) => (
             <span key={i} style={{
               width: i === slideIdx ? 28 : 8, height: 3, borderRadius: 2,
-              background: i === slideIdx ? "var(--k-maroon)" : "var(--k-border)",
-              transition: "width .35s ease, background .35s ease",
+              background: i === slideIdx ? "var(--k-maroon)" : "rgba(34,34,34,.25)",
+              transition: "width .4s ease, background .4s ease",
             }} />
           ))}
         </div>
@@ -1911,9 +1954,9 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
 }
 
 /* ── TRIAL ROOM ── */
-function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onLogout, showToast, maxTrial, tryOnSec }: {
+function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec }: {
   items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
-  onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onLogout: () => void;
+  onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
 }) {
   const [timer, setTimer] = useState(tryOnSec);
@@ -1978,7 +2021,7 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
       </div>
 
       <div style={{ display: "flex", width: "100%", height: "100vh", paddingTop: 72 }}>
-        {/* LEFT panel — saree list */}
+        {/* LEFT panel — saree grid */}
         <div style={{
           width: "28%", minWidth: 280, height: "100%", overflowY: "auto",
           padding: "12px 10px", paddingBottom: 80,
@@ -1987,49 +2030,48 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
           <div style={{ fontSize: 16, fontWeight: 700, padding: "6px 8px", marginBottom: 10 }}>
             Trial Room ({items.length}/{maxTrial})
           </div>
-          {items.map((saree, idx) => {
-            const active = idx === selIdx;
-            const selW = selForWard.has(saree._id);
-            return (
-              <div key={saree._id} onClick={() => setSelIdx(idx)} style={{
-                display: "flex", gap: 10, padding: "12px 10px", marginBottom: 8,
-                borderRadius: "var(--k-r-sm)", cursor: "pointer", position: "relative",
-                background: active ? "rgba(242,212,212,.4)" : "var(--k-card)",
-                border: active ? "2.5px solid var(--k-maroon)" : "1.5px solid var(--k-border)",
-                transition: "all .15s",
-              }}>
-                {/* Checkbox — large touch target */}
-                <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
-                  width: 32, height: 32, borderRadius: 7, flexShrink: 0, alignSelf: "center",
-                  border: `2px solid ${selW ? "var(--k-green)" : "var(--k-text-light)"}`,
-                  background: selW ? "var(--k-green)" : "transparent",
-                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                  transition: "all .15s ease", color: "#fff",
-                }}>
-                  {selW && <Check size={18} strokeWidth={3} />}
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(108px, 1fr))", gap: 10,
+          }}>
+            {items.map((saree, idx) => {
+              const active = idx === selIdx;
+              const selW = selForWard.has(saree._id);
+              return (
+                <div key={saree._id} onClick={() => setSelIdx(idx)}
+                  className={`k-trial-card k-press k-slideUp${active ? " is-active" : ""}`}
+                >
+                  <div className="k-trial-card-img">
+                    <div>
+                      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={38} gradientAngle={135} />
+                    </div>
+                    <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
+                      position: "absolute", top: 6, left: 6, zIndex: 2,
+                      width: 28, height: 28, borderRadius: 7,
+                      border: `2px solid ${selW ? "var(--k-green)" : "rgba(255,255,255,.85)"}`,
+                      background: selW ? "var(--k-green)" : "rgba(255,255,255,.55)",
+                      backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                      display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                      color: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,.15)",
+                    }}>
+                      {selW && <Check size={15} strokeWidth={3} />}
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); onRemoveItem(saree._id); }} aria-label="Remove" style={{
+                      position: "absolute", top: 6, right: 6, zIndex: 2,
+                      width: 28, height: 28, borderRadius: "50%", cursor: "pointer", border: "none",
+                      background: "rgba(255,255,255,.85)",
+                      backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "var(--k-red)", boxShadow: "0 2px 8px rgba(0,0,0,.15)",
+                    }}><X size={14} strokeWidth={2.5} /></button>
+                  </div>
+                  <div className="k-trial-card-info">
+                    <div className="k-trial-card-name">{saree.name}</div>
+                    <div className="k-trial-card-price">₹{fmtPrice(saree.price)}</div>
+                  </div>
                 </div>
-                {/* Thumbnail */}
-                <div style={{
-                  width: 56, height: 56, borderRadius: "var(--k-r-sm)", flexShrink: 0,
-                  overflow: "hidden",
-                }}>
-                  <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={22} gradientAngle={135} />
-                </div>
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{saree.name}</div>
-                  <div className="k-mono" style={{ fontSize: 13, color: "var(--k-maroon)", fontWeight: 600 }}>₹{fmtPrice(saree.price)}</div>
-                </div>
-                {/* Remove button — bigger touch target */}
-                <button onClick={(e) => { e.stopPropagation(); onRemoveItem(saree._id); }} aria-label="Remove" style={{
-                  width: 32, height: 32, borderRadius: "50%", cursor: "pointer",
-                  background: "var(--k-red-bg)", border: "none",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--k-red)", flexShrink: 0, alignSelf: "center",
-                }}><X size={16} strokeWidth={2.5} /></button>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
           {selForWard.size > 0 && (
             <button onClick={moveToWardrobe} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp" style={{
               width: "100%", marginTop: 12, fontSize: 15, fontWeight: 600,
@@ -2037,26 +2079,58 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
               <ShoppingBag size={18} /> Add to Wardrobe ({selForWard.size})
             </button>
           )}
+          <button onClick={onGoToWardrobe} className="k-btn k-btn-pill k-press" style={{
+            width: "100%", marginTop: 10, fontSize: 14, fontWeight: 600,
+            background: "rgba(255,255,255,.6)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            border: "1.5px solid var(--k-maroon)", color: "var(--k-maroon)",
+          }}>
+            <ShoppingBag size={16} /> Go to Wardrobe ({wardrobeItems.length})
+            <ChevronRight size={16} />
+          </button>
         </div>
 
-        {/* RIGHT panel — preview */}
-        <div style={{ flex: 1, position: "relative", height: "100%" }}>
+        {/* RIGHT panel — preview card */}
+        <div style={{
+          flex: 1, display: "flex",
+          padding: "20px 28px 32px",
+        }}>
           {current && (
-            <div style={{ position: "absolute", inset: 0 }}>
-              <SareeThumb name={current.name} fileId={current.imageIds?.[0]} grad={current.grad} emoji={current.emoji} emojiSize={120} gradientAngle={135} />
-            </div>
-          )}
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 50%, rgba(245,240,234,.9) 90%)" }} />
-          {current && (
-            <div style={{
-              position: "absolute", bottom: 80, right: 24, width: "50%", maxWidth: 480,
-              background: "rgba(255,255,255,.92)", backdropFilter: "blur(12px)",
-              borderRadius: "var(--k-r-lg)", padding: "20px 24px", boxShadow: "var(--k-shadow-lg)",
-            }}>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{current.name}</div>
-              <div className="k-mono" style={{ fontSize: 20, fontWeight: 700, color: "var(--k-maroon)", marginTop: 4 }}>₹{fmtPrice(current.price)}</div>
-              {current.description && <div style={{ fontSize: 14, color: "var(--k-text-muted)", marginTop: 6, lineHeight: 1.5 }}>{current.description}</div>}
-              <div style={{ fontSize: 12, color: "var(--k-text-light)", marginTop: 8 }}>{current.fabric} · {current.occasion}</div>
+            <div className="k-trial-preview k-slideUp" style={{ flex: 1, height: "100%" }}>
+              {/* Image top */}
+              <div className="k-trial-preview-img">
+                <SareeThumb name={current.name} fileId={current.imageIds?.[0]} grad={current.grad} emoji={current.emoji} emojiSize={160} gradientAngle={135} />
+              </div>
+
+              {/* Info bottom — glassmorphism */}
+              <div className="k-trial-preview-info">
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="k-display" style={{ fontSize: 26 }}>{current.name}</div>
+                    {current.description && (
+                      <div style={{ fontSize: 14, color: "var(--k-text-mid)", marginTop: 6, lineHeight: 1.5 }}>
+                        {current.description}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+                      {current.fabric && <span className="k-chip k-chip-maroon" style={{ fontSize: 11 }}>{current.fabric}</span>}
+                      {current.occasion && <span className="k-chip k-chip-gold" style={{ fontSize: 11 }}>{current.occasion}</span>}
+                      {current.region && <span className="k-chip" style={{ fontSize: 11 }}>{current.region}</span>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div className="k-mono" style={{ fontSize: 26, fontWeight: 700, color: "var(--k-maroon)", lineHeight: 1 }}>
+                      ₹{fmtPrice(current.price)}
+                    </div>
+                    {current.mrp && current.mrp > current.price && (
+                      <div className="k-mono" style={{ fontSize: 13, color: "var(--k-text-light)", textDecoration: "line-through", marginTop: 4 }}>
+                        ₹{fmtPrice(current.mrp)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
