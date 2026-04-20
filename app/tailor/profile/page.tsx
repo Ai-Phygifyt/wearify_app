@@ -10,7 +10,7 @@ const MENU_ITEMS = [
   { label: "Edit Profile", href: "/tailor/profile/edit", icon: "edit" },
   { label: "Portfolio", href: "/tailor/profile/portfolio", icon: "grid" },
   { label: "Availability", href: "/tailor/profile/availability", icon: "clock" },
-  { label: "Services & Pricing", href: "/tailor/profile/edit", icon: "tag" },
+  { label: "Services & Pricing", href: "/tailor/profile/services", icon: "tag" },
   { label: "Verification (KYC)", href: "/tailor/profile/verification", icon: "shield" },
   { label: "Commission & Earnings", href: "/tailor/profile/commission", icon: "wallet" },
   { label: "Ratings & Reviews", href: "/tailor/orders", icon: "star" },

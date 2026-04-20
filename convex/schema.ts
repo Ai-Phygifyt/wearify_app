@@ -499,6 +499,12 @@ export default defineSchema({
     aadhaarVerified: v.optional(v.boolean()),
     panVerified: v.optional(v.boolean()),
     addressVerified: v.optional(v.boolean()),
+    // KYC document files (uploaded by tailor, reviewed by admin).
+    aadhaarFileId: v.optional(v.id("_storage")),
+    panFileId: v.optional(v.id("_storage")),
+    addressProofFileId: v.optional(v.id("_storage")),
+    // Admin rejection note shown back to the tailor on the verification page.
+    kycRejectionReason: v.optional(v.string()),
     // Language
     language: v.optional(v.string()),
     // Password

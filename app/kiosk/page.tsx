@@ -727,6 +727,11 @@ export default function KioskPage() {
         return (
           <TailorScreen
             storeCity={storeData?.city || ""}
+            storeId={storeId}
+            storeName={storeName}
+            customerId={customerId}
+            customerName={customerName}
+            customerPhone={phone ? `+91${phone}` : ""}
             onBack={goBack}
             showToast={showToast}
           />
@@ -2353,8 +2358,74 @@ function OrderScreen({ cart, setCart, onCheckout, onFindTailor, onBack }: {
 }
 
 /* ── TAILORS ── */
-function TailorScreen({ storeCity, onBack, showToast }: { storeCity: string; onBack: () => void; showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void }) {
+function TailorScreen({
+  storeCity,
+  storeId,
+  storeName,
+  customerId,
+  customerName,
+  customerPhone,
+  onBack,
+  showToast,
+}: {
+  storeCity: string;
+  storeId: string;
+  storeName: string;
+  customerId: Id<"customers"> | null;
+  customerName: string;
+  customerPhone: string;
+  onBack: () => void;
+  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
+}) {
   const tailors = useQuery(api.tailorOps.listByCity, storeCity ? { city: storeCity } : "skip");
+  const createReferral = useMutation(api.tailorOps.createReferral);
+  const [connecting, setConnecting] = useState<string | null>(null);
+
+  // Connect flow: write a referral row server-side for attribution and
+  // analytics, then open the tailor's WhatsApp with a pre-filled intro so
+  // the customer doesn't have to type a thing. We still open WhatsApp even
+  // if the referral write fails — the handoff is more important than the
+  // audit row.
+  async function handleConnect(t: {
+    _id: Id<"tailors">;
+    tailorId: string;
+    name: string;
+    phone: string;
+  }) {
+    setConnecting(t._id);
+    try {
+      if (customerId && customerName && customerPhone) {
+        try {
+          await createReferral({
+            tailorId: t.tailorId,
+            customerId,
+            customerName,
+            customerPhone,
+            storeId: storeId || undefined,
+            storeName: storeName || undefined,
+            measurementsShared: true, // customer's measurements live on their row; order creation auto-copies
+            date: new Date().toISOString().slice(0, 10),
+          });
+        } catch { /* analytics-level failure, don't block WhatsApp handoff */ }
+      }
+      const phoneDigits = (t.phone || "").replace(/[^0-9]/g, "");
+      if (!phoneDigits) {
+        showToast("Tailor contact not available", "warning");
+        return;
+      }
+      const intro = customerName ? `Hi ${t.name}, I'm ${customerName}` : `Hi ${t.name}`;
+      const storeLine = storeName ? ` at ${storeName}` : "";
+      const msg = `${intro}${storeLine}. I'd like to discuss a blouse stitching job. (via Wearify)`;
+      window.open(
+        `https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}`,
+        "_blank",
+      );
+      showToast("Opening WhatsApp…", "success");
+    } finally {
+      setConnecting(null);
+    }
+  }
+
   return (
     <div className="k-shell">
       <div className="k-topbar">
@@ -2399,9 +2470,14 @@ function TailorScreen({ storeCity, onBack, showToast }: { storeCity: string; onB
                   {t.city}
                 </div>
               </div>
-              <button onClick={() => showToast("Tailor connection coming soon", "info")} className="k-btn k-btn-primary k-btn-pill k-press" style={{
-                padding: "8px 16px", fontSize: 12, fontWeight: 600, minHeight: 36,
-              }}>Connect</button>
+              <button
+                onClick={() => handleConnect(t)}
+                disabled={connecting === t._id}
+                className="k-btn k-btn-primary k-btn-pill k-press"
+                style={{ padding: "8px 16px", fontSize: 12, fontWeight: 600, minHeight: 36, opacity: connecting === t._id ? 0.6 : 1 }}
+              >
+                {connecting === t._id ? "…" : "Connect"}
+              </button>
             </div>
           ))
         )}

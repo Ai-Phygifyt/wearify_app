@@ -189,12 +189,16 @@ export const registerTailor = mutation({
   },
 });
 
+// Admin-facing: approve / reject individual KYC docs. The rejectionReason,
+// when set, is displayed back to the tailor so they know what to fix.
+// Passing explicit `null` to `kycRejectionReason` clears it (on approval).
 export const updateVerification = mutation({
   args: {
     tailorId: v.string(),
     aadhaarVerified: v.optional(v.boolean()),
     panVerified: v.optional(v.boolean()),
     addressVerified: v.optional(v.boolean()),
+    kycRejectionReason: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const tailor = await ctx.db
@@ -202,14 +206,65 @@ export const updateVerification = mutation({
       .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))
       .unique();
     if (!tailor) throw new Error("Tailor not found");
-    const { tailorId: _, ...fields } = args;
     const updates: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+    if (args.aadhaarVerified !== undefined) updates.aadhaarVerified = args.aadhaarVerified;
+    if (args.panVerified !== undefined) updates.panVerified = args.panVerified;
+    if (args.addressVerified !== undefined) updates.addressVerified = args.addressVerified;
+    if (args.kycRejectionReason !== undefined) {
+      updates.kycRejectionReason = args.kycRejectionReason ?? undefined;
+    }
+    // Auto-promote status to "verified" once all three docs are approved.
+    const approvedNow =
+      (args.aadhaarVerified ?? tailor.aadhaarVerified) &&
+      (args.panVerified ?? tailor.panVerified) &&
+      (args.addressVerified ?? tailor.addressVerified);
+    if (approvedNow) updates.status = "verified";
+    await ctx.db.patch(tailor._id, updates);
+  },
+});
+
+// Tailor-facing: submit or replace a single KYC document. Saving a fresh
+// file resets that doc's verified flag (admin must re-review) and clears
+// any global rejection reason so the tailor sees a clean "pending review"
+// state after resubmitting.
+export const submitKycDocument = mutation({
+  args: {
+    tailorId: v.string(),
+    docType: v.union(v.literal("aadhaar"), v.literal("pan"), v.literal("address")),
+    fileId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const tailor = await ctx.db
+      .query("tailors")
+      .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))
+      .unique();
+    if (!tailor) throw new Error("Tailor not found");
+    const updates: Record<string, unknown> = { kycRejectionReason: undefined };
+    if (args.docType === "aadhaar") {
+      updates.aadhaarFileId = args.fileId;
+      updates.aadhaarVerified = false;
+    } else if (args.docType === "pan") {
+      updates.panFileId = args.fileId;
+      updates.panVerified = false;
+    } else {
+      updates.addressProofFileId = args.fileId;
+      updates.addressVerified = false;
     }
     await ctx.db.patch(tailor._id, updates);
+  },
+});
+
+// Admin-facing: list tailors that have at least one submitted KYC document
+// but aren't fully verified yet. Used by the admin approval queue.
+export const listKycQueue = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("tailors").take(500);
+    return all.filter((t) => {
+      const hasDocs = !!(t.aadhaarFileId || t.panFileId || t.addressProofFileId);
+      const fullyVerified = !!(t.aadhaarVerified && t.panVerified && t.addressVerified);
+      return hasDocs && !fullyVerified;
+    });
   },
 });
 
@@ -429,6 +484,39 @@ export const createOrder = mutation({
     }
     const orderId = `TO-${random}`;
 
+    // When the caller doesn't supply measurements explicitly, pull them from
+    // the linked customer row. Lets "convert referral → order" skip a
+    // re-entry step, since the customer's body-scan/profile measurements
+    // already live on `customers`.
+    let measurements = {
+      bust: args.bust,
+      waist: args.waist,
+      shoulder: args.shoulder,
+      armLength: args.armLength,
+      backLength: args.backLength,
+      neckDepthFront: args.neckDepthFront,
+      neckDepthBack: args.neckDepthBack,
+      sleeve: args.sleeve,
+      neck: args.neck,
+    };
+    const hasAnyMeasurement = Object.values(measurements).some((v) => v !== undefined);
+    if (!hasAnyMeasurement && args.customerId) {
+      const customer = await ctx.db.get(args.customerId);
+      if (customer) {
+        measurements = {
+          bust: customer.bust,
+          waist: customer.waist,
+          shoulder: customer.shoulder,
+          armLength: customer.armLength,
+          backLength: customer.backLength,
+          neckDepthFront: customer.neckDepthFront,
+          neckDepthBack: customer.neckDepthBack,
+          sleeve: customer.sleeve,
+          neck: customer.neck,
+        };
+      }
+    }
+
     return await ctx.db.insert("tailorOrders", {
       orderId,
       tailorId: args.tailorId,
@@ -448,15 +536,7 @@ export const createOrder = mutation({
       orderDate: args.orderDate,
       note: args.note,
       tailorWhatsapp: args.tailorWhatsapp,
-      bust: args.bust,
-      waist: args.waist,
-      shoulder: args.shoulder,
-      armLength: args.armLength,
-      backLength: args.backLength,
-      neckDepthFront: args.neckDepthFront,
-      neckDepthBack: args.neckDepthBack,
-      sleeve: args.sleeve,
-      neck: args.neck,
+      ...measurements,
     });
   },
 });

@@ -219,6 +219,19 @@ Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When
 - **Responsive:** `@media (max-width: 820px)` and `(max-width: 520px)` rules shrink numpad buttons, codeboxes, iconbtns, and modal padding for portrait tablets.
 - **Pre-existing lint warnings** (`set-state-in-effect` in countdown timers, a few unused vars) were NOT fixed — they predate this pass.
 
+### Tailor module build-out (items 1–4, 6, 8 from the audit)
+
+- **KYC document upload wired end-to-end.** Schema added `aadhaarFileId`, `panFileId`, `addressProofFileId`, `kycRejectionReason` to `tailors`. New mutation `submitKycDocument({ tailorId, docType, fileId })` — uploads a doc, clears that doc's `verified` flag, clears the rejection reason. `updateVerification` extended to accept a rejection reason and auto-promotes `status` to `"verified"` when all three docs are approved. [convex/schema.ts](convex/schema.ts), [convex/tailorOps.ts](convex/tailorOps.ts).
+- **Tailor verification UI** ([app/tailor/profile/verification/page.tsx](app/tailor/profile/verification/page.tsx)) rewritten: real file pickers, inline previews via `useConvexUrl`, three states per doc (Not submitted / Under review / Verified), rejection banner with admin note when present. Replace-on-resubmit UX.
+- **Admin KYC approval queue** — brand new route [app/admin/tailors/page.tsx](app/admin/tailors/page.tsx). Tabs for Review / Verified / All. Expandable per-tailor card with side-by-side document previews, per-doc Approve, and a bulk Reject-with-reason. New query `tailorOps.listKycQueue` — tailors who have at least one submitted doc but aren't fully verified. Admin sidebar gets a `Scissors` icon entry.
+- **Portfolio image upload** ([app/tailor/profile/portfolio/page.tsx](app/tailor/profile/portfolio/page.tsx)): file picker + local preview in the Add form. `addPortfolioItem` already supported `imageFileId` — just wire up from UI. Grid overlays `ConvexImage` on the gradient so uploaded cards show real photos while legacy entries fall back cleanly.
+- **Service pricing editor** — new route [app/tailor/profile/services/page.tsx](app/tailor/profile/services/page.tsx). Reads/writes `tailors.services` array. Active-toggle, add/remove rows, per-row validation before save. Profile index's "Services & Pricing" link now points here (was pointing at `/edit`).
+- **Kiosk "Connect tailor" is real.** The dead-end "coming soon" toast is gone. `TailorScreen` now receives `customerId`, `customerName`, `customerPhone`, `storeId`, `storeName` from the parent and, on Connect: writes a `tailorReferrals` row via `createReferral` (fire-and-forget — WhatsApp handoff is the priority) and opens `https://wa.me/...` with a prefilled intro message. [app/kiosk/page.tsx](app/kiosk/page.tsx).
+- **Measurements auto-flow into tailorOrders.** `createOrder` now, when the caller doesn't supply measurements explicitly and a `customerId` is attached, pulls bust/waist/shoulder/armLength/backLength/neckDepth{Front,Back}/sleeve/neck from the customer row. Saves the tailor from re-measuring when a referral converts. [convex/tailorOps.ts](convex/tailorOps.ts).
+- **Design brief** at [TAILOR_MODULE_BRIEF.md](TAILOR_MODULE_BRIEF.md) at repo root — standalone document meant for sharing with a designer who hasn't seen the codebase.
+
+Not in this batch (deferred): `/c/tailors` customer discovery (item 5 of the audit), auto-commission on order completion (item 5 of the priority list), admin commission-rate config (item 9).
+
 ### Staff PIN uniqueness per store
 
 - **Problem:** `staff.pin` had a per-store index (`by_storeId_and_pin` on `staff`) but neither `createStaff` nor `updateStaff` used it. Admins/owners could create two staff in the same store with the same PIN; `staffPinLogin` returns the first index hit, so the second staff silently couldn't log in and analytics got attributed to the wrong person.

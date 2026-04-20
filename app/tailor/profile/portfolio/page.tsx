@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { useUploadFile } from "@/lib/useUpload";
+import { ConvexImage } from "@/lib/ConvexImage";
 
 const GRADIENT_PALETTES = [
   ["#E8D5B7", "#C4A882"],
@@ -26,6 +28,10 @@ export default function PortfolioPage() {
   const [occasion, setOccasion] = useState("");
   const [style, setStyle] = useState("");
   const [loading, setLoading] = useState(false);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const { upload } = useUploadFile();
 
   useEffect(() => {
     try {
@@ -48,10 +54,29 @@ export default function PortfolioPage() {
     return <PageLoading />;
   }
 
+  function handlePhotoPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setPhoto(f);
+    setPhotoPreview(URL.createObjectURL(f));
+  }
+
+  function resetForm() {
+    setTag(""); setOccasion(""); setStyle("");
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhoto(null); setPhotoPreview(null);
+    setShowForm(false);
+  }
+
   async function handleAdd() {
     if (!tag.trim()) return;
     setLoading(true);
     try {
+      // Upload the photo (if any) first so the mutation either gets a real
+      // fileId or falls back to a gradient placeholder when the tailor
+      // hasn't picked an image.
+      const imageFileId = photo ? await upload(photo) : undefined;
       const randomGrad = GRADIENT_PALETTES[Math.floor(Math.random() * GRADIENT_PALETTES.length)];
       await addItem({
         tailorId: tailorId!,
@@ -59,11 +84,9 @@ export default function PortfolioPage() {
         occasion: occasion.trim() || undefined,
         style: style.trim() || undefined,
         grad: randomGrad,
+        imageFileId,
       });
-      setTag("");
-      setOccasion("");
-      setStyle("");
-      setShowForm(false);
+      resetForm();
     } catch {
       // ignore
     } finally {
@@ -101,6 +124,36 @@ export default function PortfolioPage() {
       {showForm && (
         <div className="bg-wf-card rounded-lg p-4 border border-wf-border space-y-3">
           <div className="text-sm font-semibold text-wf-text">Add Portfolio Item</div>
+
+          {/* Photo picker — tap to select from device. If not provided, the
+              card falls back to a gradient placeholder to keep parity with
+              older entries. */}
+          <div>
+            <label className="block text-xs text-wf-subtext mb-1">Photo</label>
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              className="w-full border border-dashed border-wf-border rounded-lg p-3 bg-white cursor-pointer hover:bg-wf-card/50 transition-colors"
+            >
+              {photoPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoPreview} alt="Preview" className="w-full h-40 object-cover rounded" />
+              ) : (
+                <div className="text-center py-4">
+                  <div className="text-xs text-wf-muted">Tap to add a photo (optional)</div>
+                  <div className="text-[10px] text-wf-muted mt-1">Good lighting, neutral background works best</div>
+                </div>
+              )}
+            </button>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoPick}
+            />
+          </div>
+
           <div>
             <label className="block text-xs text-wf-subtext mb-1">Tag / Label *</label>
             <input
@@ -134,7 +187,7 @@ export default function PortfolioPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Btn small onClick={() => setShowForm(false)}>Cancel</Btn>
+            <Btn small onClick={resetForm}>Cancel</Btn>
             <Btn small primary onClick={handleAdd} disabled={loading}>
               {loading ? "Adding..." : "Add"}
             </Btn>
@@ -158,12 +211,23 @@ export default function PortfolioPage() {
                 className="rounded-lg overflow-hidden border border-wf-border relative group"
               >
                 <div
-                  className="h-32 flex items-end p-3"
+                  className="h-32 flex items-end p-3 relative"
                   style={{
                     background: `linear-gradient(135deg, ${grad[0]}, ${grad[1]})`,
                   }}
                 >
-                  <div>
+                  {/* Real photo overlays the gradient when one is uploaded.
+                      ConvexImage renders nothing while loading, so the
+                      gradient provides a clean fallback. */}
+                  {item.imageFileId && (
+                    <ConvexImage
+                      fileId={item.imageFileId}
+                      alt={item.tag || "Portfolio item"}
+                      className="absolute inset-0 w-full h-full"
+                      style={{ objectFit: "cover" }}
+                    />
+                  )}
+                  <div className="relative z-10">
                     {item.tag && (
                       <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold text-white bg-black/30 backdrop-blur-sm mb-1">
                         {item.tag}

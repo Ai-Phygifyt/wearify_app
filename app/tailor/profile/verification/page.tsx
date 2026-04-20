@@ -1,37 +1,127 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Badge, Card, Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { Badge, Card, PageLoading } from "@/components/ui/wearify-ui";
+import { useUploadFile } from "@/lib/useUpload";
+import { useConvexUrl } from "@/lib/ConvexImage";
+import { Id } from "@/convex/_generated/dataModel";
+
+type DocType = "aadhaar" | "pan" | "address";
+
+// Single card that handles upload + preview + status for one KYC doc type.
+// Renders one of three states: no file yet ("Tap to upload"), file submitted
+// and awaiting admin review, or file approved by admin.
+function KycDocCard({
+  title,
+  subtitle,
+  accentClass,
+  icon,
+  fileId,
+  verified,
+  onPick,
+  uploading,
+}: {
+  title: string;
+  subtitle: string;
+  accentClass: string;
+  icon: React.ReactNode;
+  fileId?: Id<"_storage">;
+  verified: boolean;
+  onPick: (file: File) => void;
+  uploading: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const url = useConvexUrl(fileId ?? null);
+
+  const statusLabel = verified ? "Verified" : fileId ? "Under review" : "Not submitted";
+  const statusTone: "verified" | "pending" | "offline" = verified
+    ? "verified"
+    : fileId
+      ? "pending"
+      : "offline";
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${accentClass}`}>
+            {icon}
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-wf-text">{title}</div>
+            <div className="text-xs text-wf-muted">{subtitle}</div>
+          </div>
+        </div>
+        <Badge status={statusTone}>{statusLabel}</Badge>
+      </div>
+
+      {/* Preview of the uploaded document, if any */}
+      {url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={`${title} preview`}
+          className="mt-3 w-full max-h-48 object-cover rounded-lg border border-wf-border"
+        />
+      )}
+
+      {/* Upload / replace control. Tailor can replace a rejected doc by
+          tapping the tile again — backend clears the verified flag. */}
+      {!verified && (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="mt-3 w-full border border-dashed border-wf-border rounded-lg p-4 text-center bg-transparent cursor-pointer hover:bg-wf-card/50 transition-colors disabled:opacity-50"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-muted)" strokeWidth="2" className="mx-auto mb-2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <div className="text-xs text-wf-muted">
+            {uploading ? "Uploading..." : fileId ? `Replace ${title}` : `Tap to upload ${title}`}
+          </div>
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) onPick(f);
+        }}
+      />
+    </Card>
+  );
+}
 
 export default function VerificationPage() {
   const router = useRouter();
   const [tailorId, setTailorId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [uploadingType, setUploadingType] = useState<DocType | null>(null);
 
   useEffect(() => {
     try {
       const userData = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
       if (userData.tailorId) setTailorId(userData.tailorId);
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }, []);
 
   const profile = useQuery(
     api.tailorOps.getByTailorId,
-    tailorId ? { tailorId } : "skip"
+    tailorId ? { tailorId } : "skip",
   );
+  const { upload } = useUploadFile();
+  const submitKycDocument = useMutation(api.tailorOps.submitKycDocument);
 
-  const updateVerification = useMutation(api.tailorOps.updateVerification);
-
-  if (!tailorId || profile === undefined) {
-    return <PageLoading />;
-  }
-
+  if (!tailorId || profile === undefined) return <PageLoading />;
   if (!profile) {
     return (
       <div className="text-center py-12">
@@ -40,33 +130,22 @@ export default function VerificationPage() {
     );
   }
 
+  async function handlePick(docType: DocType, file: File) {
+    setUploadingType(docType);
+    try {
+      const fileId = await upload(file);
+      await submitKycDocument({ tailorId: tailorId!, docType, fileId });
+    } finally {
+      setUploadingType(null);
+    }
+  }
+
   const verifiedCount = [
     profile.aadhaarVerified,
     profile.panVerified,
     profile.addressVerified,
   ].filter(Boolean).length;
-
-  const badgeLevel =
-    verifiedCount === 3 ? "Verified" : verifiedCount >= 1 ? "Partial" : "Unverified";
-
-  async function handleSubmit() {
-    setLoading(true);
-    try {
-      // In a real app, this would trigger document verification
-      // For now, mark as pending (backend would process)
-      await updateVerification({
-        tailorId: tailorId!,
-        aadhaarVerified: profile!.aadhaarVerified || false,
-        panVerified: profile!.panVerified || false,
-        addressVerified: profile!.addressVerified || false,
-      });
-      setSubmitted(true);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }
+  const badgeLevel = verifiedCount === 3 ? "Verified" : verifiedCount >= 1 ? "Partial" : "Unverified";
 
   return (
     <div className="space-y-4">
@@ -83,13 +162,16 @@ export default function VerificationPage() {
         <h1 className="text-lg font-bold text-wf-text">KYC Verification</h1>
       </div>
 
-      {submitted && (
-        <div className="px-4 py-2.5 rounded-lg bg-wf-green/10 text-wf-green text-sm font-medium">
-          Documents submitted for verification!
+      {/* Rejection banner — shown when admin has rejected and tailor hasn't
+          yet resubmitted. Uploading a new doc clears the reason server-side. */}
+      {profile.kycRejectionReason && (
+        <div className="px-4 py-3 rounded-lg bg-wf-red/10 border border-wf-red/30 text-wf-red text-sm">
+          <div className="font-semibold mb-1">Admin feedback</div>
+          <div className="text-xs">{profile.kycRejectionReason}</div>
         </div>
       )}
 
-      {/* Badge Status */}
+      {/* Status summary */}
       <div className="bg-wf-card rounded-lg p-4 border border-wf-border text-center">
         <div className="text-sm text-wf-subtext mb-2">Verification Status</div>
         <Badge
@@ -98,113 +180,69 @@ export default function VerificationPage() {
         >
           {badgeLevel}
         </Badge>
-        <div className="text-xs text-wf-muted mt-2">
-          {verifiedCount}/3 documents verified
-        </div>
+        <div className="text-xs text-wf-muted mt-2">{verifiedCount}/3 documents verified</div>
         <div className="w-full h-1.5 bg-wf-border rounded-full mt-2">
           <div
             className="h-full bg-wf-green rounded-full transition-all"
             style={{ width: `${(verifiedCount / 3) * 100}%` }}
           />
         </div>
+        <div className="text-[11px] text-wf-muted mt-3">
+          Usually reviewed within 24 hours. You can replace a document anytime before it&apos;s verified.
+        </div>
       </div>
 
-      {/* Aadhaar */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-wf-blue/10 flex items-center justify-center flex-shrink-0">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-blue)" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <line x1="7" y1="9" x2="17" y2="9" />
-                <line x1="7" y1="13" x2="12" y2="13" />
-              </svg>
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-wf-text">Aadhaar Card</div>
-              <div className="text-xs text-wf-muted">Government ID proof</div>
-            </div>
-          </div>
-          <Badge status={profile.aadhaarVerified ? "verified" : "pending"}>
-            {profile.aadhaarVerified ? "Verified" : "Pending"}
-          </Badge>
-        </div>
-        {!profile.aadhaarVerified && (
-          <div className="mt-3 border border-dashed border-wf-border rounded-lg p-4 text-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-muted)" strokeWidth="2" className="mx-auto mb-2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <div className="text-xs text-wf-muted">Tap to upload Aadhaar</div>
-          </div>
-        )}
-      </Card>
+      <KycDocCard
+        title="Aadhaar Card"
+        subtitle="Government ID proof"
+        accentClass="bg-wf-blue/10"
+        icon={
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-blue)" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <line x1="7" y1="9" x2="17" y2="9" />
+            <line x1="7" y1="13" x2="12" y2="13" />
+          </svg>
+        }
+        fileId={profile.aadhaarFileId}
+        verified={!!profile.aadhaarVerified}
+        onPick={(f) => handlePick("aadhaar", f)}
+        uploading={uploadingType === "aadhaar"}
+      />
 
-      {/* PAN */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-wf-amber/10 flex items-center justify-center flex-shrink-0">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-amber)" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <line x1="7" y1="9" x2="17" y2="9" />
-                <line x1="7" y1="13" x2="14" y2="13" />
-              </svg>
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-wf-text">PAN Card</div>
-              <div className="text-xs text-wf-muted">Tax identification</div>
-            </div>
-          </div>
-          <Badge status={profile.panVerified ? "verified" : "pending"}>
-            {profile.panVerified ? "Verified" : "Pending"}
-          </Badge>
-        </div>
-        {!profile.panVerified && (
-          <div className="mt-3 border border-dashed border-wf-border rounded-lg p-4 text-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-muted)" strokeWidth="2" className="mx-auto mb-2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <div className="text-xs text-wf-muted">Tap to upload PAN</div>
-          </div>
-        )}
-      </Card>
+      <KycDocCard
+        title="PAN Card"
+        subtitle="Tax identification"
+        accentClass="bg-wf-amber/10"
+        icon={
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-amber)" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <line x1="7" y1="9" x2="17" y2="9" />
+            <line x1="7" y1="13" x2="14" y2="13" />
+          </svg>
+        }
+        fileId={profile.panFileId}
+        verified={!!profile.panVerified}
+        onPick={(f) => handlePick("pan", f)}
+        uploading={uploadingType === "pan"}
+      />
 
-      {/* Address Proof */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-wf-green/10 flex items-center justify-center flex-shrink-0">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-green)" strokeWidth="2">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-wf-text">Address Proof</div>
-              <div className="text-xs text-wf-muted">Utility bill / rental agreement</div>
-            </div>
-          </div>
-          <Badge status={profile.addressVerified ? "verified" : "pending"}>
-            {profile.addressVerified ? "Verified" : "Pending"}
-          </Badge>
-        </div>
-        {!profile.addressVerified && (
-          <div className="mt-3 border border-dashed border-wf-border rounded-lg p-4 text-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-muted)" strokeWidth="2" className="mx-auto mb-2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <div className="text-xs text-wf-muted">Tap to upload address proof</div>
-          </div>
-        )}
-      </Card>
+      <KycDocCard
+        title="Address Proof"
+        subtitle="Utility bill / rental agreement"
+        accentClass="bg-wf-green/10"
+        icon={
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-green)" strokeWidth="2">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+        }
+        fileId={profile.addressProofFileId}
+        verified={!!profile.addressVerified}
+        onPick={(f) => handlePick("address", f)}
+        uploading={uploadingType === "address"}
+      />
 
-      {/* Badge Progression Info */}
+      {/* Badge progression */}
       <div className="bg-wf-card rounded-lg p-4 border border-wf-border">
         <div className="text-sm font-semibold text-wf-text mb-2">Badge Progression</div>
         <div className="space-y-2 text-xs text-wf-subtext">
@@ -222,12 +260,6 @@ export default function VerificationPage() {
           </div>
         </div>
       </div>
-
-      {verifiedCount < 3 && (
-        <Btn primary className="w-full" onClick={handleSubmit} disabled={loading}>
-          {loading ? "Submitting..." : "Submit for Verification"}
-        </Btn>
-      )}
     </div>
   );
 }
