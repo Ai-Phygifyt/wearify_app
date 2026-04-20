@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { assertFiles, GUARDS } from "./fileValidation";
 
 // 1. List sarees for a store (bounded to 200)
 export const listByStore = query({
@@ -52,6 +53,9 @@ export const create = mutation({
     reorderScore: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    if (args.imageIds && args.imageIds.length > 0) {
+      await assertFiles(ctx, args.imageIds, GUARDS.sareePhoto);
+    }
     const sareeId = await ctx.db.insert("sarees", {
       ...args,
       tryOns: 0,
@@ -101,6 +105,9 @@ export const update = mutation({
     reorderScore: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    if (args.imageIds && args.imageIds.length > 0) {
+      await assertFiles(ctx, args.imageIds, GUARDS.sareePhoto);
+    }
     const { id, ...fields } = args;
     // Remove undefined fields so patch only updates provided values
     const updates: Record<string, unknown> = {};

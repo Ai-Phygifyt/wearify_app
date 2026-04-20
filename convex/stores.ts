@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { MutationCtx } from "./_generated/server";
+import { assertFile, GUARDS } from "./fileValidation";
 
 export const list = query({
   args: {},
@@ -109,6 +110,7 @@ export const update = mutation({
     logoFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    if (args.logoFileId) await assertFile(ctx, args.logoFileId, GUARDS.storeLogo);
     const { id, ...fields } = args;
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {

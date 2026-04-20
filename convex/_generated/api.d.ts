@@ -14,6 +14,7 @@ import type * as campaignOps from "../campaignOps.js";
 import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
 import type * as devices from "../devices.js";
+import type * as fileValidation from "../fileValidation.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as legal from "../legal.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   customers: typeof customers;
   dashboard: typeof dashboard;
   devices: typeof devices;
+  fileValidation: typeof fileValidation;
   files: typeof files;
   http: typeof http;
   legal: typeof legal;

@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { assertFile, GUARDS } from "./fileValidation";
 
 // ============================
 // TAILORS
@@ -240,6 +241,7 @@ export const submitKycDocument = mutation({
     fileId: v.id("_storage"),
   },
   handler: async (ctx, args) => {
+    await assertFile(ctx, args.fileId, GUARDS.kycDocument);
     const tailor = await ctx.db
       .query("tailors")
       .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))
@@ -312,6 +314,7 @@ export const addPortfolioItem = mutation({
     imageFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    if (args.imageFileId) await assertFile(ctx, args.imageFileId, GUARDS.portfolioPhoto);
     return await ctx.db.insert("tailorPortfolio", {
       tailorId: args.tailorId,
       tag: args.tag,

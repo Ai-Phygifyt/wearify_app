@@ -1,6 +1,7 @@
 import { query, mutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { assertFile, GUARDS } from "./fileValidation";
 
 // ============================
 // Loyalty tier helper
@@ -154,6 +155,7 @@ export const updateProfile = mutation({
     photoFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    if (args.photoFileId) await assertFile(ctx, args.photoFileId, GUARDS.customerPhoto);
     const { customerId, ...fields } = args;
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
@@ -209,6 +211,7 @@ export const completeProfile = mutation({
     language: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.photoFileId) await assertFile(ctx, args.photoFileId, GUARDS.customerPhoto);
     const customer = await ctx.db.get(args.customerId);
     if (!customer) throw new Error("Customer not found");
     const name = args.name.trim();
@@ -332,6 +335,7 @@ export const recordBodyScan = mutation({
     bodyScanFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    if (args.bodyScanFileId) await assertFile(ctx, args.bodyScanFileId, GUARDS.bodyScan);
     const updates: Record<string, unknown> = { lastBodyScan: Date.now() };
     if (args.bodyScanFileId) updates.bodyScanFileId = args.bodyScanFileId;
     await ctx.db.patch(args.customerId, updates);

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 
 /* ── Toggle ────────────────────────────────────────────────────────── */
 function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () => void; disabled?: boolean }) {
@@ -152,15 +153,19 @@ export default function SettingsPage() {
   const { upload } = useUploadFile();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState("");
 
   async function handleLogoPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !store) return;
     setLogoUploading(true);
+    setLogoError("");
     try {
-      const fileId = await upload(file);
+      const fileId = await upload(file, GUARDS.storeLogo);
       await updateStore({ id: store._id, logoFileId: fileId });
+    } catch (err: unknown) {
+      setLogoError(err instanceof Error ? err.message : "Upload failed");
     } finally { setLogoUploading(false); }
   }
 
@@ -296,6 +301,11 @@ export default function SettingsPage() {
             <div className="w-serif" style={{ fontSize: 20, fontWeight: 700, fontStyle: "italic", color: "var(--w-navy)", marginBottom: 2 }}>
               {store?.name || "My Store"}
             </div>
+            {logoError && (
+              <div style={{ fontSize: 11, color: "var(--w-danger)", marginBottom: 2 }}>
+                {logoError}
+              </div>
+            )}
             <div style={{ fontSize: 12.5, color: "var(--w-ink-muted)" }}>
               {[store?.city, store?.state].filter(Boolean).join(", ") || "Location not set"}
             </div>

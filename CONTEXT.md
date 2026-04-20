@@ -219,6 +219,17 @@ Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When
 - **Responsive:** `@media (max-width: 820px)` and `(max-width: 520px)` rules shrink numpad buttons, codeboxes, iconbtns, and modal padding for portrait tablets.
 - **Pre-existing lint warnings** (`set-state-in-effect` in countdown timers, a few unused vars) were NOT fixed — they predate this pass.
 
+### File-upload validation — size + MIME, client + server
+
+- **Problem:** `useUploadFile` accepted any `File` with no size/type checks, and the Convex mutations that consumed the resulting `Id<"_storage">` didn't re-validate. A malicious client could bypass the client and store 100MB files or `.exe`s tagged as saree images.
+- **Defence in depth:**
+  - [lib/uploadGuards.ts](lib/uploadGuards.ts) — six preset `UploadGuard`s (sareePhoto, portfolioPhoto, storeLogo, customerPhoto, kycDocument, bodyScan) with size + accept lists. Exported `assertFileClient` for pre-upload validation. Values are mirrored in [convex/fileValidation.ts](convex/fileValidation.ts) — **keep them in sync**.
+  - [lib/useUpload.ts](lib/useUpload.ts) — `upload(file, guard?)` accepts an optional guard and throws a typed error before hitting the network. Backward-compatible: callers that don't pass a guard still work (though they should).
+  - [convex/fileValidation.ts](convex/fileValidation.ts) — `assertFile(ctx, fileId, guard)` fetches metadata via `ctx.db.system.get(fileId)` (per Convex guidelines §"File storage") and throws on size or MIME mismatch. `assertFiles` handles arrays. Error messages match the client exactly so UX is consistent.
+  - **Server-guarded mutations:** `tailorOps.submitKycDocument` → kycDocument; `tailorOps.addPortfolioItem` → portfolioPhoto; `stores.update` → storeLogo (when `logoFileId` provided); `customers.updateProfile` and `customers.completeProfile` → customerPhoto (when `photoFileId` provided); `customers.recordBodyScan` → bodyScan; `sarees.create` and `sarees.update` → sareePhoto for each entry in `imageIds[]`.
+  - **Client call sites passing matching guards:** `/store/inventory/add`, `/store/settings` (logo), `/tailor/profile/verification`, `/tailor/profile/portfolio`, `/c/me/profile`, `/c/register`, `/tablet/register`. Each surfaces the typed error inline near the input instead of a generic toast.
+- **Current limits:** saree 5 MB, portfolio 5 MB, store logo 2 MB, customer photo 4 MB, KYC document 10 MB (image or PDF), body scan 10 MB. Change in both `lib/uploadGuards.ts` and `convex/fileValidation.ts` together.
+
 ### Tailor module build-out (items 1–4, 6, 8 from the audit)
 
 - **KYC document upload wired end-to-end.** Schema added `aadhaarFileId`, `panFileId`, `addressProofFileId`, `kycRejectionReason` to `tailors`. New mutation `submitKycDocument({ tailorId, docType, fileId })` — uploads a doc, clears that doc's `verified` flag, clears the rejection reason. `updateVerification` extended to accept a rejection reason and auto-promotes `status` to `"verified"` when all three docs are approved. [convex/schema.ts](convex/schema.ts), [convex/tailorOps.ts](convex/tailorOps.ts).

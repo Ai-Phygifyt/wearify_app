@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import { Id } from "@/convex/_generated/dataModel";
 
 const TYPES = ["Banarasi", "Kanjeevaram", "Chanderi", "Tussar", "Organza", "Chiffon", "Georgette", "Cotton", "Linen", "Paithani"];
@@ -131,7 +132,7 @@ export default function AddSareePage() {
       const files = (["front", "back", "pallu", "border"] as PhotoKey[])
         .map((key) => photos[key])
         .filter((f): f is File => !!f);
-      const imageIds: Id<"_storage">[] = await Promise.all(files.map((f) => upload(f)));
+      const imageIds: Id<"_storage">[] = await Promise.all(files.map((f) => upload(f, GUARDS.sareePhoto)));
       const stockNum = parseInt(stock);
       let status = "active";
       if (stockNum <= 0) status = "out_of_stock";

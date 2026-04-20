@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import { setToken, setStoredUser, formatPhone, fullPhone, isValidPhone } from "@/lib/phoneAuth";
 import {
   Gender,
@@ -156,10 +157,10 @@ export default function RegisterPage() {
     const localUrl = URL.createObjectURL(file);
     setPhotoPreview(localUrl);
     try {
-      const id = await upload(file);
+      const id = await upload(file, GUARDS.customerPhoto);
       setPhotoFileId(id);
-    } catch {
-      setError("Photo upload failed. Try again.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Photo upload failed. Try again.");
       setPhotoPreview("");
     } finally {
       setPhotoUploading(false);

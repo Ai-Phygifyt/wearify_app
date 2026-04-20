@@ -3,19 +3,23 @@
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { assertFileClient, type UploadGuard } from "./uploadGuards";
 
 /**
  * Hook for uploading files to Convex storage.
- * Returns an `upload` function that takes a File and returns the storage Id.
+ *
+ * Pass an optional `guard` to enforce size + MIME limits before the upload
+ * is sent. This is a UX convenience (fast failure, no wasted bandwidth);
+ * the real security boundary lives on the server via convex/fileValidation.
  */
 export function useUploadFile() {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
-  async function upload(file: File): Promise<Id<"_storage">> {
-    // 1. Get a short-lived upload URL from Convex
+  async function upload(file: File, guard?: UploadGuard): Promise<Id<"_storage">> {
+    if (guard) assertFileClient(file, guard);
+
     const url = await generateUploadUrl();
 
-    // 2. POST the file to the upload URL
     const result = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": file.type },

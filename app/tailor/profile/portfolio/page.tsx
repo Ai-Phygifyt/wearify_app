@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Btn, PageLoading } from "@/components/ui/wearify-ui";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS, assertFileClient } from "@/lib/uploadGuards";
 import { ConvexImage } from "@/lib/ConvexImage";
 
 const GRADIENT_PALETTES = [
@@ -30,6 +31,7 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(false);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
   const { upload } = useUploadFile();
 
@@ -58,6 +60,15 @@ export default function PortfolioPage() {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
+    // Validate at pick time for immediate feedback; upload() also
+    // validates as belt-and-suspenders.
+    try {
+      assertFileClient(f, GUARDS.portfolioPhoto);
+    } catch (err: unknown) {
+      setPhotoError(err instanceof Error ? err.message : "Invalid file");
+      return;
+    }
+    setPhotoError("");
     // Revoke the previous blob URL before we lose the reference — prevents
     // a small memory leak when the tailor re-picks a photo before saving.
     if (photoPreview) URL.revokeObjectURL(photoPreview);
@@ -69,6 +80,7 @@ export default function PortfolioPage() {
     setTag(""); setOccasion(""); setStyle("");
     if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhoto(null); setPhotoPreview(null);
+    setPhotoError("");
     setShowForm(false);
   }
 
@@ -79,7 +91,7 @@ export default function PortfolioPage() {
       // Upload the photo (if any) first so the mutation either gets a real
       // fileId or falls back to a gradient placeholder when the tailor
       // hasn't picked an image.
-      const imageFileId = photo ? await upload(photo) : undefined;
+      const imageFileId = photo ? await upload(photo, GUARDS.portfolioPhoto) : undefined;
       const randomGrad = GRADIENT_PALETTES[Math.floor(Math.random() * GRADIENT_PALETTES.length)];
       await addItem({
         tailorId: tailorId!,
@@ -155,6 +167,9 @@ export default function PortfolioPage() {
               className="hidden"
               onChange={handlePhotoPick}
             />
+            {photoError && (
+              <div className="text-xs text-wf-red mt-1">{photoError}</div>
+            )}
           </div>
 
           <div>

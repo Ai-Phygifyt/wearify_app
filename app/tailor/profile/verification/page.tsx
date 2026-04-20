@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge, Card, PageLoading } from "@/components/ui/wearify-ui";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import { useConvexUrl } from "@/lib/ConvexImage";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -106,6 +107,7 @@ export default function VerificationPage() {
   const router = useRouter();
   const [tailorId, setTailorId] = useState<string | null>(null);
   const [uploadingType, setUploadingType] = useState<DocType | null>(null);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     try {
@@ -132,9 +134,12 @@ export default function VerificationPage() {
 
   async function handlePick(docType: DocType, file: File) {
     setUploadingType(docType);
+    setUploadError("");
     try {
-      const fileId = await upload(file);
+      const fileId = await upload(file, GUARDS.kycDocument);
       await submitKycDocument({ tailorId: tailorId!, docType, fileId });
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploadingType(null);
     }
@@ -168,6 +173,14 @@ export default function VerificationPage() {
         <div className="px-4 py-3 rounded-lg bg-wf-red/10 border border-wf-red/30 text-wf-red text-sm">
           <div className="font-semibold mb-1">Admin feedback</div>
           <div className="text-xs">{profile.kycRejectionReason}</div>
+        </div>
+      )}
+
+      {/* Transient upload error (size, MIME, network). Cleared on the next
+          successful pick. */}
+      {uploadError && (
+        <div className="px-4 py-2.5 rounded-lg bg-wf-red/10 text-wf-red text-sm">
+          {uploadError}
         </div>
       )}
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import { useCustomer } from "../../layout";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -139,11 +140,11 @@ export default function EditProfilePage() {
     const localUrl = URL.createObjectURL(file);
     setPhotoPreview(localUrl);
     try {
-      const id = await upload(file);
+      const id = await upload(file, GUARDS.customerPhoto);
       setPhotoFileId(id);
       setDirty(true);
-    } catch {
-      setError("Photo upload failed.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Photo upload failed.");
       setPhotoPreview("");
     } finally {
       setPhotoUploading(false);
