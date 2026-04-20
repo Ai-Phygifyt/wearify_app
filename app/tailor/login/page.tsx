@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Btn } from "@/components/ui/wearify-ui";
 
 const SPECIALTY_OPTIONS = [
   { id: "silk_blouse", label: "Silk Blouse" },
@@ -42,11 +41,12 @@ export default function TailorLoginPage() {
   const [mainTab, setMainTab] = useState<MainTab>("login");
   const [loginTab, setLoginTab] = useState<LoginTab>("otp");
   const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [password, setPassword] = useState("");
   const [otpStep, setOtpStep] = useState<OtpStep>("phone");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Registration state
   const [regStep, setRegStep] = useState(1);
@@ -59,6 +59,15 @@ export default function TailorLoginPage() {
   const [servicePricing, setServicePricing] = useState<ServicePricing[]>([]);
   const [regBio, setRegBio] = useState("");
 
+  const otp = otpDigits.join("");
+
+  useEffect(() => {
+    // Auto-focus the first OTP box whenever the tailor lands on the OTP step.
+    if (otpStep === "otp" && mainTab === "login") {
+      otpRefs.current[0]?.focus();
+    }
+  }, [otpStep, mainTab]);
+
   function saveAuthAndRedirect(token: string, tailorId: string) {
     localStorage.setItem("wearify_auth_token", token);
     localStorage.setItem(
@@ -68,18 +77,43 @@ export default function TailorLoginPage() {
     router.replace("/tailor");
   }
 
+  function handleOtpDigit(index: number, value: string) {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const next = [...otpDigits];
+    next[index] = digit;
+    setOtpDigits(next);
+    if (digit && index < 5) otpRefs.current[index + 1]?.focus();
+  }
+
+  function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    e.preventDefault();
+    const next = [...otpDigits];
+    for (let i = 0; i < 6; i++) next[i] = pasted[i] ?? "";
+    setOtpDigits(next);
+    otpRefs.current[Math.min(pasted.length, 5)]?.focus();
+  }
+
   async function handleSendOtp() {
     if (phone.length < 10) {
       setError("Enter a valid 10-digit phone number");
       return;
     }
     setError("");
+    setOtpDigits(["", "", "", "", "", ""]);
     setOtpStep("otp");
   }
 
   async function handleVerifyOtp() {
     if (otp.length !== 6) {
-      setError("Enter 6-digit OTP");
+      setError("Enter all 6 digits of the OTP");
       return;
     }
     setLoading(true);
@@ -208,400 +242,579 @@ export default function TailorLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-wf-bg flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        {/* Branding */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-wf-primary flex items-center justify-center mx-auto mb-4">
-            <span className="text-white text-xl font-bold tracking-wider">W</span>
-          </div>
-          <h1 className="text-xl font-bold text-wf-text">Wearify</h1>
-          <p className="text-sm text-wf-subtext mt-1">Tailor Portal</p>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        padding: "0 20px",
+      }}
+    >
+      {/* Auth hero — serif logo, no page chrome */}
+      <div style={{ padding: "64px 8px 24px", textAlign: "center" }}>
+        <div
+          className="t-serif"
+          style={{
+            fontSize: 44,
+            fontWeight: 500,
+            letterSpacing: "-0.02em",
+            lineHeight: 1,
+            marginBottom: 8,
+          }}
+        >
+          Wearify<em style={{ fontStyle: "italic", color: "var(--gold)", fontWeight: 400 }}>.</em>
         </div>
-
-        {/* Main Tab Toggle: Login | Register */}
-        <div className="flex bg-wf-card rounded-lg p-1 mb-6 border border-wf-border">
-          <button
-            onClick={() => { setMainTab("login"); setError(""); }}
-            className={`flex-1 py-2 rounded-md text-sm font-semibold transition-colors cursor-pointer border-none ${
-              mainTab === "login"
-                ? "bg-wf-primary text-white"
-                : "bg-transparent text-wf-subtext"
-            }`}
-          >
-            Login
-          </button>
-          <button
-            onClick={() => { setMainTab("register"); setError(""); setRegStep(1); }}
-            className={`flex-1 py-2 rounded-md text-sm font-semibold transition-colors cursor-pointer border-none ${
-              mainTab === "register"
-                ? "bg-wf-primary text-white"
-                : "bg-transparent text-wf-subtext"
-            }`}
-          >
-            Register
-          </button>
+        <div style={{ fontSize: 13, color: "var(--ink-3)", letterSpacing: "0.04em" }}>
+          Tailor portal
         </div>
+      </div>
 
-        {error && (
-          <div className="mb-4 px-4 py-2.5 rounded-lg bg-wf-red/10 text-wf-red text-sm font-medium">
-            {error}
+      {/* Login / Register segment toggle */}
+      <div className="t-seg" style={{ margin: "0 0 22px" }}>
+        <button
+          type="button"
+          className={mainTab === "login" ? "t-on" : ""}
+          onClick={() => { setMainTab("login"); setError(""); }}
+        >
+          Sign in
+        </button>
+        <button
+          type="button"
+          className={mainTab === "register" ? "t-on" : ""}
+          onClick={() => { setMainTab("register"); setError(""); setRegStep(1); }}
+        >
+          Create account
+        </button>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "var(--urgent-tint)",
+            color: "var(--urgent)",
+            borderRadius: 12,
+            fontSize: 13,
+            marginBottom: 14,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* ========== LOGIN ========== */}
+      {mainTab === "login" && (
+        <>
+          {/* Login sub-tabs */}
+          <div
+            className="t-seg"
+            style={{
+              margin: "0 0 20px",
+              background: "transparent",
+              padding: 0,
+              borderBottom: "1px solid var(--line)",
+              borderRadius: 0,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => { setLoginTab("otp"); setError(""); setOtpStep("phone"); setOtpDigits(["", "", "", "", "", ""]); }}
+              style={{
+                padding: "10px 0",
+                background: "transparent",
+                border: 0,
+                borderBottom: `2px solid ${loginTab === "otp" ? "var(--maroon)" : "transparent"}`,
+                color: loginTab === "otp" ? "var(--ink)" : "var(--ink-3)",
+                fontSize: 13,
+                fontWeight: 500,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                boxShadow: "none",
+                borderRadius: 0,
+              }}
+            >
+              OTP
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginTab("password"); setError(""); }}
+              style={{
+                padding: "10px 0",
+                background: "transparent",
+                border: 0,
+                borderBottom: `2px solid ${loginTab === "password" ? "var(--maroon)" : "transparent"}`,
+                color: loginTab === "password" ? "var(--ink)" : "var(--ink-3)",
+                fontSize: 13,
+                fontWeight: 500,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                boxShadow: "none",
+                borderRadius: 0,
+              }}
+            >
+              Password
+            </button>
           </div>
-        )}
 
-        {/* ========== LOGIN ========== */}
-        {mainTab === "login" && (
-          <>
-            {/* Login sub-tabs */}
-            <div className="flex gap-2 mb-4">
+          {loginTab === "otp" && otpStep === "phone" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <PhoneField
+                value={phone}
+                onChange={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
+              />
               <button
-                onClick={() => { setLoginTab("otp"); setError(""); setOtpStep("phone"); }}
-                className={`flex-1 py-1.5 rounded text-xs font-semibold cursor-pointer border-none transition-colors ${
-                  loginTab === "otp"
-                    ? "bg-wf-primary/10 text-wf-primary"
-                    : "bg-transparent text-wf-muted"
-                }`}
+                type="button"
+                className="t-btn t-btn-primary t-btn-full t-btn-lg"
+                onClick={handleSendOtp}
+                disabled={loading}
               >
-                OTP Login
+                Send OTP
+              </button>
+              <p style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "center", margin: 0 }}>
+                Dev OTP: <span className="t-mono" style={{ color: "var(--ink-3)" }}>123456</span>
+              </p>
+            </div>
+          )}
+
+          {loginTab === "otp" && otpStep === "otp" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <p style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", margin: 0 }}>
+                Enter the 6-digit code sent to{" "}
+                <span className="t-mono" style={{ color: "var(--ink)" }}>+91 {phone}</span>
+              </p>
+              <div className="t-otp-row">
+                {otpDigits.map((d, i) => {
+                  const isCur = i === otpDigits.findIndex((x) => x === "");
+                  const filled = !!d;
+                  return (
+                    <input
+                      key={i}
+                      ref={(el) => { otpRefs.current[i] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={1}
+                      value={d}
+                      onChange={(e) => handleOtpDigit(i, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                      onPaste={handleOtpPaste}
+                      className={`t-otp-box ${filled ? "t-filled" : ""} ${isCur && !filled ? "t-cur" : ""}`}
+                      style={{ outline: "none" }}
+                    />
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                className="t-btn t-btn-primary t-btn-full t-btn-lg"
+                onClick={handleVerifyOtp}
+                disabled={loading || otp.length !== 6}
+              >
+                {loading ? "Verifying…" : "Verify & continue"}
               </button>
               <button
-                onClick={() => { setLoginTab("password"); setError(""); }}
-                className={`flex-1 py-1.5 rounded text-xs font-semibold cursor-pointer border-none transition-colors ${
-                  loginTab === "password"
-                    ? "bg-wf-primary/10 text-wf-primary"
-                    : "bg-transparent text-wf-muted"
-                }`}
+                type="button"
+                onClick={() => { setOtpStep("phone"); setOtpDigits(["", "", "", "", "", ""]); setError(""); }}
+                style={{
+                  background: "transparent",
+                  border: 0,
+                  color: "var(--maroon)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  padding: "4px 0",
+                }}
               >
-                Password Login
+                Change phone number
               </button>
             </div>
+          )}
 
-            {loginTab === "otp" && otpStep === "phone" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-wf-text mb-1.5">Phone Number</label>
-                  <div className="flex items-center border border-wf-border rounded-lg bg-white overflow-hidden">
-                    <span className="px-3 text-sm text-wf-muted font-mono bg-wf-card border-r border-wf-border py-2.5">+91</span>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      placeholder="Enter phone number"
-                      className="flex-1 px-3 py-2.5 text-sm outline-none bg-transparent text-wf-text"
-                      maxLength={10}
-                    />
-                  </div>
-                </div>
-                <Btn primary className="w-full" onClick={handleSendOtp} disabled={loading}>
-                  Send OTP
-                </Btn>
-                <p className="text-xs text-wf-muted text-center">
-                  Demo OTP: <span className="font-mono font-bold text-wf-subtext">123456</span>
-                </p>
+          {loginTab === "password" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <PhoneField
+                value={phone}
+                onChange={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
+              />
+              <div className="t-field">
+                <label>Password</label>
+                <input
+                  className="t-input"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                />
               </div>
-            )}
-
-            {loginTab === "otp" && otpStep === "otp" && (
-              <div className="space-y-4">
-                <p className="text-sm text-wf-subtext text-center">
-                  Enter the OTP sent to <span className="font-bold text-wf-text">+91 {phone}</span>
-                </p>
-                <div>
-                  <label className="block text-sm font-semibold text-wf-text mb-1.5">OTP Code</label>
-                  <input
-                    type="text"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="6-digit OTP"
-                    className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text font-mono text-center tracking-[0.5em] text-lg"
-                    maxLength={6}
-                  />
-                </div>
-                <Btn primary className="w-full" onClick={handleVerifyOtp} disabled={loading}>
-                  {loading ? "Verifying..." : "Verify OTP"}
-                </Btn>
-                <button
-                  onClick={() => { setOtpStep("phone"); setOtp(""); setError(""); }}
-                  className="w-full text-sm text-wf-primary font-semibold bg-transparent border-none cursor-pointer py-2"
-                >
-                  Change phone number
-                </button>
-              </div>
-            )}
-
-            {loginTab === "password" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-wf-text mb-1.5">Phone Number</label>
-                  <div className="flex items-center border border-wf-border rounded-lg bg-white overflow-hidden">
-                    <span className="px-3 text-sm text-wf-muted font-mono bg-wf-card border-r border-wf-border py-2.5">+91</span>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      placeholder="Enter phone number"
-                      className="flex-1 px-3 py-2.5 text-sm outline-none bg-transparent text-wf-text"
-                      maxLength={10}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-wf-text mb-1.5">Password</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password"
-                    className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-                  />
-                </div>
-                <Btn primary className="w-full" onClick={handlePasswordLogin} disabled={loading}>
-                  {loading ? "Logging in..." : "Login"}
-                </Btn>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ========== REGISTER ========== */}
-        {mainTab === "register" && (
-          <>
-            {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-6">
-              {[1, 2, 3, 4].map((s) => (
-                <div key={s} className="flex items-center flex-1">
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                      s <= regStep
-                        ? "bg-wf-primary text-white"
-                        : "bg-wf-border text-wf-muted"
-                    }`}
-                  >
-                    {s}
-                  </div>
-                  {s < 4 && (
-                    <div
-                      className={`flex-1 h-0.5 mx-1 ${
-                        s < regStep ? "bg-wf-primary" : "bg-wf-border"
-                      }`}
-                    />
-                  )}
-                </div>
-              ))}
+              <button
+                type="button"
+                className="t-btn t-btn-primary t-btn-full t-btn-lg"
+                onClick={handlePasswordLogin}
+                disabled={loading}
+              >
+                {loading ? "Signing in…" : "Sign in"}
+              </button>
             </div>
+          )}
+        </>
+      )}
 
-            {/* Step 1: Basic Info */}
-            {regStep === 1 && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold text-wf-text">Basic Information</h2>
-                <div>
-                  <label className="block text-sm font-semibold text-wf-text mb-1.5">Full Name</label>
-                  <input
-                    type="text"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                    placeholder="Your full name"
-                    className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-wf-text mb-1.5">Phone Number</label>
-                  <div className="flex items-center border border-wf-border rounded-lg bg-white overflow-hidden">
-                    <span className="px-3 text-sm text-wf-muted font-mono bg-wf-card border-r border-wf-border py-2.5">+91</span>
-                    <input
-                      type="tel"
-                      value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      placeholder="Enter phone number"
-                      className="flex-1 px-3 py-2.5 text-sm outline-none bg-transparent text-wf-text"
-                      maxLength={10}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-wf-text mb-1.5">Password</label>
-                  <input
-                    type="password"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Min 6 characters"
-                    className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-wf-text mb-1.5">City</label>
-                    <input
-                      type="text"
-                      value={regCity}
-                      onChange={(e) => setRegCity(e.target.value)}
-                      placeholder="City"
-                      className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-wf-text mb-1.5">Area</label>
-                    <input
-                      type="text"
-                      value={regArea}
-                      onChange={(e) => setRegArea(e.target.value)}
-                      placeholder="Area"
-                      className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-                    />
-                  </div>
-                </div>
-                <Btn
-                  primary
-                  className="w-full"
-                  onClick={() => {
-                    if (!regName || !regPhone || !regCity || !regPassword) {
-                      setError("Please fill all required fields");
-                      return;
-                    }
-                    if (regPhone.length < 10) {
-                      setError("Enter a valid 10-digit phone number");
-                      return;
-                    }
-                    if (regPassword.length < 6) {
-                      setError("Password must be at least 6 characters");
-                      return;
-                    }
-                    setError("");
-                    setRegStep(2);
-                  }}
-                >
-                  Next
-                </Btn>
+      {/* ========== REGISTER ========== */}
+      {mainTab === "register" && (
+        <>
+          {/* Wizard progress bar */}
+          <div className="t-wizard-bar" style={{ padding: "0 0 16px" }}>
+            {[1, 2, 3, 4].map((s) => (
+              <div key={s} className={`t-seg-dot ${s <= regStep ? "t-on" : ""}`} />
+            ))}
+          </div>
+
+          {regStep === 1 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <SectionHeading eyebrow={`Step 1 of 4`} title="Basic information" />
+              <div className="t-field">
+                <label>Full name</label>
+                <input
+                  className="t-input"
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="Your full name"
+                />
               </div>
-            )}
+              <PhoneField
+                label="Phone number"
+                value={regPhone}
+                onChange={(v) => setRegPhone(v.replace(/\D/g, "").slice(0, 10))}
+              />
+              <div className="t-field">
+                <label>Password</label>
+                <input
+                  className="t-input"
+                  type="password"
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="t-field">
+                  <label>City</label>
+                  <input
+                    className="t-input"
+                    value={regCity}
+                    onChange={(e) => setRegCity(e.target.value)}
+                    placeholder="Mumbai"
+                  />
+                </div>
+                <div className="t-field">
+                  <label>Area</label>
+                  <input
+                    className="t-input"
+                    value={regArea}
+                    onChange={(e) => setRegArea(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="t-btn t-btn-primary t-btn-full t-btn-lg"
+                style={{ marginTop: 6 }}
+                onClick={() => {
+                  if (!regName || !regPhone || !regCity || !regPassword) {
+                    setError("Please fill all required fields");
+                    return;
+                  }
+                  if (regPhone.length < 10) {
+                    setError("Enter a valid 10-digit phone number");
+                    return;
+                  }
+                  if (regPassword.length < 6) {
+                    setError("Password must be at least 6 characters");
+                    return;
+                  }
+                  setError("");
+                  setRegStep(2);
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          )}
 
-            {/* Step 2: Specialties */}
-            {regStep === 2 && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold text-wf-text">Your Specialties</h2>
-                <p className="text-sm text-wf-subtext">Select all that apply</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {SPECIALTY_OPTIONS.map((opt) => (
+          {regStep === 2 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <SectionHeading
+                eyebrow="Step 2 of 4"
+                title="Your specialties"
+                sub="Pick everything you stitch. Customers filter by these."
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {SPECIALTY_OPTIONS.map((opt) => {
+                  const on = selectedSpecialties.includes(opt.id);
+                  return (
                     <button
                       key={opt.id}
+                      type="button"
                       onClick={() => toggleSpecialty(opt.id)}
-                      className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer border ${
-                        selectedSpecialties.includes(opt.id)
-                          ? "bg-wf-primary/10 text-wf-primary border-wf-primary"
-                          : "bg-white text-wf-subtext border-wf-border hover:border-wf-muted"
-                      }`}
+                      style={{
+                        padding: "12px 14px",
+                        borderRadius: 12,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        background: on ? "var(--maroon-tint)" : "var(--paper)",
+                        color: on ? "var(--maroon-ink)" : "var(--ink-3)",
+                        border: `1px solid ${on ? "rgba(123, 29, 29, 0.2)" : "var(--line-2)"}`,
+                        textAlign: "left",
+                      }}
                     >
                       {opt.label}
                     </button>
-                  ))}
-                </div>
-                <div className="flex gap-3">
-                  <Btn className="flex-1" onClick={() => setRegStep(1)}>
-                    Back
-                  </Btn>
-                  <Btn primary className="flex-1" onClick={goToStep3}>
-                    Next
-                  </Btn>
-                </div>
+                  );
+                })}
               </div>
-            )}
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button type="button" className="t-btn t-btn-ghost" style={{ flex: 1 }} onClick={() => setRegStep(1)}>
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="t-btn t-btn-primary"
+                  style={{ flex: 2 }}
+                  onClick={goToStep3}
+                  disabled={selectedSpecialties.length === 0}
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
 
-            {/* Step 3: Services Pricing */}
-            {regStep === 3 && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold text-wf-text">Service Pricing</h2>
-                <p className="text-sm text-wf-subtext">Set pricing for your selected services</p>
-                <div className="space-y-3 max-h-[340px] overflow-y-auto">
-                  {servicePricing.map((svc, idx) => (
-                    <div key={svc.id} className="bg-wf-card rounded-lg p-3 border border-wf-border">
-                      <div className="text-sm font-semibold text-wf-text mb-2">{svc.name}</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-[10px] text-wf-muted mb-0.5">Min Price</label>
-                          <input
-                            type="number"
-                            value={svc.priceMin || ""}
-                            onChange={(e) => updatePricing(idx, "priceMin", Number(e.target.value))}
-                            placeholder="0"
-                            className="w-full px-2 py-1.5 text-sm border border-wf-border rounded bg-white outline-none text-wf-text"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-wf-muted mb-0.5">Max Price</label>
-                          <input
-                            type="number"
-                            value={svc.priceMax || ""}
-                            onChange={(e) => updatePricing(idx, "priceMax", Number(e.target.value))}
-                            placeholder="0"
-                            className="w-full px-2 py-1.5 text-sm border border-wf-border rounded bg-white outline-none text-wf-text"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-wf-muted mb-0.5">Days</label>
-                          <input
-                            type="number"
-                            value={svc.days || ""}
-                            onChange={(e) => updatePricing(idx, "days", Number(e.target.value))}
-                            placeholder="7"
-                            className="w-full px-2 py-1.5 text-sm border border-wf-border rounded bg-white outline-none text-wf-text"
-                          />
-                        </div>
+          {regStep === 3 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <SectionHeading
+                eyebrow="Step 3 of 4"
+                title="Service pricing"
+                sub="You can always tweak these later from your profile."
+              />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {servicePricing.map((svc, idx) => (
+                  <div key={svc.id} className="t-card" style={{ padding: 14 }}>
+                    <div className="t-serif" style={{ fontSize: 16, fontWeight: 500, marginBottom: 10 }}>
+                      {svc.name}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                      <div className="t-field">
+                        <label>Min (₹)</label>
+                        <input
+                          className="t-input t-mono"
+                          type="number"
+                          value={svc.priceMin || ""}
+                          onChange={(e) => updatePricing(idx, "priceMin", Number(e.target.value))}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="t-field">
+                        <label>Max (₹)</label>
+                        <input
+                          className="t-input t-mono"
+                          type="number"
+                          value={svc.priceMax || ""}
+                          onChange={(e) => updatePricing(idx, "priceMax", Number(e.target.value))}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="t-field">
+                        <label>Days</label>
+                        <input
+                          className="t-input t-mono"
+                          type="number"
+                          value={svc.days || ""}
+                          onChange={(e) => updatePricing(idx, "days", Number(e.target.value))}
+                          placeholder="7"
+                        />
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="flex gap-3">
-                  <Btn className="flex-1" onClick={() => setRegStep(2)}>
-                    Back
-                  </Btn>
-                  <Btn primary className="flex-1" onClick={() => { setError(""); setRegStep(4); }}>
-                    Next
-                  </Btn>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Bio & Complete */}
-            {regStep === 4 && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold text-wf-text">About You</h2>
-                <div>
-                  <label className="block text-sm font-semibold text-wf-text mb-1.5">Bio</label>
-                  <textarea
-                    value={regBio}
-                    onChange={(e) => setRegBio(e.target.value)}
-                    placeholder="Tell customers about your experience and what makes your work special..."
-                    rows={4}
-                    className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text resize-none"
-                  />
-                </div>
-                <div className="bg-wf-card rounded-lg p-4 border border-wf-border">
-                  <div className="text-sm font-semibold text-wf-text mb-2">Registration Summary</div>
-                  <div className="space-y-1 text-sm text-wf-subtext">
-                    <div>Name: <span className="text-wf-text font-medium">{regName}</span></div>
-                    <div>Phone: <span className="text-wf-text font-medium">+91 {regPhone}</span></div>
-                    <div>City: <span className="text-wf-text font-medium">{regCity}{regArea ? `, ${regArea}` : ""}</span></div>
-                    <div>Specialties: <span className="text-wf-text font-medium">{selectedSpecialties.length} selected</span></div>
-                    <div>Services: <span className="text-wf-text font-medium">{servicePricing.length} configured</span></div>
                   </div>
-                </div>
-                <div className="flex gap-3">
-                  <Btn className="flex-1" onClick={() => setRegStep(3)}>
-                    Back
-                  </Btn>
-                  <Btn primary className="flex-1" onClick={handleCompleteRegistration} disabled={loading}>
-                    {loading ? "Registering..." : "Complete Registration"}
-                  </Btn>
-                </div>
+                ))}
               </div>
-            )}
-          </>
-        )}
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button type="button" className="t-btn t-btn-ghost" style={{ flex: 1 }} onClick={() => setRegStep(2)}>
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="t-btn t-btn-primary"
+                  style={{ flex: 2 }}
+                  onClick={() => { setError(""); setRegStep(4); }}
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
 
-        <p className="text-[10px] text-wf-muted text-center mt-8">
-          By continuing, you agree to Wearify&apos;s Terms of Service and Privacy Policy.
-        </p>
+          {regStep === 4 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <SectionHeading eyebrow="Step 4 of 4" title="About you" sub="A short bio customers see on your profile." />
+              <div className="t-field">
+                <label>Bio</label>
+                <textarea
+                  className="t-textarea"
+                  value={regBio}
+                  onChange={(e) => setRegBio(e.target.value)}
+                  placeholder="Tell customers about your experience and what makes your work special…"
+                  rows={4}
+                  style={{ resize: "none", fontFamily: "inherit" }}
+                />
+              </div>
+              <div
+                className="t-card t-card-inset"
+                style={{ background: "var(--ivory-2)", borderColor: "transparent" }}
+              >
+                <div className="t-caps" style={{ color: "var(--ink-3)", marginBottom: 8 }}>
+                  Review
+                </div>
+                <SummaryRow label="Name" value={regName} />
+                <SummaryRow label="Phone" value={`+91 ${regPhone}`} mono />
+                <SummaryRow label="Location" value={regArea ? `${regCity}, ${regArea}` : regCity} />
+                <SummaryRow label="Specialties" value={`${selectedSpecialties.length} selected`} />
+                <SummaryRow label="Services" value={`${servicePricing.length} configured`} last />
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button type="button" className="t-btn t-btn-ghost" style={{ flex: 1 }} onClick={() => setRegStep(3)}>
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="t-btn t-btn-primary t-btn-lg"
+                  style={{ flex: 2 }}
+                  onClick={handleCompleteRegistration}
+                  disabled={loading}
+                >
+                  {loading ? "Creating account…" : "Create account"}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      <p
+        style={{
+          fontSize: 11,
+          color: "var(--ink-4)",
+          textAlign: "center",
+          margin: "auto 0 28px",
+          paddingTop: 32,
+        }}
+      >
+        By continuing, you agree to Wearify&apos;s Terms of Service and Privacy Policy.
+      </p>
+    </div>
+  );
+}
+
+function PhoneField({ label = "Phone number", value, onChange }: { label?: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="t-field">
+      <label>{label}</label>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          background: "var(--paper)",
+          border: "1px solid var(--line-2)",
+          borderRadius: 12,
+          overflow: "hidden",
+        }}
+      >
+        <span
+          className="t-mono"
+          style={{
+            padding: "12px 14px",
+            color: "var(--ink-3)",
+            fontSize: 15,
+            background: "var(--ivory-2)",
+            borderRight: "1px solid var(--line)",
+          }}
+        >
+          +91
+        </span>
+        <input
+          type="tel"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="98765 43210"
+          className="t-mono"
+          maxLength={10}
+          style={{
+            flex: 1,
+            padding: "12px 14px",
+            fontSize: 16,
+            border: 0,
+            outline: "none",
+            background: "transparent",
+            color: "var(--ink)",
+            fontFamily: "var(--font-mono)",
+            letterSpacing: "0.02em",
+          }}
+        />
       </div>
+    </div>
+  );
+}
+
+function SectionHeading({ eyebrow, title, sub }: { eyebrow?: string; title: string; sub?: string }) {
+  return (
+    <div>
+      {eyebrow && (
+        <div className="t-caps" style={{ color: "var(--ink-3)", marginBottom: 4 }}>
+          {eyebrow}
+        </div>
+      )}
+      <h2
+        className="t-serif"
+        style={{
+          fontSize: 26,
+          fontWeight: 500,
+          letterSpacing: "-0.01em",
+          margin: 0,
+          lineHeight: 1.15,
+        }}
+      >
+        {title}
+      </h2>
+      {sub && (
+        <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "6px 0 0", lineHeight: 1.5 }}>
+          {sub}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, mono, last }: { label: string; value: string; mono?: boolean; last?: boolean }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        padding: "8px 0",
+        borderBottom: last ? "none" : "1px solid var(--line)",
+      }}
+    >
+      <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{label}</span>
+      <span
+        className={mono ? "t-mono" : ""}
+        style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
