@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { PageLoading } from "@/components/ui/wearify-ui";
 
 const SPECIALTY_OPTIONS = [
   { id: "silk_blouse", label: "Silk Blouse" },
@@ -36,16 +36,13 @@ export default function EditProfilePage() {
     try {
       const userData = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
       if (userData.tailorId) setTailorId(userData.tailorId);
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }, []);
 
   const profile = useQuery(
     api.tailorOps.getByTailorId,
     tailorId ? { tailorId } : "skip"
   );
-
   const updateProfile = useMutation(api.tailorOps.updateProfile);
 
   useEffect(() => {
@@ -60,9 +57,7 @@ export default function EditProfilePage() {
     }
   }, [profile]);
 
-  if (!tailorId || profile === undefined) {
-    return <PageLoading />;
-  }
+  if (!tailorId || profile === undefined) return <PageLoading />;
 
   function toggleSpecialty(id: string) {
     setSpecialties((prev) =>
@@ -86,122 +81,124 @@ export default function EditProfilePage() {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {
-      // ignore
-    } finally {
+    } catch { /* ignore */ } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+    <div className="t-screen">
+      <div className="t-topbar">
         <button
+          type="button"
+          className="t-back"
           onClick={() => router.push("/tailor/profile")}
-          className="p-1 rounded-lg hover:bg-wf-card transition-colors bg-transparent border-none cursor-pointer"
+          aria-label="Back"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-wf-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="text-lg font-bold text-wf-text">Edit Profile</h1>
+        <h1>Edit profile</h1>
+        <div style={{ width: 36 }} />
       </div>
 
       {saved && (
-        <div className="px-4 py-2.5 rounded-lg bg-wf-green/10 text-wf-green text-sm font-medium">
-          Profile saved successfully!
+        <div
+          style={{
+            margin: "0 20px 12px",
+            padding: "10px 14px",
+            background: "var(--ok-tint)",
+            color: "var(--ok)",
+            borderRadius: 12,
+            fontSize: 13,
+            fontWeight: 500,
+          }}
+        >
+          ✓ Profile saved
         </div>
       )}
 
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-1.5">Full Name</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-          />
+      <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="t-field">
+          <label>Full name</label>
+          <input className="t-input" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-semibold text-wf-text mb-1.5">City</label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-            />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div className="t-field">
+            <label>City</label>
+            <input className="t-input" value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-wf-text mb-1.5">Area</label>
-            <input
-              type="text"
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-            />
+          <div className="t-field">
+            <label>Area</label>
+            <input className="t-input" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Optional" />
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-1.5">Bio</label>
+        <div className="t-field">
+          <label>Bio</label>
           <textarea
+            className="t-textarea"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             rows={3}
-            placeholder="Tell customers about yourself..."
-            className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text resize-none"
+            placeholder="Tell customers about yourself"
+            style={{ resize: "none", fontFamily: "inherit" }}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-semibold text-wf-text mb-1.5">Experience</label>
-            <input
-              type="text"
-              value={experience}
-              onChange={(e) => setExperience(e.target.value)}
-              placeholder="e.g. 10 years"
-              className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-            />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div className="t-field">
+            <label>Experience</label>
+            <input className="t-input" value={experience} onChange={(e) => setExperience(e.target.value)} placeholder="e.g. 10 years" />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-wf-text mb-1.5">Service Radius (km)</label>
-            <input
-              type="number"
-              value={serviceRadius}
-              onChange={(e) => setServiceRadius(e.target.value)}
-              placeholder="e.g. 10"
-              className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
-            />
+          <div className="t-field">
+            <label>Service radius (km)</label>
+            <input className="t-input t-mono" type="number" value={serviceRadius} onChange={(e) => setServiceRadius(e.target.value)} placeholder="10" />
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-2">Specialties</label>
-          <div className="grid grid-cols-2 gap-2">
-            {SPECIALTY_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => toggleSpecialty(opt.id)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer border ${
-                  specialties.includes(opt.id)
-                    ? "bg-wf-primary/10 text-wf-primary border-wf-primary"
-                    : "bg-white text-wf-subtext border-wf-border hover:border-wf-muted"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        <div className="t-field">
+          <label>Specialties</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {SPECIALTY_OPTIONS.map((opt) => {
+              const on = specialties.includes(opt.id);
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => toggleSpecialty(opt.id)}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    background: on ? "var(--maroon-tint)" : "var(--paper)",
+                    color: on ? "var(--maroon-ink)" : "var(--ink-3)",
+                    border: `1px solid ${on ? "rgba(123, 29, 29, 0.2)" : "var(--line-2)"}`,
+                    textAlign: "left",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
         </div>
+      </div>
 
-        <Btn primary className="w-full" onClick={handleSave} disabled={loading}>
-          {loading ? "Saving..." : "Save Changes"}
-        </Btn>
+      <div style={{ padding: 20 }}>
+        <button
+          type="button"
+          className="t-btn t-btn-primary t-btn-full t-btn-lg"
+          onClick={handleSave}
+          disabled={loading}
+        >
+          {loading ? "Saving…" : "Save changes"}
+        </button>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { KPI, Card, Badge, PageLoading } from "@/components/ui/wearify-ui";
+import { PageLoading } from "@/components/ui/wearify-ui";
 
 export default function CommissionPage() {
   const router = useRouter();
@@ -14,21 +14,17 @@ export default function CommissionPage() {
     try {
       const userData = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
       if (userData.tailorId) setTailorId(userData.tailorId);
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }, []);
 
   const profile = useQuery(
     api.tailorOps.getByTailorId,
     tailorId ? { tailorId } : "skip"
   );
-
   const earnings = useQuery(
     api.tailorOps.getEarnings,
     tailorId ? { tailorId } : "skip"
   );
-
   const commissions = useQuery(
     api.tailorOps.listCommission,
     tailorId ? { tailorId } : "skip"
@@ -38,75 +34,153 @@ export default function CommissionPage() {
     return <PageLoading />;
   }
 
-  function typeToBadge(type: string) {
-    switch (type) {
-      case "referral": return "progress";
-      case "order": return "active";
-      case "payout": return "paid";
-      default: return "planned";
-    }
-  }
-
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+    <div className="t-screen">
+      <div className="t-topbar">
         <button
+          type="button"
+          className="t-back"
           onClick={() => router.push("/tailor/profile")}
-          className="p-1 rounded-lg hover:bg-wf-card transition-colors bg-transparent border-none cursor-pointer"
+          aria-label="Back"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-wf-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="text-lg font-bold text-wf-text">Commission & Earnings</h1>
+        <h1>Earnings</h1>
+        <div style={{ width: 36 }} />
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
-        <KPI label="Total Earned" value={`Rs.${earnings.totalEarned}`} />
-        <KPI label="Pending Payout" value={`Rs.${earnings.totalPending}`} color="var(--color-wf-amber)" />
-        <KPI label="Commission Rate" value="10%" subtitle="Platform fee" />
-      </div>
-
-      {/* Commission List */}
-      <Card title="Commission History">
-        {commissions.length === 0 ? (
-          <p className="text-sm text-wf-muted py-2">No commission records yet.</p>
-        ) : (
-          <div className="space-y-0">
-            {commissions.map((entry) => (
-              <div
-                key={entry._id}
-                className="flex items-center justify-between py-2.5 border-b border-wf-border last:border-b-0"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-wf-text capitalize">{entry.type}</span>
-                    <Badge status={entry.status === "paid" ? "paid" : "pending"}>
-                      {entry.status}
-                    </Badge>
-                  </div>
-                  <div className="text-xs text-wf-muted mt-0.5">
-                    {entry.date}
-                    {entry.description && ` - ${entry.description}`}
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0 ml-3">
-                  <div className={`text-sm font-bold ${
-                    entry.type === "payout" ? "text-wf-red" : "text-wf-green"
-                  }`}>
-                    {entry.type === "payout" ? "-" : "+"}Rs.{entry.amount}
-                  </div>
-                  <Badge status={typeToBadge(entry.type)} className="mt-0.5">
-                    {entry.type}
-                  </Badge>
-                </div>
-              </div>
-            ))}
+      {/* Hero summary */}
+      <div style={{ padding: "0 20px 16px" }}>
+        <div
+          style={{
+            background: "linear-gradient(160deg, #1A1512 0%, #2E2620 100%)",
+            color: "var(--ivory)",
+            borderRadius: "var(--radius-lg)",
+            padding: "22px 22px 20px",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              right: -24, top: -24,
+              width: 140, height: 140, borderRadius: 99,
+              background: "radial-gradient(circle at 30% 30%, rgba(176,123,26,0.4), transparent 70%)",
+            }}
+          />
+          <div className="t-hero-eyebrow" style={{ position: "relative" }}>Total earned</div>
+          <div
+            className="t-mono"
+            style={{
+              position: "relative",
+              fontSize: 36,
+              fontWeight: 500,
+              letterSpacing: "-0.02em",
+              lineHeight: 1,
+              marginBottom: 6,
+            }}
+          >
+            ₹{(earnings.totalEarned ?? 0).toLocaleString("en-IN")}
           </div>
-        )}
-      </Card>
+          <div className="t-hero-sub" style={{ margin: 0 }}>
+            Pending payout{" "}
+            <strong className="t-mono" style={{ color: "var(--gold)" }}>
+              ₹{(earnings.totalPending ?? 0).toLocaleString("en-IN")}
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      {/* Commission rate card */}
+      <div style={{ padding: "0 20px 16px" }}>
+        <div className="t-card t-card-inset" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div className="t-caps" style={{ color: "var(--ink-3)" }}>Platform fee</div>
+            <div className="t-serif" style={{ fontSize: 18, fontWeight: 500, marginTop: 2 }}>
+              10% on each order
+            </div>
+          </div>
+          <div
+            className="t-mono"
+            style={{
+              fontSize: 20, fontWeight: 500,
+              padding: "6px 12px",
+              borderRadius: 99,
+              background: "var(--gold-tint)",
+              color: "var(--gold-ink)",
+            }}
+          >
+            10%
+          </div>
+        </div>
+      </div>
+
+      {/* History */}
+      <div className="t-section-head">
+        <h2>History</h2>
+        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{commissions.length} entries</span>
+      </div>
+
+      {commissions.length === 0 ? (
+        <div className="t-empty">
+          <p>No commission records yet. They&apos;ll appear here once your first order completes.</p>
+        </div>
+      ) : (
+        <div style={{ padding: "0 20px" }}>
+          <div className="t-card" style={{ padding: 0, overflow: "hidden" }}>
+            {commissions.map((entry, idx) => {
+              const isPayout = entry.type === "payout";
+              const pillClass =
+                entry.type === "referral" ? "t-pill-quoted"
+                : entry.type === "order" ? "t-pill-confirmed"
+                : "t-pill-declined";
+              return (
+                <div
+                  key={entry._id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "14px 16px",
+                    borderBottom: idx < commissions.length - 1 ? "1px solid var(--line)" : "none",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 14, fontWeight: 500, textTransform: "capitalize" }}>
+                        {entry.type}
+                      </span>
+                      <span className={`t-pill ${pillClass}`}>
+                        {entry.status}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3, letterSpacing: "0.03em" }}>
+                      {entry.date}
+                      {entry.description ? ` · ${entry.description}` : ""}
+                    </div>
+                  </div>
+                  <div
+                    className="t-mono"
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 500,
+                      color: isPayout ? "var(--urgent)" : "var(--ok)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isPayout ? "−" : "+"}₹{entry.amount.toLocaleString("en-IN")}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div style={{ height: 28 }} />
     </div>
   );
 }

@@ -219,6 +219,28 @@ Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When
 - **Responsive:** `@media (max-width: 820px)` and `(max-width: 520px)` rules shrink numpad buttons, codeboxes, iconbtns, and modal padding for portrait tablets.
 - **Pre-existing lint warnings** (`set-state-in-effect` in countdown timers, a few unused vars) were NOT fixed — they predate this pass.
 
+### Tailor module — design re-skin from Claude Design handoff
+
+- Applied the design handoff bundle (`Tailor Module.html`) delivered via `api.anthropic.com/v1/design/h/e0i9RLFnOkv-rzA3yxctng`. Package contained README, chat transcript, styles.css, screens1/2 jsx, components, icons.
+- **Only visual changes** — no features added or removed, no queries or mutations touched, every route still lands on the same component. Markup and classes re-written against a new design system.
+- **New theme:** [app/tailor/tailor-theme.css](app/tailor/tailor-theme.css) — scoped to `.t-app` so it can't bleed into other modules. Imports via [app/tailor/layout.tsx](app/tailor/layout.tsx), which also loads Cormorant Garamond / DM Sans / DM Mono from Google Fonts.
+- **Palette** (reinterpreted warm-premium): softened ivory `#FAF6EF`, deeper ink `#1A1512`, maroon `#7B1D1D`, gold `#B07B1A`, navy `#0D1F35` with ok-green and urgent-red semantic tones.
+- **Typography:** Cormorant Garamond italics for serif "atelier" moments (headings, lead names, order titles), DM Sans for body, DM Mono for numbers and prices.
+- **Component primitives added** (all `.t-` prefixed): `t-hero`, `t-stat`, `t-lead`, `t-pill` + variants, `t-order-row`, `t-pipeline`, `t-accordion`, `t-pinned-field` (navy-fill hero for bust/waist), `t-portfolio-tile`, `t-upload-tile`, `t-kyc-meter`, `t-service-row`, `t-toggle`, `t-seg` (segmented control).
+- **Screens re-skinned:**
+  - Dashboard ([/tailor](app/tailor/page.tsx)) — greeting with italic "ji", hero lead callout dominating, stats row, leads preview, in-progress orders.
+  - Orders list + detail ([/tailor/orders](app/tailor/orders/page.tsx), [[id]](app/tailor/orders/[id]/page.tsx)) — segmented filters, stitched-pattern thumbnails, pipeline dots with current-step maroon halo, bust/waist pinned as navy fields, rest of measurements in Upper/Sleeves/Neck accordions.
+  - Referrals list + detail ([/tailor/referrals](app/tailor/referrals/page.tsx), [[id]](app/tailor/referrals/[id]/page.tsx)) — new-leads urgency banner, lead cards with left-border accent for "new", and a dark hero CTA block for "Convert to order" (dominant action per the design brief).
+  - Profile hub ([/tailor/profile](app/tailor/profile/page.tsx)) — identity card with gradient avatar, at-a-glance stats, menu list with dead links greyed out.
+  - Portfolio ([/tailor/profile/portfolio](app/tailor/profile/portfolio/page.tsx)) — coaching empty state, 2-col aspect-3/4 tile grid, add-tile at the end, bottom-sheet add form with photo preview.
+  - Services editor ([/tailor/profile/services](app/tailor/profile/services/page.tsx)) — serif-input row name with toggle, 3-col price/days inputs.
+  - Verification ([/tailor/profile/verification](app/tailor/profile/verification/page.tsx)) — KYC meter with gradient bar, three upload tiles with status dots (not-submitted / pending / verified), badge progression guide.
+  - Availability ([/tailor/profile/availability](app/tailor/profile/availability/page.tsx)) — "Currently accepting orders" toggle hero, 7-day pill grid, hour selects.
+  - Commission ([/tailor/profile/commission](app/tailor/profile/commission/page.tsx)) — dark hero with total-earned mono number, 10% platform-fee card, ledger list.
+  - Edit profile ([/tailor/profile/edit](app/tailor/profile/edit/page.tsx)) — standard form with specialty chip-toggles.
+  - Bottom nav redesigned with uppercase labels, maroon active state, and a Leads entry added for direct referrals access (was only reachable via dashboard before).
+- **Not touched:** `/tailor/login` and `/tailor/orders/create` still use the global wearify theme. They work fine under `.t-app` (CSS vars overlay without breaking existing Tailwind classes) but weren't re-skinned in this pass. Follow-up candidates.
+
 ### File-upload validation — size + MIME, client + server
 
 - **Problem:** `useUploadFile` accepted any `File` with no size/type checks, and the Convex mutations that consumed the resulting `Id<"_storage">` didn't re-validate. A malicious client could bypass the client and store 100MB files or `.exe`s tagged as saree images.

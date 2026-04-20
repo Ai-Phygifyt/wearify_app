@@ -4,22 +4,27 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Badge, Tabs, PageLoading } from "@/components/ui/wearify-ui";
+import { PageLoading } from "@/components/ui/wearify-ui";
 
-const FILTER_TABS = ["All", "New", "Contacted", "Quoted", "Confirmed", "Declined"];
+const FILTERS = [
+  { k: "all", lbl: "All" },
+  { k: "new", lbl: "New" },
+  { k: "contacted", lbl: "Contacted" },
+  { k: "quoted", lbl: "Quoted" },
+  { k: "confirmed", lbl: "Confirmed" },
+  { k: "declined", lbl: "Declined" },
+];
 
 export default function TailorReferralsPage() {
   const router = useRouter();
   const [tailorId, setTailorId] = useState<string | null>(null);
-  const [filter, setFilter] = useState("All");
+  const [filter, setFilter] = useState<string>("all");
 
   useEffect(() => {
     try {
       const userData = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
       if (userData.tailorId) setTailorId(userData.tailorId);
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }, []);
 
   const referrals = useQuery(
@@ -27,78 +32,131 @@ export default function TailorReferralsPage() {
     tailorId ? { tailorId } : "skip"
   );
 
-  if (!tailorId || referrals === undefined) {
-    return <PageLoading />;
-  }
+  if (!tailorId || referrals === undefined) return <PageLoading />;
 
-  const filtered =
-    filter === "All"
-      ? referrals
-      : referrals.filter((r) => r.status === filter.toLowerCase());
-
-  function statusToBadge(status: string) {
-    switch (status) {
-      case "new": return "open";
-      case "contacted": return "progress";
-      case "quoted": return "pending";
-      case "confirmed": return "active";
-      case "declined": return "terminated";
-      case "completed": return "verified";
-      default: return "planned";
-    }
-  }
+  const filtered = filter === "all" ? referrals : referrals.filter((r) => r.status === filter);
+  const newCount = referrals.filter((r) => r.status === "new").length;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.push("/tailor")}
-          className="p-1 rounded-lg hover:bg-wf-card transition-colors bg-transparent border-none cursor-pointer"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-wf-text">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        <h1 className="text-lg font-bold text-wf-text">Referrals</h1>
-        <span className="text-sm text-wf-muted ml-auto">{referrals.length} total</span>
+    <div className="t-screen">
+      <div className="t-topbar">
+        <div style={{ width: 36 }} />
+        <h1>Leads</h1>
+        <div style={{ width: 36 }} />
       </div>
 
-      {/* Filter Tabs */}
-      <Tabs items={FILTER_TABS} active={filter} onChange={setFilter} />
+      {/* "new leads today" urgency banner */}
+      {newCount > 0 && (
+        <div
+          style={{
+            margin: "0 20px 14px",
+            padding: "12px 14px",
+            background: "var(--maroon-tint)",
+            color: "var(--maroon-ink)",
+            borderRadius: 12,
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 8, height: 8, borderRadius: 99,
+              background: "var(--maroon)",
+            }}
+          />
+          <span>
+            <strong>{newCount} new {newCount === 1 ? "lead" : "leads"}</strong> from kiosks and Wearify.
+          </span>
+        </div>
+      )}
 
-      {/* Referral List */}
+      <div className="t-seg" style={{ overflowX: "auto" }}>
+        {FILTERS.map((f) => (
+          <button
+            key={f.k}
+            type="button"
+            className={filter === f.k ? "t-on" : ""}
+            onClick={() => setFilter(f.k)}
+          >
+            {f.lbl}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ height: 14 }} />
+
       {filtered.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-sm text-wf-muted">No referrals found.</p>
+        <div className="t-empty">
+          <div className="t-empty-ill">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </div>
+          <h3>No leads in this view</h3>
+          <p>New customer handoffs from stores and kiosks show up here first.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="t-lead-list">
           {filtered.map((ref) => (
-            <div
-              key={ref._id}
-              onClick={() => router.push(`/tailor/referrals/${ref._id}`)}
-              className="bg-wf-card rounded-lg p-4 border border-wf-border cursor-pointer hover:border-wf-primary/30 transition-colors"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <div className="text-sm font-semibold text-wf-text">{ref.customerName}</div>
-                  <div className="text-xs text-wf-subtext mt-0.5">
-                    {ref.saree || "General Service"} {ref.fabric ? `- ${ref.fabric}` : ""}
-                  </div>
-                </div>
-                <Badge status={statusToBadge(ref.status)}>{ref.status}</Badge>
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-wf-muted">
-                {ref.storeName && <span>Store: {ref.storeName}</span>}
-                {ref.occasion && <span>Occasion: {ref.occasion}</span>}
-                {ref.budget && <span>Budget: {ref.budget}</span>}
-                <span>{ref.date}</span>
-              </div>
-            </div>
+            <LeadCard key={ref._id} ref_={ref} onClick={() => router.push(`/tailor/referrals/${ref._id}`)} />
           ))}
         </div>
       )}
+
+      <div style={{ height: 24 }} />
+    </div>
+  );
+}
+
+type RefRow = {
+  _id: string;
+  customerName: string;
+  status: string;
+  saree?: string;
+  fabric?: string;
+  storeName?: string;
+  occasion?: string;
+  budget?: string;
+  date: string;
+};
+
+function LeadCard({ ref_, onClick }: { ref_: RefRow; onClick: () => void }) {
+  const pillClass =
+    ref_.status === "new" ? "t-pill-new"
+    : ref_.status === "contacted" ? "t-pill-contacted"
+    : ref_.status === "quoted" ? "t-pill-quoted"
+    : ref_.status === "confirmed" ? "t-pill-confirmed"
+    : ref_.status === "declined" ? "t-pill-declined"
+    : "t-pill-confirmed";
+  return (
+    <div className={`t-lead ${ref_.status === "new" ? "t-new" : ""}`} onClick={onClick} role="button" tabIndex={0}>
+      <div className="t-lead-head">
+        <div>
+          <div className="t-lead-name">{ref_.customerName}</div>
+          <div className="t-lead-meta">
+            {ref_.saree || "General enquiry"}
+            {ref_.fabric ? ` · ${ref_.fabric}` : ""}
+          </div>
+        </div>
+        <span className={`t-pill ${pillClass}`}>{ref_.status}</span>
+      </div>
+      {(ref_.occasion || ref_.budget) && (
+        <div className="t-lead-body">
+          {ref_.occasion && <span>{ref_.occasion}</span>}
+          {ref_.occasion && ref_.budget && <span className="t-sep" />}
+          {ref_.budget && <span className="t-mono">{ref_.budget}</span>}
+        </div>
+      )}
+      <div className="t-lead-source">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+        {ref_.storeName ?? "Direct"} · {ref_.date}
+      </div>
     </div>
   );
 }

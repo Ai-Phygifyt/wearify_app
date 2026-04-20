@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Badge, Card, PageLoading } from "@/components/ui/wearify-ui";
+import { PageLoading } from "@/components/ui/wearify-ui";
 import { useUploadFile } from "@/lib/useUpload";
 import { GUARDS } from "@/lib/uploadGuards";
 import { useConvexUrl } from "@/lib/ConvexImage";
@@ -12,14 +12,9 @@ import { Id } from "@/convex/_generated/dataModel";
 
 type DocType = "aadhaar" | "pan" | "address";
 
-// Single card that handles upload + preview + status for one KYC doc type.
-// Renders one of three states: no file yet ("Tap to upload"), file submitted
-// and awaiting admin review, or file approved by admin.
 function KycDocCard({
   title,
   subtitle,
-  accentClass,
-  icon,
   fileId,
   verified,
   onPick,
@@ -27,8 +22,6 @@ function KycDocCard({
 }: {
   title: string;
   subtitle: string;
-  accentClass: string;
-  icon: React.ReactNode;
   fileId?: Id<"_storage">;
   verified: boolean;
   onPick: (file: File) => void;
@@ -37,69 +30,64 @@ function KycDocCard({
   const inputRef = useRef<HTMLInputElement>(null);
   const url = useConvexUrl(fileId ?? null);
 
-  const statusLabel = verified ? "Verified" : fileId ? "Under review" : "Not submitted";
-  const statusTone: "verified" | "pending" | "offline" = verified
-    ? "verified"
-    : fileId
-      ? "pending"
-      : "offline";
+  const statusLabel = uploading
+    ? "Uploading…"
+    : verified
+      ? "Verified"
+      : fileId
+        ? "Under review"
+        : "Not submitted";
+  const dotClass = verified ? "t-verified" : fileId ? "t-pending" : "";
 
   return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${accentClass}`}>
-            {icon}
+    <div style={{ padding: "0 20px", marginBottom: 10 }}>
+      <div className="t-upload-tile">
+        <div className={`t-prev ${fileId ? "t-has" : ""}`}>
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={`${title} preview`} />
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <line x1="7" y1="9" x2="17" y2="9" />
+              <line x1="7" y1="13" x2="12" y2="13" />
+            </svg>
+          )}
+        </div>
+        <div className="t-info">
+          <div className="t-doc-name">{title}</div>
+          <div className="t-doc-status">
+            <div className={`t-status-dot ${dotClass}`} />
+            <span>{statusLabel}</span>
           </div>
-          <div>
-            <div className="text-sm font-semibold text-wf-text">{title}</div>
-            <div className="text-xs text-wf-muted">{subtitle}</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>
+            {subtitle}
           </div>
         </div>
-        <Badge status={statusTone}>{statusLabel}</Badge>
-      </div>
-
-      {/* Preview of the uploaded document, if any */}
-      {url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt={`${title} preview`}
-          className="mt-3 w-full max-h-48 object-cover rounded-lg border border-wf-border"
+        {!verified && (
+          <button
+            type="button"
+            className="t-btn t-btn-ghost"
+            style={{ padding: "8px 12px", fontSize: 13 }}
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+          >
+            {fileId ? "Replace" : "Upload"}
+          </button>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) onPick(f);
+          }}
         />
-      )}
-
-      {/* Upload / replace control. Tailor can replace a rejected doc by
-          tapping the tile again — backend clears the verified flag. */}
-      {!verified && (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-          className="mt-3 w-full border border-dashed border-wf-border rounded-lg p-4 text-center bg-transparent cursor-pointer hover:bg-wf-card/50 transition-colors disabled:opacity-50"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-muted)" strokeWidth="2" className="mx-auto mb-2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-          <div className="text-xs text-wf-muted">
-            {uploading ? "Uploading..." : fileId ? `Replace ${title}` : `Tap to upload ${title}`}
-          </div>
-        </button>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*,application/pdf"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (f) onPick(f);
-        }}
-      />
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -126,8 +114,8 @@ export default function VerificationPage() {
   if (!tailorId || profile === undefined) return <PageLoading />;
   if (!profile) {
     return (
-      <div className="text-center py-12">
-        <p className="text-sm text-wf-subtext">Profile not found.</p>
+      <div className="t-empty">
+        <h3>Profile not found</h3>
       </div>
     );
   }
@@ -150,72 +138,85 @@ export default function VerificationPage() {
     profile.panVerified,
     profile.addressVerified,
   ].filter(Boolean).length;
-  const badgeLevel = verifiedCount === 3 ? "Verified" : verifiedCount >= 1 ? "Partial" : "Unverified";
+  const statusLabel = verifiedCount === 3 ? "Verified" : verifiedCount >= 1 ? "Partial" : "Unverified";
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+    <div className="t-screen">
+      <div className="t-topbar">
         <button
+          type="button"
+          className="t-back"
           onClick={() => router.push("/tailor/profile")}
-          className="p-1 rounded-lg hover:bg-wf-card transition-colors bg-transparent border-none cursor-pointer"
+          aria-label="Back"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-wf-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="text-lg font-bold text-wf-text">KYC Verification</h1>
+        <h1>Verification</h1>
+        <div style={{ width: 36 }} />
       </div>
 
-      {/* Rejection banner — shown when admin has rejected and tailor hasn't
-          yet resubmitted. Uploading a new doc clears the reason server-side. */}
+      {/* Rejection banner */}
       {profile.kycRejectionReason && (
-        <div className="px-4 py-3 rounded-lg bg-wf-red/10 border border-wf-red/30 text-wf-red text-sm">
-          <div className="font-semibold mb-1">Admin feedback</div>
-          <div className="text-xs">{profile.kycRejectionReason}</div>
+        <div
+          style={{
+            margin: "0 20px 14px",
+            padding: "14px 16px",
+            background: "var(--urgent-tint)",
+            borderRadius: 14,
+            border: "1px solid rgba(192, 62, 28, 0.18)",
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--urgent)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Admin feedback
+          </div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            {profile.kycRejectionReason}
+          </div>
         </div>
       )}
 
-      {/* Transient upload error (size, MIME, network). Cleared on the next
-          successful pick. */}
+      {/* Transient upload error */}
       {uploadError && (
-        <div className="px-4 py-2.5 rounded-lg bg-wf-red/10 text-wf-red text-sm">
+        <div
+          style={{
+            margin: "0 20px 14px",
+            padding: "10px 14px",
+            background: "var(--urgent-tint)",
+            color: "var(--urgent)",
+            borderRadius: 12,
+            fontSize: 13,
+          }}
+        >
           {uploadError}
         </div>
       )}
 
-      {/* Status summary */}
-      <div className="bg-wf-card rounded-lg p-4 border border-wf-border text-center">
-        <div className="text-sm text-wf-subtext mb-2">Verification Status</div>
-        <Badge
-          status={badgeLevel === "Verified" ? "verified" : badgeLevel === "Partial" ? "pending" : "offline"}
-          className="text-base px-4 py-1"
-        >
-          {badgeLevel}
-        </Badge>
-        <div className="text-xs text-wf-muted mt-2">{verifiedCount}/3 documents verified</div>
-        <div className="w-full h-1.5 bg-wf-border rounded-full mt-2">
-          <div
-            className="h-full bg-wf-green rounded-full transition-all"
-            style={{ width: `${(verifiedCount / 3) * 100}%` }}
-          />
+      {/* KYC meter */}
+      <div className="t-kyc-meter" style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+          <div>
+            <div className="t-caps" style={{ color: "var(--ink-3)" }}>Verification</div>
+            <div className="t-serif" style={{ fontSize: 22, fontWeight: 500, marginTop: 2, letterSpacing: "-0.01em" }}>
+              {statusLabel}
+            </div>
+          </div>
+          <div className="t-mono" style={{ fontSize: 16, fontWeight: 500, color: "var(--ink-2)" }}>
+            {verifiedCount}/3
+          </div>
         </div>
-        <div className="text-[11px] text-wf-muted mt-3">
+        <div className="t-kyc-progress">
+          <div className="t-bar" style={{ width: `${(verifiedCount / 3) * 100}%` }} />
+        </div>
+        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10 }}>
           Usually reviewed within 24 hours. You can replace a document anytime before it&apos;s verified.
         </div>
       </div>
 
       <KycDocCard
-        title="Aadhaar Card"
+        title="Aadhaar card"
         subtitle="Government ID proof"
-        accentClass="bg-wf-blue/10"
-        icon={
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-blue)" strokeWidth="2">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <line x1="7" y1="9" x2="17" y2="9" />
-            <line x1="7" y1="13" x2="12" y2="13" />
-          </svg>
-        }
         fileId={profile.aadhaarFileId}
         verified={!!profile.aadhaarVerified}
         onPick={(f) => handlePick("aadhaar", f)}
@@ -223,16 +224,8 @@ export default function VerificationPage() {
       />
 
       <KycDocCard
-        title="PAN Card"
+        title="PAN card"
         subtitle="Tax identification"
-        accentClass="bg-wf-amber/10"
-        icon={
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-amber)" strokeWidth="2">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <line x1="7" y1="9" x2="17" y2="9" />
-            <line x1="7" y1="13" x2="14" y2="13" />
-          </svg>
-        }
         fileId={profile.panFileId}
         verified={!!profile.panVerified}
         onPick={(f) => handlePick("pan", f)}
@@ -240,15 +233,8 @@ export default function VerificationPage() {
       />
 
       <KycDocCard
-        title="Address Proof"
-        subtitle="Utility bill / rental agreement"
-        accentClass="bg-wf-green/10"
-        icon={
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-wf-green)" strokeWidth="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-            <circle cx="12" cy="10" r="3" />
-          </svg>
-        }
+        title="Address proof"
+        subtitle="Utility bill or rental agreement"
         fileId={profile.addressProofFileId}
         verified={!!profile.addressVerified}
         onPick={(f) => handlePick("address", f)}
@@ -256,23 +242,29 @@ export default function VerificationPage() {
       />
 
       {/* Badge progression */}
-      <div className="bg-wf-card rounded-lg p-4 border border-wf-border">
-        <div className="text-sm font-semibold text-wf-text mb-2">Badge Progression</div>
-        <div className="space-y-2 text-xs text-wf-subtext">
-          <div className="flex items-center gap-2">
-            <Badge status="pending">New</Badge>
-            <span>Default badge after registration</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge status="verified">Verified</Badge>
-            <span>All 3 KYC documents verified</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge status="active">Pro</Badge>
-            <span>Verified + 50+ orders + 4.5+ rating</span>
+      <div style={{ padding: "0 20px", marginTop: 18 }}>
+        <div className="t-card t-card-inset">
+          <div className="t-caps" style={{ color: "var(--ink-3)", marginBottom: 10 }}>Badge progression</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="t-pill t-pill-new">New</span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Default badge after registration</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="t-pill t-pill-confirmed">Verified</span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>All three KYC docs approved</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="t-pill" style={{ background: "var(--gold-tint)", color: "var(--gold-ink)" }}>
+                Pro
+              </span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Verified + 50 orders + 4.5★</span>
+            </div>
           </div>
         </div>
       </div>
+
+      <div style={{ height: 28 }} />
     </div>
   );
 }

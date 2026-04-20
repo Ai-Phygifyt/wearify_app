@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
+import "./tailor-theme.css";
 
 const NAV_ITEMS = [
   { key: "home", label: "Home", href: "/tailor", icon: "home" },
@@ -47,27 +48,67 @@ function NavIcon({ name, size = 20 }: { name: string; size?: number }) {
 
 function BottomNav({ newReferralCount }: { newReferralCount: number }) {
   const pathname = usePathname();
+  const items = [
+    ...NAV_ITEMS.slice(0, 1),
+    { key: "referrals", label: "Leads", href: "/tailor/referrals", icon: "orders" as const },
+    ...NAV_ITEMS.slice(1),
+  ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-wf-border z-40 flex justify-around items-center h-16 px-2">
-      {NAV_ITEMS.map((item) => {
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40"
+      style={{
+        background: "var(--paper, #FFFEFB)",
+        borderTop: "1px solid var(--line, rgba(26,21,18,0.08))",
+        display: "grid",
+        gridTemplateColumns: `repeat(${items.length}, 1fr)`,
+        gap: 4,
+        padding: "10px 8px 28px",
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
+      {items.map((item) => {
         const isActive =
           item.href === "/tailor"
             ? pathname === "/tailor"
             : pathname.startsWith(item.href);
+        const showBadge =
+          (item.key === "home" || item.key === "referrals") && newReferralCount > 0;
         return (
           <Link
             key={item.key}
             href={item.href}
-            className={cn(
-              "flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors no-underline min-w-[56px] relative",
-              isActive ? "text-wf-primary" : "text-wf-muted"
-            )}
+            className={cn("no-underline")}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+              padding: "6px 4px",
+              color: isActive ? "var(--maroon, #7B1D1D)" : "var(--ink-4, #A79986)",
+              fontSize: 10,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              position: "relative",
+            }}
           >
-            <div className="relative">
+            <div style={{ position: "relative" }}>
               <NavIcon name={item.icon} size={20} />
-              {item.key === "home" && newReferralCount > 0 && (
-                <span className="absolute -top-1.5 -right-2.5 w-4 h-4 rounded-full bg-wf-red text-white text-[8px] font-bold flex items-center justify-center">
+              {showBadge && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -6, right: -10,
+                    minWidth: 16, height: 16, padding: "0 4px",
+                    borderRadius: 999,
+                    background: "var(--maroon, #7B1D1D)",
+                    color: "#fff",
+                    fontSize: 9,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: "'DM Mono', monospace",
+                  }}
+                >
                   {newReferralCount > 9 ? "9+" : newReferralCount}
                 </span>
               )}
@@ -141,7 +182,16 @@ export default function TailorLayout({ children }: { children: React.ReactNode }
   }, [session, token, isLoginPage, redirectToLogin]);
 
   if (isLoginPage) {
-    return <>{children}</>;
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
+        <div className="t-app">{children}</div>
+      </>
+    );
   }
 
   if (authState === "loading") {
@@ -163,10 +213,17 @@ export default function TailorLayout({ children }: { children: React.ReactNode }
 
   return (
     <>
-      <main className="pb-20 min-h-screen bg-wf-bg">
-        <div className="px-4 py-4 max-w-md mx-auto">{children}</div>
-      </main>
-      <BottomNav newReferralCount={newReferrals?.length ?? 0} />
+      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+      <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+        rel="stylesheet"
+      />
+      <div className="t-app" style={{ minHeight: "100vh" }}>
+        <main style={{ paddingBottom: 88, maxWidth: 480, margin: "0 auto" }}>
+          {children}
+        </main>
+        <BottomNav newReferralCount={newReferrals?.length ?? 0} />
+      </div>
     </>
   );
 }

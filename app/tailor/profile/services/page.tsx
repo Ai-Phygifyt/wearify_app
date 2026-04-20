@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { PageLoading } from "@/components/ui/wearify-ui";
 
 type ServiceRow = {
   id: string;
@@ -15,7 +15,6 @@ type ServiceRow = {
   active: boolean;
 };
 
-// Defaults used when a tailor adds a brand-new service row.
 function newRow(): ServiceRow {
   return {
     id: `svc-${Math.random().toString(36).slice(2, 8)}`,
@@ -48,8 +47,6 @@ export default function ServicesPage() {
   );
   const updateServices = useMutation(api.tailorOps.updateServices);
 
-  // Hydrate local editing state from the server once. We intentionally
-  // don't re-sync on every query update so in-flight edits aren't clobbered.
   useEffect(() => {
     if (profile && rows.length === 0) {
       setRows(profile.services ?? []);
@@ -60,8 +57,8 @@ export default function ServicesPage() {
   if (!tailorId || profile === undefined) return <PageLoading />;
   if (!profile) {
     return (
-      <div className="text-center py-12">
-        <p className="text-sm text-wf-subtext">Profile not found.</p>
+      <div className="t-empty">
+        <h3>Profile not found</h3>
       </div>
     );
   }
@@ -78,7 +75,6 @@ export default function ServicesPage() {
 
   async function handleSave() {
     setError("");
-    // Basic validation: name + sensible price band + days > 0.
     for (const r of rows) {
       if (!r.name.trim()) { setError("Every service needs a name"); return; }
       if (r.priceMin < 0 || r.priceMax < r.priceMin) {
@@ -109,113 +105,173 @@ export default function ServicesPage() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+    <div className="t-screen">
+      <div className="t-topbar">
         <button
+          type="button"
+          className="t-back"
           onClick={() => router.push("/tailor/profile")}
-          className="p-1 rounded-lg hover:bg-wf-card transition-colors bg-transparent border-none cursor-pointer"
+          aria-label="Back"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-wf-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="text-lg font-bold text-wf-text">Services &amp; Pricing</h1>
+        <h1>Services</h1>
+        <div style={{ width: 36 }} />
       </div>
 
       {savedFlash && (
-        <div className="px-4 py-2.5 rounded-lg bg-wf-green/10 text-wf-green text-sm font-medium">
-          Services saved.
+        <div
+          style={{
+            margin: "0 20px 12px",
+            padding: "10px 14px",
+            background: "var(--ok-tint)",
+            color: "var(--ok)",
+            borderRadius: 12,
+            fontSize: 13,
+            fontWeight: 500,
+          }}
+        >
+          ✓ Services saved
         </div>
       )}
       {error && (
-        <div className="px-4 py-2.5 rounded-lg bg-wf-red/10 text-wf-red text-sm">
+        <div
+          style={{
+            margin: "0 20px 12px",
+            padding: "10px 14px",
+            background: "var(--urgent-tint)",
+            color: "var(--urgent)",
+            borderRadius: 12,
+            fontSize: 13,
+          }}
+        >
           {error}
         </div>
       )}
 
-      {/* Hint */}
-      <div className="px-4 py-3 rounded-lg bg-wf-card border border-wf-border text-xs text-wf-subtext">
-        Keep active services short and specific (e.g. &ldquo;Blouse stitching&rdquo;, &ldquo;Fall &amp; picco&rdquo;, &ldquo;Alteration&rdquo;). Deactivate a service temporarily instead of deleting if you&apos;re out of capacity — it keeps the price history intact.
+      {/* Helpful hint */}
+      <div style={{ margin: "0 20px 16px" }}>
+        <div
+          className="t-card t-card-inset"
+          style={{
+            background: "var(--ivory-2)",
+            borderColor: "transparent",
+            fontSize: 13,
+            color: "var(--ink-3)",
+            lineHeight: 1.5,
+          }}
+        >
+          Keep active services short and specific (e.g. &ldquo;Blouse stitching&rdquo;, &ldquo;Fall &amp; picco&rdquo;, &ldquo;Alteration&rdquo;). Deactivate temporarily instead of deleting to keep price history intact.
+        </div>
       </div>
 
-      {/* Rows */}
-      <div className="space-y-3">
-        {rows.length === 0 && (
-          <div className="text-center py-8 text-sm text-wf-muted">
-            No services yet. Add one below.
-          </div>
-        )}
+      {rows.length === 0 && (
+        <div className="t-empty" style={{ padding: "24px 24px 0" }}>
+          <p>No services yet. Add one below to start taking orders.</p>
+        </div>
+      )}
+
+      <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 10 }}>
         {rows.map((r, idx) => (
           <div
             key={r.id}
-            className={`bg-wf-card rounded-lg p-4 border ${r.active ? "border-wf-border" : "border-wf-border opacity-60"}`}
+            className="t-card"
+            style={{ padding: 16, opacity: r.active ? 1 : 0.6 }}
           >
-            <div className="flex items-center justify-between mb-3">
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
               <input
-                type="text"
+                className="t-input"
+                style={{
+                  flex: 1,
+                  fontFamily: "var(--font-serif)",
+                  fontSize: 17,
+                  fontWeight: 500,
+                  letterSpacing: "-0.01em",
+                }}
                 value={r.name}
                 onChange={(e) => updateRow(idx, { name: e.target.value })}
                 placeholder="Service name"
-                className="flex-1 mr-3 px-3 py-2 text-sm font-semibold border border-wf-border rounded-lg outline-none bg-white text-wf-text"
               />
-              <label className="flex items-center gap-2 text-xs text-wf-subtext cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={r.active}
-                  onChange={(e) => updateRow(idx, { active: e.target.checked })}
-                />
-                Active
-              </label>
+              <button
+                type="button"
+                className={`t-toggle ${r.active ? "t-on" : ""}`}
+                onClick={() => updateRow(idx, { active: !r.active })}
+                aria-label="Active"
+              />
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-[11px] text-wf-subtext mb-1">Price min (₹)</label>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              <div className="t-field">
+                <label>Min (₹)</label>
                 <input
+                  className="t-input t-mono"
                   type="number"
                   min={0}
                   value={r.priceMin || ""}
                   onChange={(e) => updateRow(idx, { priceMin: Number(e.target.value) })}
-                  className="w-full px-3 py-2 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
+                  placeholder="0"
                 />
               </div>
-              <div>
-                <label className="block text-[11px] text-wf-subtext mb-1">Price max (₹)</label>
+              <div className="t-field">
+                <label>Max (₹)</label>
                 <input
+                  className="t-input t-mono"
                   type="number"
                   min={0}
                   value={r.priceMax || ""}
                   onChange={(e) => updateRow(idx, { priceMax: Number(e.target.value) })}
-                  className="w-full px-3 py-2 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
+                  placeholder="0"
                 />
               </div>
-              <div>
-                <label className="block text-[11px] text-wf-subtext mb-1">Days</label>
+              <div className="t-field">
+                <label>Days</label>
                 <input
+                  className="t-input t-mono"
                   type="number"
                   min={1}
                   value={r.days || ""}
                   onChange={(e) => updateRow(idx, { days: Number(e.target.value) })}
-                  className="w-full px-3 py-2 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
+                  placeholder="7"
                 />
               </div>
             </div>
+
             <button
               type="button"
               onClick={() => removeRow(idx)}
-              className="mt-3 text-xs text-wf-red bg-transparent border-none cursor-pointer"
+              style={{
+                marginTop: 10,
+                background: "transparent",
+                border: 0,
+                color: "var(--urgent)",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                padding: 0,
+                fontFamily: "inherit",
+              }}
             >
-              Remove service
+              Remove
             </button>
           </div>
         ))}
       </div>
 
-      <div className="flex gap-2">
-        <Btn small onClick={addRow}>+ Add service</Btn>
-        <Btn primary className="ml-auto" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </Btn>
+      <div style={{ padding: "20px", display: "flex", gap: 10 }}>
+        <button type="button" className="t-btn t-btn-ghost" onClick={addRow}>
+          + Add service
+        </button>
+        <button
+          type="button"
+          className="t-btn t-btn-primary"
+          style={{ marginLeft: "auto" }}
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save changes"}
+        </button>
       </div>
     </div>
   );
