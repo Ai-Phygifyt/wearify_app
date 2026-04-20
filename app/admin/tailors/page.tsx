@@ -118,29 +118,38 @@ function TailorReviewCard({ tailor }: { tailor: Doc }) {
             ))}
           </div>
 
-          {/* Reject-all (with reason) — sends all docs back to the tailor */}
-          <div className="rounded-lg border border-wf-red/30 bg-wf-red/5 p-3">
-            <div className="text-xs font-semibold text-wf-red mb-2">Reject submission</div>
-            <div className="text-[11px] text-wf-subtext mb-2">
-              The tailor sees your reason on their verification page and can resubmit.
+          {/* Reject-all (with reason) — sends all docs back to the tailor.
+              Disabled when there's nothing to reject yet; rejecting a tailor
+              who hasn't submitted a single doc is an incoherent signal
+              (should be a separate "deactivate" flow if that's ever needed). */}
+          {pendingCount > 0 ? (
+            <div className="rounded-lg border border-wf-red/30 bg-wf-red/5 p-3">
+              <div className="text-xs font-semibold text-wf-red mb-2">Reject submission</div>
+              <div className="text-[11px] text-wf-subtext mb-2">
+                The tailor sees your reason on their verification page and can resubmit.
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Reason (e.g. Aadhaar image unclear — please retake)"
+                  className="flex-1 px-3 py-2 text-xs border border-wf-border rounded-lg bg-white text-wf-text outline-none"
+                />
+                <Btn
+                  small
+                  onClick={rejectAll}
+                  disabled={!rejectReason.trim() || busy === "all"}
+                >
+                  {busy === "all" ? "…" : "Reject"}
+                </Btn>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Reason (e.g. Aadhaar image unclear — please retake)"
-                className="flex-1 px-3 py-2 text-xs border border-wf-border rounded-lg bg-white text-wf-text outline-none"
-              />
-              <Btn
-                small
-                onClick={rejectAll}
-                disabled={!rejectReason.trim() || busy === "all"}
-              >
-                {busy === "all" ? "…" : "Reject"}
-              </Btn>
+          ) : (
+            <div className="text-[11px] text-wf-muted italic">
+              No documents submitted yet — nothing to review.
             </div>
-          </div>
+          )}
 
           {tailor.kycRejectionReason && (
             <div className="text-[11px] text-wf-muted">

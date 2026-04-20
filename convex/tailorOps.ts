@@ -368,6 +368,24 @@ export const createReferral = mutation({
       .unique();
     if (!tailor) throw new Error("Tailor not found");
 
+    // Dedup window: if the same customer taps Connect on the same tailor
+    // within 60 seconds (double-tap, jittery touch, flaky network retry),
+    // return the existing referral instead of creating a duplicate lead.
+    // Only consults "new" status — if the tailor already contacted /
+    // quoted / declined, a fresh lead is the right signal.
+    const DEDUP_WINDOW_MS = 60_000;
+    const recent = await ctx.db
+      .query("tailorReferrals")
+      .withIndex("by_tailorId_and_status", (q) =>
+        q.eq("tailorId", args.tailorId).eq("status", "new"),
+      )
+      .filter((q) => q.eq(q.field("customerPhone"), args.customerPhone))
+      .order("desc")
+      .first();
+    if (recent && Date.now() - recent._creationTime < DEDUP_WINDOW_MS) {
+      return recent._id;
+    }
+
     const referralId = await ctx.db.insert("tailorReferrals", {
       tailorId: args.tailorId,
       customerId: args.customerId,

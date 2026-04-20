@@ -58,6 +58,9 @@ export default function PortfolioPage() {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
+    // Revoke the previous blob URL before we lose the reference — prevents
+    // a small memory leak when the tailor re-picks a photo before saving.
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhoto(f);
     setPhotoPreview(URL.createObjectURL(f));
   }
