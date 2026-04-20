@@ -699,6 +699,97 @@ export const listTrialCart = query({
 });
 
 // ============================================================
+// KIOSK CART — per (customer, store) persistent checkout cart
+// ============================================================
+
+export const addCartItem = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+    qty: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (existing) return existing._id;
+    return await ctx.db.insert("kioskCart", {
+      customerId: args.customerId,
+      storeId: args.storeId,
+      sareeId: args.sareeId,
+      qty: Math.max(1, args.qty ?? 1),
+      addedAt: Date.now(),
+    });
+  },
+});
+
+export const updateCartQty = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+    qty: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (!row) return;
+    await ctx.db.patch(row._id, { qty: Math.max(1, args.qty) });
+  },
+});
+
+export const removeCartItem = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (row) await ctx.db.delete(row._id);
+  },
+});
+
+export const clearCart = mutation({
+  args: { customerId: v.id("customers"), storeId: v.string() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
+      )
+      .collect();
+    for (const r of rows) await ctx.db.delete(r._id);
+  },
+});
+
+export const listCart = query({
+  args: { customerId: v.id("customers"), storeId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
+      )
+      .order("desc")
+      .collect();
+  },
+});
+
+// ============================================================
 // ORDERS
 // ============================================================
 

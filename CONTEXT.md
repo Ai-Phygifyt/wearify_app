@@ -6,6 +6,8 @@
 
 - **Ask before you code when the ask is vague.** If the user's request is ambiguous, under-scoped, or could reasonably be interpreted multiple ways, ask a focused clarifying question first. Guessing and redoing is more expensive than one round-trip.
 - **Log substantial changes to section 12.** After a meaningful change — new feature, schema change, cross-module refactor, non-obvious design decision, or anything a future session would have to re-derive from code alone — append a concise entry to the Conversation Log below. Keep small fixes out of it.
+- **Never delete the CONTEXT.md file.** This file is the persistent memory of the project. If you need to update it, append to it. If it becomes corrupted, restore it from the last known good version.
+- **Commit the changes accordingly after each substantial change.** 
 
 ## 1. Project Purpose
 
@@ -206,6 +208,36 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 ## 12. Conversation Log — engineering decisions taken
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
+
+### Kiosk cart persistence + always-on cart icon
+
+- **Problem 1:** Kiosk cart was pure React state (`useState<Array<SareeItem & { qty }>>`), so moving wardrobe items → cart, adjusting qty, or anything else was lost on logout. Inconsistent with wardrobe/trial-room which already persist per `(customer, store)`.
+- **Problem 2:** Cart icon in kiosk header was gated on `cartCount > 0` — there was no way to open an empty cart (confusing when the user expected a static nav).
+- **Schema:** new `kioskCart` table in [convex/schema.ts](convex/schema.ts) — `{ customerId, storeId, sareeId, qty, addedAt }` + indexes `by_customer_store`, `by_customer_store_saree`. Mirrors `kioskTrialCart` with a `qty` column; kept separate so "items I'm buying" stays distinct from "items I'm trying now" and "items I saved".
+- **Backend** ([convex/sessionOps.ts](convex/sessionOps.ts)): `addCartItem` (idempotent upsert, default qty 1), `updateCartQty` (clamps ≥ 1), `removeCartItem`, `clearCart`, `listCart`. Same shape as the trial-cart mutations.
+- **Frontend** ([app/kiosk/page.tsx](app/kiosk/page.tsx)):
+  - Hydration effect now waits on `savedCart` alongside wardrobe + trial cart; maps rows → `SareeItem & { qty }` via `sareeMap`; merges (not replaces) into local state.
+  - `OrderScreen` refactored — no longer takes `setCart`; takes explicit `onUpdateQty(idx, delta)` / `onRemoveItem(idx)` callbacks. Parent wraps each to mirror the change to the server via `updateCartQtyMut` / `removeCartItemMut`.
+  - `onMoveToCart` (Wardrobe → cart) dedupes before firing `addCartItem` per new item (avoids double-writes if the user re-enters wardrobe).
+  - `onCheckout` fires `clearCart` after order creation succeeds and wipes local cart state.
+  - `handleWipe` stays local-only — logout wipes client state, server rows survive, next login hydrates. Matches wardrobe/trial-cart behavior exactly.
+- **Cart icon bug:** removed the `cartCount > 0 &&` gate at the `KioskHeader` render site — the icon now always shows; the badge inside `iconBtn` already self-gates on `count > 0`, so the green pill only appears once items are added.
+
+### String-field whitespace hardening — tailors + stores + staff + customers
+
+- **Triggering bug:** Admin-registered "test" tailor wasn't showing up in kiosk Mumbai results. Root cause: `city: "Mumbai "` (trailing space) written to the DB. `listByCity` uses `withIndex("by_city", q => q.eq("city", args.city))`, an exact-match — whitespace kills the match.
+- **Class of bug:** any indexed or exact-compared string field is vulnerable. `stores.city` is already indexed (`by_city`); `customers.phone`, `users.phone`, `tailors.phone`, `staff.phone` are all indexed and get exact-matched on login/lookup. One stray space anywhere in the write path silently breaks the read path.
+- **Fix at write sites** — all four tables now trim string inputs:
+  - [convex/tailorOps.ts](convex/tailorOps.ts) — `registerTailor` and `updateProfile` trim `name/phone/city/area/experience/bio/badge/language/subscription`.
+  - [convex/stores.ts](convex/stores.ts) — `create`, `update`, `createStaff`, `updateStaff` trim text fields (name, city, state, address, pin, area, hours, owner fields, whatsappNumber, etc.). Enum fields (status/plan/role) go through untouched.
+  - [convex/customers.ts](convex/customers.ts) — `ensureCustomerByPhone` trims the phone arg on entry; `updateProfile` trims name/initials/phone/language/DOB/gender/heightUnit/email/city; `completeProfile` extended to also trim gender/heightUnit/language (already trimmed name/city/email).
+  - `listByCity` in [convex/tailorOps.ts](convex/tailorOps.ts) trims the incoming `city` arg as defense in depth.
+- **Backfills** — three idempotent `internalMutation`s, run once:
+  - `tailorOps:backfillTrimTailorStrings` — scanned 5, touched 1.
+  - `stores:backfillTrimStoreAndStaffStrings` — scanned 8 stores + 7 staff, touched 0.
+  - `customers:backfillTrimCustomerStrings` — scanned 21, touched 0.
+- **Phone caveat:** phone inputs via the `phoneAuth` module already pass through `normalizePhone` which strips whitespace and non-digits. The trims above are belt-and-suspenders for paths that bypass `phoneAuth` (kiosk `ensureByPhone`, direct `stores.createStaff`, etc.).
+- **Keep in mind:** if any new indexed string field gets added later, follow the same pattern (trim on create/update, defensive trim on query-by-index, and a one-shot backfill if existing rows might be dirty).
 
 ### Kiosk design-system alignment — maroon + Montserrat/Roboto + Lucide icons + inventory-image thumbs
 

@@ -676,6 +676,20 @@ export default defineSchema({
     .index("by_customer_store_saree", ["customerId", "storeId", "sareeId"]),
 
   // ============================
+  // KIOSK CART (per-customer-per-store persistent checkout cart)
+  // Retains items the customer added to cart across visits; checkout clears.
+  // ============================
+  kioskCart: defineTable({
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+    qty: v.number(),
+    addedAt: v.number(),
+  })
+    .index("by_customer_store", ["customerId", "storeId"])
+    .index("by_customer_store_saree", ["customerId", "storeId", "sareeId"]),
+
+  // ============================
   // ORDERS (purchase orders from mirror/checkout)
   // ============================
   orders: defineTable({

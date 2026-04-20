@@ -1,4 +1,4 @@
-import { query, mutation, MutationCtx } from "./_generated/server";
+import { query, mutation, internalMutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { assertFile, GUARDS } from "./fileValidation";
@@ -38,13 +38,14 @@ export function computeInitials(name: string): string {
  */
 export async function ensureCustomerByPhone(
   ctx: MutationCtx,
-  phone: string,
+  phoneRaw: string,
   opts?: {
     name?: string;
     dateOfBirth?: string;
     language?: string;
   }
 ): Promise<{ customerId: Id<"customers">; created: boolean; profileComplete: boolean }> {
+  const phone = phoneRaw.trim();
   const existing = await ctx.db
     .query("customers")
     .withIndex("by_phone", (q) => q.eq("phone", phone))
@@ -74,8 +75,8 @@ export async function ensureCustomerByPhone(
     phone,
     name: name || "Guest",
     initials: computeInitials(name || "Guest"),
-    dateOfBirth: opts?.dateOfBirth,
-    language: opts?.language || "en",
+    dateOfBirth: opts?.dateOfBirth?.trim(),
+    language: opts?.language?.trim() || "en",
     profileComplete: false,
     totalVisits: 0,
     totalLooks: 0,
@@ -157,11 +158,14 @@ export const updateProfile = mutation({
   handler: async (ctx, args) => {
     if (args.photoFileId) await assertFile(ctx, args.photoFileId, GUARDS.customerPhoto);
     const { customerId, ...fields } = args;
+    const TRIM_KEYS = new Set([
+      "name", "initials", "phone", "language", "dateOfBirth",
+      "gender", "heightUnit", "email", "city",
+    ]);
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+      if (value === undefined) continue;
+      updates[key] = typeof value === "string" && TRIM_KEYS.has(key) ? value.trim() : value;
     }
     // Recompute profileComplete if any gating field changed
     if (Object.keys(updates).length > 0) {
@@ -225,14 +229,14 @@ export const completeProfile = mutation({
     await ctx.db.patch(args.customerId, {
       name,
       initials: computeInitials(name),
-      dateOfBirth: args.dateOfBirth,
-      gender: args.gender,
+      dateOfBirth: args.dateOfBirth.trim(),
+      gender: args.gender.trim(),
       heightCm: args.heightCm,
-      heightUnit: args.heightUnit ?? "cm",
+      heightUnit: args.heightUnit?.trim() || "cm",
       city: args.city.trim(),
       email: args.email?.trim() || undefined,
       photoFileId: args.photoFileId,
-      language: args.language ?? customer.language ?? "en",
+      language: args.language?.trim() || customer.language || "en",
       profileComplete: true,
     });
     return { success: true };
@@ -834,5 +838,27 @@ export const listStoreLinksEnriched = query({
       });
     }
     return enriched;
+  },
+});
+
+// One-shot backfill: trim whitespace on customer string fields. Idempotent.
+export const backfillTrimCustomerStrings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const KEYS = ["phone", "name", "initials", "language", "dateOfBirth", "gender", "heightUnit", "email", "city", "loyaltyTier"] as const;
+    const rows = await ctx.db.query("customers").collect();
+    let touched = 0;
+    for (const row of rows) {
+      const updates: Record<string, unknown> = {};
+      for (const key of KEYS) {
+        const val = (row as Record<string, unknown>)[key];
+        if (typeof val === "string" && val !== val.trim()) updates[key] = val.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(row._id, updates);
+        touched++;
+      }
+    }
+    return { scanned: rows.length, touched };
   },
 });

@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { assertFile, GUARDS } from "./fileValidation";
 
@@ -38,7 +38,7 @@ export const listByCity = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("tailors")
-      .withIndex("by_city", (q) => q.eq("city", args.city))
+      .withIndex("by_city", (q) => q.eq("city", args.city.trim()))
       .take(100);
   },
 });
@@ -65,11 +65,11 @@ export const updateProfile = mutation({
       .unique();
     if (!tailor) throw new Error("Tailor not found");
     const { tailorId: _, ...fields } = args;
+    const TRIM_KEYS = new Set(["name", "phone", "city", "area", "experience", "bio", "badge", "language", "subscription"]);
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+      if (value === undefined) continue;
+      updates[key] = typeof value === "string" && TRIM_KEYS.has(key) ? value.trim() : value;
     }
     await ctx.db.patch(tailor._id, updates);
   },
@@ -147,10 +147,18 @@ export const registerTailor = mutation({
     passwordHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const name = args.name.trim();
+    const phone = args.phone.trim();
+    const city = args.city.trim();
+    const area = args.area?.trim();
+    const experience = args.experience?.trim();
+    const bio = args.bio?.trim();
+    const language = args.language?.trim();
+
     // Duplicate check — prevent creating a second tailor with the same phone
     const existing = await ctx.db
       .query("tailors")
-      .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
       .first();
     if (existing) {
       throw new Error("A tailor with this phone number already exists");
@@ -160,14 +168,14 @@ export const registerTailor = mutation({
     const tailorId = `TL-${randomDigits}`;
     return await ctx.db.insert("tailors", {
       tailorId,
-      name: args.name,
-      phone: args.phone,
-      city: args.city,
-      area: args.area,
+      name,
+      phone,
+      city,
+      area,
       specialties: args.specialties,
-      experience: args.experience,
-      bio: args.bio,
-      language: args.language,
+      experience,
+      bio,
+      language,
       passwordHash: args.passwordHash,
       status: "pending",
       rating: 0,
@@ -776,5 +784,30 @@ export const getEarnings = query({
     }
 
     return { totalEarned, totalPending, totalPaid };
+  },
+});
+
+// One-shot backfill: trim leading/trailing whitespace on string fields that
+// feed indexes or UI filters. Idempotent — rows already clean get no write.
+export const backfillTrimTailorStrings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const TRIM_KEYS = ["name", "phone", "city", "area", "experience", "bio", "badge", "language", "subscription"] as const;
+    const rows = await ctx.db.query("tailors").collect();
+    let touched = 0;
+    for (const row of rows) {
+      const updates: Record<string, unknown> = {};
+      for (const key of TRIM_KEYS) {
+        const val = (row as Record<string, unknown>)[key];
+        if (typeof val === "string" && val !== val.trim()) {
+          updates[key] = val.trim();
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(row._id, updates);
+        touched++;
+      }
+    }
+    return { scanned: rows.length, touched };
   },
 });

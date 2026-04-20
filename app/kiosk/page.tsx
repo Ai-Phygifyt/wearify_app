@@ -148,6 +148,10 @@ export default function KioskPage() {
   const recordBodyScan = useMutation(api.customers.recordBodyScan);
   const addTrialCartItem = useMutation(api.sessionOps.addTrialCartItem);
   const removeTrialCartItem = useMutation(api.sessionOps.removeTrialCartItem);
+  const addCartItem = useMutation(api.sessionOps.addCartItem);
+  const updateCartQtyMut = useMutation(api.sessionOps.updateCartQty);
+  const removeCartItemMut = useMutation(api.sessionOps.removeCartItem);
+  const clearCartMut = useMutation(api.sessionOps.clearCart);
 
   // Load config
   useEffect(() => {
@@ -295,10 +299,14 @@ export default function KioskPage() {
     api.sessionOps.listTrialCart,
     customerId && storeId ? { customerId, storeId } : "skip",
   );
+  const savedCart = useQuery(
+    api.sessionOps.listCart,
+    customerId && storeId ? { customerId, storeId } : "skip",
+  );
   const hydratedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!customerId || !storeId || !allSarees) return;
-    if (savedWardrobe === undefined || savedTrialCart === undefined) return;
+    if (savedWardrobe === undefined || savedTrialCart === undefined || savedCart === undefined) return;
     const key = `${customerId}:${storeId}`;
     if (hydratedRef.current === key) return;
     hydratedRef.current = key;
@@ -310,6 +318,12 @@ export default function KioskPage() {
     const trialForStore = savedTrialCart
       .map((t) => sareeMap.get(t.sareeId))
       .filter(Boolean) as SareeItem[];
+    const cartForStore = savedCart
+      .map((c) => {
+        const saree = sareeMap.get(c.sareeId);
+        return saree ? { ...saree, qty: c.qty } : null;
+      })
+      .filter(Boolean) as Array<SareeItem & { qty: number }>;
     // Merge rather than replace — codeEntry may have already populated trialItems from tablet shortlist.
     setWardrobeItems((prev) => {
       const have = new Set(prev.map((s) => s._id));
@@ -319,7 +333,11 @@ export default function KioskPage() {
       const have = new Set(prev.map((s) => s._id));
       return [...prev, ...trialForStore.filter((s) => !have.has(s._id))];
     });
-  }, [customerId, storeId, allSarees, savedWardrobe, savedTrialCart]);
+    setCartItems((prev) => {
+      const have = new Set(prev.map((s) => s._id));
+      return [...prev, ...cartForStore.filter((s) => !have.has(s._id))];
+    });
+  }, [customerId, storeId, allSarees, savedWardrobe, savedTrialCart, savedCart]);
 
   if (!storeId) return null;
 
@@ -680,7 +698,16 @@ export default function KioskPage() {
           <WardrobeScreen
             items={wardrobeItems}
             onMoveToCart={(items) => {
-              setCartItems((prev) => [...prev, ...items.map((i) => ({ ...i, qty: 1 }))]);
+              setCartItems((prev) => {
+                const have = new Set(prev.map((s) => s._id));
+                const fresh = items.filter((i) => !have.has(i._id));
+                if (customerId) {
+                  for (const i of fresh) {
+                    addCartItem({ customerId, storeId, sareeId: i._id, qty: 1 });
+                  }
+                }
+                return [...prev, ...fresh.map((i) => ({ ...i, qty: 1 }))];
+              });
               navigate("order");
             }}
             navigate={navigate}
@@ -699,7 +726,25 @@ export default function KioskPage() {
         return (
           <OrderScreen
             cart={cartItems}
-            setCart={setCartItems}
+            onUpdateQty={(idx, d) => {
+              setCartItems((prev) => prev.map((item, i) => {
+                if (i !== idx) return item;
+                const nextQty = Math.max(1, item.qty + d);
+                if (customerId && nextQty !== item.qty) {
+                  updateCartQtyMut({ customerId, storeId, sareeId: item._id, qty: nextQty });
+                }
+                return { ...item, qty: nextQty };
+              }));
+            }}
+            onRemoveItem={(idx) => {
+              setCartItems((prev) => {
+                const victim = prev[idx];
+                if (victim && customerId) {
+                  removeCartItemMut({ customerId, storeId, sareeId: victim._id });
+                }
+                return prev.filter((_, i) => i !== idx);
+              });
+            }}
             onCheckout={async () => {
               if (cartItems.length > 0) {
                 try {
@@ -716,6 +761,10 @@ export default function KioskPage() {
                   });
                   const cartIds = cartItems.map((c) => c._id);
                   setWardrobeItems((prev) => prev.filter((w) => !cartIds.includes(w._id)));
+                  if (customerId) {
+                    try { await clearCartMut({ customerId, storeId }); } catch { /* ignore */ }
+                  }
+                  setCartItems([]);
                 } catch { /* ignore */ }
               }
             }}
@@ -1581,7 +1630,7 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         {iconBtn(() => navigate("trialRoom"), Shirt, "Trial room", trialCount, "var(--k-gold)")}
         {iconBtn(() => navigate("wardrobe"), ShoppingBag, "Wardrobe", wardrobeCount, "var(--k-maroon)")}
-        {cartCount > 0 && iconBtn(() => navigate("order"), ShoppingCart, "Cart", cartCount, "var(--k-green)")}
+        {iconBtn(() => navigate("order"), ShoppingCart, "Cart", cartCount, "var(--k-green)")}
         {iconBtn(goHome, Home, "Home")}
         {iconBtn(triggerLogout, LogOut, "Logout")}
       </div>
@@ -2231,15 +2280,17 @@ function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, 
 }
 
 /* ── ORDER ── */
-function OrderScreen({ cart, setCart, onCheckout, onFindTailor, onBack }: {
-  cart: Array<SareeItem & { qty: number }>; setCart: React.Dispatch<React.SetStateAction<Array<SareeItem & { qty: number }>>>;
+function OrderScreen({ cart, onUpdateQty, onRemoveItem, onCheckout, onFindTailor, onBack }: {
+  cart: Array<SareeItem & { qty: number }>;
+  onUpdateQty: (idx: number, delta: number) => void;
+  onRemoveItem: (idx: number) => void;
   onCheckout: () => Promise<void>; onFindTailor: () => void; onBack: () => void;
 }) {
   const [showQR, setShowQR] = useState(false);
   const [qrExp, setQrExp] = useState(600);
   useEffect(() => { if (!showQR || qrExp <= 0) return; const t = setTimeout(() => setQrExp((v) => v - 1), 1000); return () => clearTimeout(t); }, [showQR, qrExp]);
-  const updateQty = (idx: number, d: number) => setCart((p) => p.map((item, i) => i === idx ? { ...item, qty: Math.max(1, item.qty + d) } : item));
-  const removeItem = (idx: number) => setCart((p) => p.filter((_, i) => i !== idx));
+  const updateQty = onUpdateQty;
+  const removeItem = onRemoveItem;
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const gst = cart.reduce((s, i) => s + i.price * i.qty * (i.price < 1000 ? 0.05 : 0.12), 0);
   return (

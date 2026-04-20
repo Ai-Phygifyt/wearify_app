@@ -67,7 +67,19 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("stores", {
-      ...args,
+      storeId: args.storeId.trim(),
+      name: args.name.trim(),
+      city: args.city.trim(),
+      state: args.state?.trim(),
+      address: args.address?.trim(),
+      pin: args.pin?.trim(),
+      status: args.status,
+      plan: args.plan,
+      mrr: args.mrr,
+      ownerName: args.ownerName?.trim(),
+      ownerPhone: args.ownerPhone?.trim(),
+      ownerEmail: args.ownerEmail?.trim(),
+      gstin: args.gstin?.trim(),
       healthScore: 0,
       conversionRate: 0,
       sessions: 0,
@@ -112,11 +124,15 @@ export const update = mutation({
   handler: async (ctx, args) => {
     if (args.logoFileId) await assertFile(ctx, args.logoFileId, GUARDS.storeLogo);
     const { id, ...fields } = args;
+    const TRIM_KEYS = new Set([
+      "name", "city", "state", "address", "pin", "area", "hours", "closedOn",
+      "status", "plan", "discountCode", "subscriptionPlan", "nextBillingDate",
+      "ownerName", "ownerEmail", "whatsappNumber", "agreementStatus",
+    ]);
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+      if (value === undefined) continue;
+      updates[key] = typeof value === "string" && TRIM_KEYS.has(key) ? value.trim() : value;
     }
     await ctx.db.patch(id, updates);
   },
@@ -163,11 +179,11 @@ export const createStaff = mutation({
       throw new Error(`${PIN_TAKEN_PREFIX} This PIN is already in use at this store. Please pick a different PIN.`);
     }
     const id = await ctx.db.insert("staff", {
-      name: args.name,
-      phone: args.phone,
+      name: args.name.trim(),
+      phone: args.phone.trim(),
       pin: args.pin,
       role: args.role,
-      storeId: args.storeId,
+      storeId: args.storeId.trim(),
       status: "active",
       totalSales: 0,
       conversion: 0,
@@ -205,11 +221,11 @@ export const updateStaff = mutation({
       }
     }
     const { id, ...fields } = args;
+    const TRIM_KEYS = new Set(["name", "phone", "role", "status"]);
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+      if (value === undefined) continue;
+      updates[key] = typeof value === "string" && TRIM_KEYS.has(key) ? value.trim() : value;
     }
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(id, updates);
@@ -374,5 +390,45 @@ export const removeStores = internalMutation({
       totalDeleted += await deleteStoreData(ctx, storeId);
     }
     return { deleted: totalDeleted, stores: args.storeIds };
+  },
+});
+
+// One-shot backfill: trim whitespace on string fields for stores + staff.
+// Same pattern as tailorOps.backfillTrimTailorStrings. Idempotent.
+export const backfillTrimStoreAndStaffStrings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const STORE_KEYS = ["storeId", "name", "city", "state", "address", "pin", "area", "hours", "closedOn", "status", "plan", "discountCode", "subscriptionPlan", "nextBillingDate", "ownerName", "ownerPhone", "ownerEmail", "whatsappNumber", "agreementStatus", "gstin"] as const;
+    const STAFF_KEYS = ["name", "phone", "role", "status", "storeId"] as const;
+
+    const stores = await ctx.db.query("stores").collect();
+    let storesTouched = 0;
+    for (const row of stores) {
+      const updates: Record<string, unknown> = {};
+      for (const key of STORE_KEYS) {
+        const val = (row as Record<string, unknown>)[key];
+        if (typeof val === "string" && val !== val.trim()) updates[key] = val.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(row._id, updates);
+        storesTouched++;
+      }
+    }
+
+    const staffRows = await ctx.db.query("staff").collect();
+    let staffTouched = 0;
+    for (const row of staffRows) {
+      const updates: Record<string, unknown> = {};
+      for (const key of STAFF_KEYS) {
+        const val = (row as Record<string, unknown>)[key];
+        if (typeof val === "string" && val !== val.trim()) updates[key] = val.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(row._id, updates);
+        staffTouched++;
+      }
+    }
+
+    return { stores: { scanned: stores.length, touched: storesTouched }, staff: { scanned: staffRows.length, touched: staffTouched } };
   },
 });
