@@ -219,6 +219,18 @@ Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When
 - **Responsive:** `@media (max-width: 820px)` and `(max-width: 520px)` rules shrink numpad buttons, codeboxes, iconbtns, and modal padding for portrait tablets.
 - **Pre-existing lint warnings** (`set-state-in-effect` in countdown timers, a few unused vars) were NOT fixed — they predate this pass.
 
+### Staff PIN uniqueness per store
+
+- **Problem:** `staff.pin` had a per-store index (`by_storeId_and_pin` on `staff`) but neither `createStaff` nor `updateStaff` used it. Admins/owners could create two staff in the same store with the same PIN; `staffPinLogin` returns the first index hit, so the second staff silently couldn't log in and analytics got attributed to the wrong person.
+- **Backend fix** ([convex/stores.ts](convex/stores.ts)):
+  - `createStaff` now validates `^\d{4}$` and rejects duplicate PINs in the same store.
+  - `updateStaff` validates on PIN change, fetches the current row to know `storeId`, queries the pair index, and rejects if a *different* staff already holds that PIN.
+  - Error messages use the `PIN_TAKEN:` prefix so UIs can distinguish this from generic mutation failures.
+- **Frontend fixes** — all three creation surfaces catch the prefix and show inline:
+  - [app/store/staff/page.tsx](app/store/staff/page.tsx) — owner self-serve add form; tightened client validation from 4–6 digits to exactly 4.
+  - [app/admin/stores/\[id\]/page.tsx](app/admin/stores/[id]/page.tsx) — admin store-detail staff tab; error surfaces in `staffErrors.pin`.
+  - [app/admin/stores/onboard/page.tsx](app/admin/stores/onboard/page.tsx) — 8-step wizard step 5 now checks for **duplicate PINs within the list the admin is currently typing** (client-side, before submit) so the activation step doesn't half-commit. Server-side catch on activation jumps back to step 5 with the conflicting row highlighted.
+
 ### Codebase review batch — quick/medium wins from the 2026-04-17 audit
 
 Applied the non-architectural subset of findings from the codebase review. Flagged the rest (middleware, httpOnly cookies, CI, `PhoneOtpBox` extraction, kiosk file split, full i18n, Better Auth decision, OTP env-gate, staff PIN rate-limit) for separate sessions — they need decisions or are multi-day.

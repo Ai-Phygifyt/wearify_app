@@ -319,14 +319,18 @@ function AddStaffForm({
   async function handleSubmit() {
     if (!name.trim()) { setError("Name is required"); return; }
     if (phone.length < 10) { setError("Enter a valid 10-digit phone number"); return; }
-    if (pin.length < 4 || pin.length > 6) { setError("PIN must be 4–6 digits"); return; }
+    if (!/^\d{4}$/.test(pin)) { setError("PIN must be exactly 4 digits"); return; }
     setLoading(true);
     setError("");
     try {
       await createStaff({ name: name.trim(), phone: "+91" + phone, pin, role, storeId });
       onSuccess();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to add staff");
+      const raw = err instanceof Error ? err.message : "Failed to add staff";
+      const taken = raw.includes("PIN_TAKEN");
+      setError(taken
+        ? "This PIN is already in use at this store. Please pick a different PIN."
+        : raw);
     } finally {
       setLoading(false);
     }

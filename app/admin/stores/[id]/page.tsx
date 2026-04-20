@@ -169,13 +169,23 @@ export default function StoreDetailPage({
 
   async function handleAddStaff() {
     if (!validateStaffForm()) return;
-    await createStaff({
-      name: staffForm.name.trim(),
-      phone: staffForm.phone,
-      pin: staffForm.pin,
-      role: staffForm.role,
-      storeId: id,
-    });
+    try {
+      await createStaff({
+        name: staffForm.name.trim(),
+        phone: staffForm.phone,
+        pin: staffForm.pin,
+        role: staffForm.role,
+        storeId: id,
+      });
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : "Failed to add staff";
+      setStaffErrors({
+        pin: raw.includes("PIN_TAKEN")
+          ? "This PIN is already in use at this store"
+          : raw,
+      });
+      return;
+    }
     setStaffForm({ name: "", phone: "", pin: "", role: "R05" });
     setStaffErrors({});
     setShowAddStaff(false);

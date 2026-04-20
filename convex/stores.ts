@@ -133,6 +133,12 @@ export const listStaffByStore = query({
   },
 });
 
+// Error message prefix used to signal "this PIN is already taken in this
+// store" so the UI can match on it and show an inline field error instead
+// of a generic toast. Keep in sync with the three createStaff/updateStaff
+// callsites in admin + store UIs.
+const PIN_TAKEN_PREFIX = "PIN_TAKEN:";
+
 export const createStaff = mutation({
   args: {
     name: v.string(),
@@ -142,6 +148,18 @@ export const createStaff = mutation({
     storeId: v.string(),
   },
   handler: async (ctx, args) => {
+    if (!/^\d{4}$/.test(args.pin)) {
+      throw new Error("PIN must be exactly 4 digits");
+    }
+    const existing = await ctx.db
+      .query("staff")
+      .withIndex("by_storeId_and_pin", (q) =>
+        q.eq("storeId", args.storeId).eq("pin", args.pin),
+      )
+      .first();
+    if (existing) {
+      throw new Error(`${PIN_TAKEN_PREFIX} This PIN is already in use at this store. Please pick a different PIN.`);
+    }
     const id = await ctx.db.insert("staff", {
       name: args.name,
       phone: args.phone,
@@ -168,6 +186,22 @@ export const updateStaff = mutation({
     status: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.pin !== undefined) {
+      if (!/^\d{4}$/.test(args.pin)) {
+        throw new Error("PIN must be exactly 4 digits");
+      }
+      const current = await ctx.db.get(args.id);
+      if (!current) throw new Error("Staff not found");
+      const conflict = await ctx.db
+        .query("staff")
+        .withIndex("by_storeId_and_pin", (q) =>
+          q.eq("storeId", current.storeId).eq("pin", args.pin!),
+        )
+        .first();
+      if (conflict && conflict._id !== args.id) {
+        throw new Error(`${PIN_TAKEN_PREFIX} This PIN is already in use at this store. Please pick a different PIN.`);
+      }
+    }
     const { id, ...fields } = args;
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {

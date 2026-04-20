@@ -149,6 +149,20 @@ export default function OnboardPage() {
         if (!/^\d{10}$/.test(s.phone)) { errs[`staff_${i}_phone`] = "10 digits"; t[`staff_${i}_phone`] = true; }
         if (!/^\d{4}$/.test(s.pin)) { errs[`staff_${i}_pin`] = "4 digits"; t[`staff_${i}_pin`] = true; }
       });
+      // Flag duplicate PINs within this list — catching them here avoids a
+      // half-done activation where the first staff insert succeeds and the
+      // second throws PIN_TAKEN server-side.
+      const pinSeen = new Map<string, number>();
+      staffList.forEach((s, i) => {
+        if (!/^\d{4}$/.test(s.pin)) return;
+        const firstIdx = pinSeen.get(s.pin);
+        if (firstIdx === undefined) {
+          pinSeen.set(s.pin, i);
+        } else {
+          errs[`staff_${i}_pin`] = "PIN already used above";
+          t[`staff_${i}_pin`] = true;
+        }
+      });
     }
     if (step === 6) {
       if (!waNumber.trim() || !/^\d{10}$/.test(waNumber)) { errs.waNumber = "10 digits required"; t.waNumber = true; }
@@ -175,16 +189,35 @@ export default function OnboardPage() {
       gstin: d.gstin || undefined,
     });
 
-    // Persist staff captured in step 6 (skip blank rows)
-    for (const s of staffList) {
-      if (!s.name.trim() || !/^\d{10}$/.test(s.phone) || !/^\d{4,6}$/.test(s.pin)) continue;
-      await createStaff({
-        name: s.name.trim(),
-        phone: `+91${s.phone}`,
-        pin: s.pin,
-        role: s.role,
-        storeId,
-      });
+    // Persist staff captured in step 6 (skip blank rows).
+    // PIN dedup is already enforced at step 5 validation, but if the server
+    // still rejects (e.g. existing staff on a store reused via storeId
+    // collision, or admin edited after validating), surface which staff
+    // couldn't be added instead of leaving the wizard in limbo.
+    for (let i = 0; i < staffList.length; i++) {
+      const s = staffList[i];
+      if (!s.name.trim() || !/^\d{10}$/.test(s.phone) || !/^\d{4}$/.test(s.pin)) continue;
+      try {
+        await createStaff({
+          name: s.name.trim(),
+          phone: `+91${s.phone}`,
+          pin: s.pin,
+          role: s.role,
+          storeId,
+        });
+      } catch (err: unknown) {
+        const raw = err instanceof Error ? err.message : "Failed to add staff";
+        const key = `staff_${i}_pin`;
+        setErrors((p) => ({
+          ...p,
+          [key]: raw.includes("PIN_TAKEN")
+            ? "This PIN is already in use at this store"
+            : raw,
+        }));
+        setTouched((p) => ({ ...p, [key]: true }));
+        setStep(5);
+        return;
+      }
     }
 
     router.push("/admin/stores");
