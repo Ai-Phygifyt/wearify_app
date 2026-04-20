@@ -20,7 +20,6 @@ export default defineSchema({
   })
     .index("by_phone", ["phone"])
     .index("by_phone_and_role", ["phone", "role"])
-    .index("by_sessionToken", ["sessionToken"])
     .index("by_role", ["role"]),
 
   // Per-device session tokens. One row per active login so multiple devices
@@ -352,6 +351,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_code", ["code"])
+    .index("by_code_and_storeId", ["code", "storeId"])
     .index("by_storeId", ["storeId"])
     .index("by_sessionId", ["sessionId"])
     .index("by_status", ["status"]),

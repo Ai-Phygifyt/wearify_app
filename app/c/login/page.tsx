@@ -117,7 +117,7 @@ export default function CustomerLoginPage() {
             role: "customer",
             customerId: result.customerId as string,
           });
-          window.location.href = "/c";
+          router.replace("/c");
         } else if (result.errorCode === "NO_ACCOUNT") {
           setNoAccount(true);
           setOtpDigits(["", "", "", "", "", ""]);

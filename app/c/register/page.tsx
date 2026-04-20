@@ -207,7 +207,7 @@ export default function RegisterPage() {
         role: "customer",
         customerId: login.customerId as string,
       });
-      window.location.href = "/c";
+      router.replace("/c");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not create account");
     } finally {

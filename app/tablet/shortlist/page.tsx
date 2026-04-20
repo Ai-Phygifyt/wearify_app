@@ -87,8 +87,9 @@ export default function TabletShortlistPage() {
   }, [codeExpiresAt]);
 
   const handleRemove = async (shortlistId: Id<"shortlist">) => {
+    if (!sessionId) return;
     try {
-      await removeFromShortlist({ shortlistId });
+      await removeFromShortlist({ shortlistId, sessionId });
     } catch { /* ignore */ }
   };
 
@@ -99,12 +100,12 @@ export default function TabletShortlistPage() {
       // Mark items as sent to mirror
       if (itemIds) {
         for (const id of itemIds) {
-          await markSentToMirror({ shortlistId: id });
+          await markSentToMirror({ shortlistId: id, sessionId });
         }
       } else if (shortlistItems) {
         for (const item of shortlistItems) {
           if (!item.sentToMirror) {
-            await markSentToMirror({ shortlistId: item._id });
+            await markSentToMirror({ shortlistId: item._id, sessionId });
           }
         }
       }

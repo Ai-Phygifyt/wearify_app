@@ -49,11 +49,11 @@ export const generateCode = mutation({
     while (attempts < 10) {
       const conflict = await ctx.db
         .query("trialRoom")
-        .withIndex("by_code", (q) => q.eq("code", code))
+        .withIndex("by_code_and_storeId", (q) =>
+          q.eq("code", code).eq("storeId", args.storeId),
+        )
         .take(5);
-      const activeConflict = conflict.find(
-        (tr) => tr.status === "active" && tr.storeId === args.storeId
-      );
+      const activeConflict = conflict.find((tr) => tr.status === "active");
       if (!activeConflict) break;
       code = generateNumericCode();
       attempts++;
@@ -87,12 +87,12 @@ export const validateCode = query({
   handler: async (ctx, args) => {
     const entries = await ctx.db
       .query("trialRoom")
-      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .withIndex("by_code_and_storeId", (q) =>
+        q.eq("code", args.code).eq("storeId", args.storeId),
+      )
       .take(10);
 
-    const entry = entries.find(
-      (tr) => tr.storeId === args.storeId && tr.status === "active"
-    );
+    const entry = entries.find((tr) => tr.status === "active");
 
     if (!entry) {
       return { valid: false, error: "Invalid code" } as const;
@@ -145,12 +145,12 @@ export const markCodeUsed = mutation({
   handler: async (ctx, args) => {
     const entries = await ctx.db
       .query("trialRoom")
-      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .withIndex("by_code_and_storeId", (q) =>
+        q.eq("code", args.code).eq("storeId", args.storeId),
+      )
       .take(10);
 
-    const entry = entries.find(
-      (tr) => tr.storeId === args.storeId && tr.status === "active"
-    );
+    const entry = entries.find((tr) => tr.status === "active");
     if (!entry) throw new Error("Trial room code not found or already used");
 
     await ctx.db.patch(entry._id, { status: "used" });

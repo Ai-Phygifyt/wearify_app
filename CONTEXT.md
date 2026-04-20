@@ -219,6 +219,23 @@ Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When
 - **Responsive:** `@media (max-width: 820px)` and `(max-width: 520px)` rules shrink numpad buttons, codeboxes, iconbtns, and modal padding for portrait tablets.
 - **Pre-existing lint warnings** (`set-state-in-effect` in countdown timers, a few unused vars) were NOT fixed — they predate this pass.
 
+### Codebase review batch — quick/medium wins from the 2026-04-17 audit
+
+Applied the non-architectural subset of findings from the codebase review. Flagged the rest (middleware, httpOnly cookies, CI, `PhoneOtpBox` extraction, kiosk file split, full i18n, Better Auth decision, OTP env-gate, staff PIN rate-limit) for separate sessions — they need decisions or are multi-day.
+
+- **Ownership checks on exposed mutations** ([convex/sessionOps.ts](convex/sessionOps.ts)): `removeFromShortlist` and `markSentToMirror` now require `sessionId` and verify the row's `sessionId` matches; `removeFromWardrobe` takes an optional `customerId` and rejects mismatches. Callers updated: [app/tablet/shortlist](app/tablet/shortlist/page.tsx), [app/tablet/catalogue/\[id\]](app/tablet/catalogue/[id]/page.tsx), [app/c/wishlist](app/c/wishlist/page.tsx).
+- **`trialRoom` composite index** `by_code_and_storeId` added to [convex/schema.ts](convex/schema.ts); all three call sites in [convex/trialRoom.ts](convex/trialRoom.ts) (generate, validate, markUsed) now use it instead of `by_code + in-memory filter`. No more cross-store index matches.
+- **Dropped the dead `users.by_sessionToken` index.** `userSessions` is the live table; this index was pure waste. [convex/schema.ts](convex/schema.ts).
+- **`listWardrobeByCustomer` deduplicates store lookups.** Previously one store query per wardrobe row; now one query per unique `storeId` in the result set. [convex/sessionOps.ts](convex/sessionOps.ts).
+- **`generateOrderId` bumped from 6 to 8 chars** — entropy raised from ~30 to ~40 bits, collision horizon pushed out significantly. [convex/sessionOps.ts](convex/sessionOps.ts).
+- **Inventory upload parallelized.** `/store/inventory/add` now uploads all photos via `Promise.all` before calling `createSaree`. Orphan-blob risk on partial failure remains until a `deleteFile` mutation is added (noted in review §4.2).
+- **`SareeThumb` composes `useConvexUrl` from `lib/ConvexImage`** instead of re-implementing the file-id-to-URL pattern. Also added `loading="lazy"` to the rendered `<img>` tags — kiosk grid no longer eager-loads every thumbnail on mount. [components/SareeThumb.tsx](components/SareeThumb.tsx).
+- **`window.location.href` → `router.replace`** in [app/store/login](app/store/login/page.tsx), [app/c/login](app/c/login/page.tsx), [app/c/register](app/c/register/page.tsx). Post-login navigation stays in SPA, no full page reload.
+- **Dead kiosk code removed:** the `[kiosk hydrate]` diagnostic `console.log` and the unused `isReturningCustomer` state (superseded by `scanEligibleRef`). [app/kiosk/page.tsx](app/kiosk/page.tsx).
+- **New `package.json` scripts:** `type-check`, `format`, `seed`, `seed:relational` — one-liner entry points that were previously only in docs.
+
+Review doc at `~/.claude/plans/now-go-through-entire-zazzy-goose.md` tracks the full finding list and flagged-for-later items.
+
 ### `/c/looks` = try-on history (trial entry, not wardrobe save)
 
 - **Problem:** `/c/looks` only showed sarees that were moved to wardrobe — items tried but not saved never appeared. Root cause: `createLook` was only called from `onAddToWardrobe`. Every wardrobe item first passes through trial, but trial-only items were invisible to the Looks feed.

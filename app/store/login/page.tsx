@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import "../store-theme.css";
@@ -9,6 +10,7 @@ type LoginTab = "otp" | "password";
 type OtpStep = "phone" | "otp" | "set-password";
 
 export default function StoreLoginPage() {
+  const router = useRouter();
   const loginWithOtp = useMutation(api.phoneAuth.loginWithOtp);
   const loginWithPassword = useMutation(api.phoneAuth.loginWithPassword);
   const setPasswordMut = useMutation(api.phoneAuth.setPassword);
@@ -29,7 +31,7 @@ export default function StoreLoginPage() {
   function saveAndGo(token: string, storeId: string, storeName: string) {
     localStorage.setItem("wearify_auth_token", token);
     localStorage.setItem("wearify_auth_user", JSON.stringify({ storeId, storeName, role: "store_owner" }));
-    window.location.href = "/store";
+    router.replace("/store");
   }
 
   function handleOtpDigit(index: number, value: string) {

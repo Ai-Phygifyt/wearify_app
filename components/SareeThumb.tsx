@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { useConvexUrl } from "@/lib/ConvexImage";
 
 // Local-asset fallback for seeded sarees (served from /public/inventory).
 // Keyed by exact saree.name. Seeded sarees were shipped with repo-local images
@@ -45,14 +44,15 @@ export function SareeThumb({
   style,
 }: SareeThumbProps) {
   const localSrc = SAREE_IMAGE[name];
-  const url = useQuery(api.files.getUrl, !localSrc && fileId ? { fileId } : "skip");
+  // Only fetch the Convex URL if the local-seed map didn't resolve.
+  const url = useConvexUrl(!localSrc ? fileId : null);
   const baseStyle: React.CSSProperties = { width: "100%", height: "100%", objectFit: "cover", ...style };
 
   if (localSrc) {
-    return <img src={localSrc} alt={name} className={className} style={baseStyle} />;
+    return <img src={localSrc} alt={name} className={className} style={baseStyle} loading="lazy" />;
   }
   if (url) {
-    return <img src={url} alt={name} className={className} style={baseStyle} />;
+    return <img src={url} alt={name} className={className} style={baseStyle} loading="lazy" />;
   }
 
   const g = grad && grad.length ? grad : ["#E8E0D4", "#D4A843"];

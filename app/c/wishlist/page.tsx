@@ -159,7 +159,7 @@ export default function WishlistPage() {
                     )}
                   </div>
                   <button
-                    onClick={() => removeFromWardrobe({ wardrobeId: w._id })}
+                    onClick={() => removeFromWardrobe({ wardrobeId: w._id, customerId })}
                     className="cx-press"
                     style={{ width: 36, height: 36, borderRadius: "50%", background: "#FFEBEE", border: "1px solid rgba(183,28,28,.12)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                     aria-label="Remove from wardrobe"

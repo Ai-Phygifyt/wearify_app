@@ -124,11 +124,14 @@ export default function AddSareePage() {
 
     setLoading(true); setError("");
     try {
-      const imageIds: Id<"_storage">[] = [];
-      for (const key of ["front", "back", "pallu", "border"] as PhotoKey[]) {
-        const file = photos[key];
-        if (file) { const id = await upload(file); imageIds.push(id); }
-      }
+      // Upload all photos in parallel before writing the saree row so one slow
+      // upload doesn't block the rest, and createSaree only runs once they all
+      // succeed. Orphan-blob risk on partial failure still exists until a
+      // deleteFile mutation is wired.
+      const files = (["front", "back", "pallu", "border"] as PhotoKey[])
+        .map((key) => photos[key])
+        .filter((f): f is File => !!f);
+      const imageIds: Id<"_storage">[] = await Promise.all(files.map((f) => upload(f)));
       const stockNum = parseInt(stock);
       let status = "active";
       if (stockNum <= 0) status = "out_of_stock";

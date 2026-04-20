@@ -469,8 +469,16 @@ export const getCustomerPreviousShortlist = query({
 });
 
 export const removeFromShortlist = mutation({
-  args: { shortlistId: v.id("shortlist") },
+  args: {
+    shortlistId: v.id("shortlist"),
+    sessionId: v.string(),
+  },
   handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.shortlistId);
+    if (!row) return;
+    if (row.sessionId !== args.sessionId) {
+      throw new Error("Shortlist item does not belong to this session");
+    }
     await ctx.db.delete(args.shortlistId);
   },
 });
@@ -488,10 +496,16 @@ export const getShortlist = query({
 });
 
 export const markSentToMirror = mutation({
-  args: { shortlistId: v.id("shortlist") },
+  args: {
+    shortlistId: v.id("shortlist"),
+    sessionId: v.string(),
+  },
   handler: async (ctx, args) => {
     const item = await ctx.db.get(args.shortlistId);
     if (!item) throw new Error("Shortlist item not found");
+    if (item.sessionId !== args.sessionId) {
+      throw new Error("Shortlist item does not belong to this session");
+    }
     await ctx.db.patch(args.shortlistId, { sentToMirror: true });
   },
 });
@@ -543,8 +557,18 @@ export const addToWardrobe = mutation({
 });
 
 export const removeFromWardrobe = mutation({
-  args: { wardrobeId: v.id("wardrobe") },
+  args: {
+    wardrobeId: v.id("wardrobe"),
+    customerId: v.optional(v.id("customers")),
+  },
   handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.wardrobeId);
+    if (!row) return;
+    // If caller passes customerId, require it matches. Guest rows (no
+    // customerId on either side) pass through.
+    if (args.customerId && row.customerId && row.customerId !== args.customerId) {
+      throw new Error("Wardrobe item does not belong to this customer");
+    }
     await ctx.db.delete(args.wardrobeId);
   },
 });
@@ -557,28 +581,38 @@ export const listWardrobeByCustomer = query({
       .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
       .order("desc")
       .take(200);
-    // Enrich with saree cover image + store metadata for the wishlist tab UI
-    return await Promise.all(
-      items.map(async (w) => {
-        const saree = await ctx.db.get(w.sareeId);
-        const store = saree
-          ? await ctx.db
-              .query("stores")
-              .withIndex("by_storeId", (q) => q.eq("storeId", saree.storeId))
-              .unique()
-          : null;
-        return {
-          ...w,
-          storeId: saree?.storeId,
-          storeName: store?.name,
-          storeCity: store?.city,
-          sareeImageId: saree?.imageIds?.[0],
-          sareeGrad: saree?.grad,
-          sareeEmoji: saree?.emoji,
-          sareeFabric: saree?.fabric,
-        };
-      })
+    // Enrich with saree cover image + store metadata for the wishlist tab UI.
+    // Fetch all sarees in parallel, then look up each unique store at most once
+    // (a customer typically has few distinct stores in their wardrobe).
+    const sarees = await Promise.all(items.map((w) => ctx.db.get(w.sareeId)));
+    const uniqueStoreIds = Array.from(
+      new Set(sarees.map((s) => s?.storeId).filter((id): id is string => !!id)),
     );
+    const storeRows = await Promise.all(
+      uniqueStoreIds.map((sid) =>
+        ctx.db
+          .query("stores")
+          .withIndex("by_storeId", (q) => q.eq("storeId", sid))
+          .unique(),
+      ),
+    );
+    const storeById = new Map(
+      uniqueStoreIds.map((sid, i) => [sid, storeRows[i]]),
+    );
+    return items.map((w, i) => {
+      const saree = sarees[i];
+      const store = saree?.storeId ? storeById.get(saree.storeId) : null;
+      return {
+        ...w,
+        storeId: saree?.storeId,
+        storeName: store?.name,
+        storeCity: store?.city,
+        sareeImageId: saree?.imageIds?.[0],
+        sareeGrad: saree?.grad,
+        sareeEmoji: saree?.emoji,
+        sareeFabric: saree?.fabric,
+      };
+    });
   },
 });
 
@@ -671,7 +705,7 @@ export const listTrialCart = query({
 function generateOrderId(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let result = "";
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;

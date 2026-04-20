@@ -76,7 +76,7 @@ export default function SareeDetailPage() {
       // Mark as sent to mirror
       const item = shortlistItems?.find((i) => i.sareeId === sareeId);
       if (item) {
-        await markSentToMirror({ shortlistId: item._id });
+        await markSentToMirror({ shortlistId: item._id, sessionId });
       }
       setSentToMirror(true);
     } catch { /* ignore */ }

@@ -107,7 +107,6 @@ export default function KioskPage() {
   const [customerId, setCustomerId] = useState<Id<"customers"> | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [sessionId, setSessionId] = useState("");
-  const [isReturningCustomer, setIsReturningCustomer] = useState(false);
   const [hasBodyScan, setHasBodyScan] = useState(false);
 
   // Language
@@ -184,7 +183,6 @@ export default function KioskPage() {
       setSessionId(s.sessionId);
       setPhone(s.phone ?? "");
       if (s.lang) setLang(s.lang);
-      setIsReturningCustomer(true);
       setHasBodyScan(!!s.hasBodyScan);
       returningRef.current = true;
       scanEligibleRef.current = !!s.hasBodyScan;
@@ -258,7 +256,6 @@ export default function KioskPage() {
     setCustomerName("");
     setSessionId("");
     setPhone("");
-    setIsReturningCustomer(false);
     setHasBodyScan(false);
     setTrialItems([]);
     setWardrobeItems([]);
@@ -313,14 +310,6 @@ export default function KioskPage() {
     const trialForStore = savedTrialCart
       .map((t) => sareeMap.get(t.sareeId))
       .filter(Boolean) as SareeItem[];
-    // Diagnostic — check browser console if retention looks off.
-    console.log("[kiosk hydrate]", {
-      key,
-      wardrobeFromDb: savedWardrobe.length,
-      wardrobeForStore: wardrobeForStore.length,
-      trialCartFromDb: savedTrialCart.length,
-      trialForStore: trialForStore.length,
-    });
     // Merge rather than replace — codeEntry may have already populated trialItems from tablet shortlist.
     setWardrobeItems((prev) => {
       const have = new Set(prev.map((s) => s._id));
@@ -387,7 +376,6 @@ export default function KioskPage() {
               }
               setCustomerId(customer._id);
               setCustomerName(customer.name);
-              setIsReturningCustomer(true);
               const scanAge = customer.lastBodyScan
                 ? (Date.now() - customer.lastBodyScan) / (1000 * 60 * 60 * 24 * 30)
                 : Infinity;
@@ -429,7 +417,6 @@ export default function KioskPage() {
             onRegistered={async (cId, cName) => {
               setCustomerId(cId);
               setCustomerName(cName);
-              setIsReturningCustomer(false);
               setHasBodyScan(false);
               returningRef.current = false;
               scanEligibleRef.current = false;
@@ -464,7 +451,6 @@ export default function KioskPage() {
               if (data.customer) {
                 setCustomerId(data.customer._id);
                 setCustomerName(data.customer.name);
-                setIsReturningCustomer(true);
                 const scanAge = data.customer.lastBodyScan
                   ? (Date.now() - data.customer.lastBodyScan) / (1000 * 60 * 60 * 24 * 30)
                   : Infinity;
@@ -483,7 +469,6 @@ export default function KioskPage() {
                 });
               } else {
                 setCustomerId(data.trialRoom.customerId ?? null);
-                setIsReturningCustomer(false);
                 setHasBodyScan(false);
                 returningRef.current = false;
                 scanEligibleRef.current = false;
