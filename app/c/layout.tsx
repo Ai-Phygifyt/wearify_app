@@ -84,7 +84,7 @@ const NAV_ITEMS = [
   { key: "home", label: "Home", href: "/c", Icon: NavHome },
   { key: "looks", label: "My Looks", href: "/c/looks", Icon: NavLooks },
   { key: "new", label: "New", href: "/c/new", Icon: NavNew },
-  { key: "wishlist", label: "Wishlist", href: "/c/wishlist", Icon: NavWishlist },
+  { key: "wardrobe", label: "Wardrobe", href: "/c/wardrobe", Icon: NavWishlist },
   { key: "me", label: "Me", href: "/c/me", Icon: NavMe },
 ];
 

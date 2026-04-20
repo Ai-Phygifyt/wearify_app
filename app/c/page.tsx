@@ -617,7 +617,7 @@ export default function CustomerHomePage() {
           {/* My Wardrobe */}
           <div
             className="cx-press cx-scaleIn cx-d2"
-            onClick={() => router.push("/c/wishlist")}
+            onClick={() => router.push("/c/wardrobe")}
             style={{
               borderRadius: T.r,
               overflow: "hidden",

@@ -75,7 +75,7 @@ export default function WishlistPage() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FDF8F0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>
           </button>
           <div className="cx-serif" style={{ fontSize: 26, fontWeight: 700, color: "#FDF8F0", fontStyle: "italic" }}>
-            Saved
+            {tab === "wardrobe" ? "My Wardrobe" : "Wishlist"}
           </div>
           <div style={{ color: "rgba(253,248,240,.55)", fontSize: 13, marginTop: 4 }}>
             {tab === "wardrobe"

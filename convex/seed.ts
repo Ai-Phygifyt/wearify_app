@@ -479,7 +479,7 @@ export const seedRelational = internalMutation({
 
     // ===================== WARDROBE (kiosk mirror session saves) =====================
     // Each wardrobe entry represents a look the customer saved from the smart mirror
-    // during a try-on session. /c/wishlist -> Wardrobe tab reads this.
+    // during a try-on session. /c/wardrobe reads this.
     if (c1 && st001Sarees.length >= 3) {
       await ctx.db.insert("wardrobe", { sessionId: "SS-10001", customerId: c1._id, sareeId: st001Sarees[0]._id, sareeName: st001Sarees[0].name, drapeStyle: "Nivi", accessories: ["Gold necklace", "Maang tikka"], neckline: "Round", price: st001Sarees[0].price, addedAt: now - 9 * DAY });
       await ctx.db.insert("wardrobe", { sessionId: "SS-10002", customerId: c1._id, sareeId: st001Sarees[2]._id, sareeName: st001Sarees[2].name, drapeStyle: "Gujarati", accessories: ["Jhumkas"], neckline: "V-neck", price: st001Sarees[2].price, addedAt: now - 21 * DAY });
