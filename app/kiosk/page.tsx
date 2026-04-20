@@ -10,7 +10,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown,
   Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
-  Minus, Plus, Delete, Loader2, ShieldCheck,
+  Minus, Plus, Delete, Loader2, ShieldCheck, Eye,
 } from "lucide-react";
 import { ScanChoiceScreen } from "./screens/ScanChoiceScreen";
 import { ConsentScreen } from "./screens/ConsentScreen";
@@ -19,6 +19,7 @@ import { AIProcessingScreen } from "./screens/AIProcessingScreen";
 import { FeedbackScreen } from "./screens/FeedbackScreen";
 import { DataSaveScreen } from "./screens/DataSaveScreen";
 import { SessionEndScreen } from "./screens/SessionEndScreen";
+import { TailorDetailModal } from "./screens/TailorDetailModal";
 
 /* ═══ CONFIG ═══ */
 const CFG = {
@@ -2285,6 +2286,7 @@ function TailorScreen({
   const tailors = useQuery(api.tailorOps.listByCity, storeCity ? { city: storeCity } : "skip");
   const createReferral = useMutation(api.tailorOps.createReferral);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<NonNullable<typeof tailors>[number] | null>(null);
 
   // Connect flow: write a referral row server-side for attribution and
   // analytics, then open the tailor's WhatsApp with a pre-filled intro so
@@ -2377,18 +2379,41 @@ function TailorScreen({
                   {t.city}
                 </div>
               </div>
-              <button
-                onClick={() => handleConnect(t)}
-                disabled={connecting === t._id}
-                className="k-btn k-btn-primary k-btn-pill k-press"
-                style={{ padding: "8px 16px", fontSize: 12, fontWeight: 600, minHeight: 36, opacity: connecting === t._id ? 0.6 : 1 }}
-              >
-                {connecting === t._id ? "…" : "Connect"}
-              </button>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={() => setViewing(t)}
+                  className="k-btn k-btn-secondary k-btn-pill k-press"
+                  style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, minHeight: 36 }}
+                  aria-label={`View ${t.name}`}
+                >
+                  <Eye size={14} /> View
+                </button>
+                <button
+                  onClick={() => handleConnect(t)}
+                  disabled={connecting === t._id}
+                  className="k-btn k-btn-primary k-btn-pill k-press"
+                  style={{ padding: "8px 16px", fontSize: 12, fontWeight: 600, minHeight: 36, opacity: connecting === t._id ? 0.6 : 1 }}
+                >
+                  {connecting === t._id ? "…" : "Connect"}
+                </button>
+              </div>
             </div>
           ))
         )}
       </div>
+
+      {viewing && (
+        <TailorDetailModal
+          tailor={viewing}
+          onClose={() => setViewing(null)}
+          connecting={connecting === viewing._id}
+          onConnect={async () => {
+            const target = viewing;
+            setViewing(null);
+            await handleConnect(target);
+          }}
+        />
+      )}
     </div>
   );
 }
