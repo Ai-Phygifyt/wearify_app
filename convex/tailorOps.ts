@@ -629,6 +629,28 @@ export const advanceOrderStatus = mutation({
   },
 });
 
+// Soft-cancel an order. The row stays for audit; status moves to
+// "cancelled" so it stops showing up in active-order flows and renders
+// with a muted pill. Only allowed before stitching begins, and only by
+// the tailor who owns the order.
+export const cancelOrder = mutation({
+  args: {
+    id: v.id("tailorOrders"),
+    tailorId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.id);
+    if (!order) throw new Error("Order not found");
+    if (order.tailorId !== args.tailorId) {
+      throw new Error("You can only cancel your own orders");
+    }
+    if (order.status !== "confirmed" && order.status !== "measurements") {
+      throw new Error("This order can no longer be cancelled — stitching has started");
+    }
+    await ctx.db.patch(args.id, { status: "cancelled" });
+  },
+});
+
 export const rateOrder = mutation({
   args: {
     id: v.id("tailorOrders"),

@@ -48,7 +48,7 @@ export default function TailorHomePage() {
 
   const firstName = profile.name.split(" ")[0];
   const leadCount = newReferrals?.length ?? 0;
-  const activeOrders = orders?.filter((o) => o.status !== "delivered").length ?? 0;
+  const activeOrders = orders?.filter((o) => o.status !== "delivered" && o.status !== "cancelled").length ?? 0;
   const inProgress = orders?.filter((o) => o.status === "stitching" || o.status === "ready") ?? [];
 
   return (

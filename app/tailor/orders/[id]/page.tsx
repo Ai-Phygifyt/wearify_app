@@ -7,6 +7,10 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { PageLoading } from "@/components/ui/wearify-ui";
 
+// Statuses where the tailor can still pull the plug on the order before it
+// affects the customer. Mirror the server check in cancelOrder.
+const CANCELLABLE_STATUSES = new Set(["confirmed", "measurements"]);
+
 const STATUS_STEPS = ["confirmed", "measurements", "stitching", "ready", "delivered"];
 const STATUS_LABELS: Record<string, string> = {
   confirmed: "Confirmed",
@@ -77,6 +81,10 @@ export default function OrderDetailPage() {
     tailorId ? { tailorId } : "skip"
   );
   const advanceStatus = useMutation(api.tailorOps.advanceOrderStatus);
+  const cancelOrder = useMutation(api.tailorOps.cancelOrder);
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
 
   if (order === undefined) return <PageLoading />;
 
@@ -100,6 +108,20 @@ export default function OrderDetailPage() {
     }
   }
 
+  async function handleCancel() {
+    if (!tailorId) return;
+    setCancelling(true);
+    setCancelError("");
+    try {
+      await cancelOrder({ id: orderId as Id<"tailorOrders">, tailorId });
+      setShowCancel(false);
+    } catch (err: unknown) {
+      setCancelError(err instanceof Error ? err.message : "Could not cancel");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   function handleContact() {
     const phone = order!.customerPhone.replace(/\D/g, "");
     const msg = encodeURIComponent(
@@ -108,8 +130,10 @@ export default function OrderDetailPage() {
     window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
   }
 
+  const isCancelled = order.status === "cancelled";
   const currentIdx = STATUS_STEPS.indexOf(order.status);
   const nextLabel = NEXT_LABEL[order.status];
+  const canCancel = CANCELLABLE_STATUSES.has(order.status);
 
   return (
     <div className="t-screen">
@@ -149,28 +173,67 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      {/* Pipeline */}
-      <div style={{ marginBottom: 20 }}>
-        <div className="t-pipeline">
-          {STATUS_STEPS.map((s, i) => {
-            const done = i < currentIdx;
-            const isCurrent = i === currentIdx;
-            return (
-              <React.Fragment key={s}>
-                <div className="t-node">
-                  <div className={`t-dot ${done ? "t-done" : isCurrent ? "t-current" : ""}`} />
-                  <div className={`t-node-lbl ${isCurrent ? "t-current" : ""}`}>
-                    {STATUS_LABELS[s]}
-                  </div>
-                </div>
-                {i < STATUS_STEPS.length - 1 && (
-                  <div className={`t-line ${done ? "t-done" : ""}`} />
-                )}
-              </React.Fragment>
-            );
-          })}
+      {/* Cancelled banner — replaces the pipeline so the tailor knows the
+          order is closed and there's no action to take. */}
+      {isCancelled ? (
+        <div
+          style={{
+            margin: "0 20px 16px",
+            padding: "14px 16px",
+            background: "var(--ivory-2)",
+            borderRadius: 14,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            border: "1px solid var(--line)",
+          }}
+        >
+          <div
+            style={{
+              width: 32, height: 32, borderRadius: 99,
+              background: "var(--line-2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+              color: "var(--ink-3)",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink-2)" }}>
+              Order cancelled
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
+              No further action needed. Kept here for your records.
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div style={{ marginBottom: 20 }}>
+          <div className="t-pipeline">
+            {STATUS_STEPS.map((s, i) => {
+              const done = i < currentIdx;
+              const isCurrent = i === currentIdx;
+              return (
+                <React.Fragment key={s}>
+                  <div className="t-node">
+                    <div className={`t-dot ${done ? "t-done" : isCurrent ? "t-current" : ""}`} />
+                    <div className={`t-node-lbl ${isCurrent ? "t-current" : ""}`}>
+                      {STATUS_LABELS[s]}
+                    </div>
+                  </div>
+                  {i < STATUS_STEPS.length - 1 && (
+                    <div className={`t-line ${done ? "t-done" : ""}`} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div style={{ margin: "0 20px 16px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
@@ -314,7 +377,7 @@ export default function OrderDetailPage() {
             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
           </svg>
         </button>
-        {nextLabel && (
+        {nextLabel && !isCancelled && (
           <button
             type="button"
             className="t-btn t-btn-primary"
@@ -329,7 +392,109 @@ export default function OrderDetailPage() {
           </button>
         )}
       </div>
+
+      {/* Cancel-order link — only before stitching starts. Low-contrast to
+          keep it out of the way of the primary "advance" action. */}
+      {canCancel && (
+        <div style={{ padding: "0 20px 24px", textAlign: "center" }}>
+          <button
+            type="button"
+            onClick={() => { setCancelError(""); setShowCancel(true); }}
+            style={{
+              background: "transparent",
+              border: 0,
+              color: "var(--urgent)",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              padding: "8px 12px",
+            }}
+          >
+            Cancel order
+          </button>
+        </div>
+      )}
+
       <div style={{ height: 10 }} />
+
+      {/* Confirmation bottom sheet */}
+      {showCancel && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(26, 21, 18, 0.4)",
+            zIndex: 50,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+          onClick={() => !cancelling && setShowCancel(false)}
+        >
+          <div
+            style={{
+              background: "var(--ivory)",
+              width: "100%",
+              maxWidth: 480,
+              borderRadius: "26px 26px 0 0",
+              padding: "16px 20px 34px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: 44, height: 4, borderRadius: 99,
+                background: "var(--line-2)", margin: "0 auto 18px",
+              }}
+            />
+            <h3 className="t-serif" style={{ fontSize: 22, fontWeight: 500, margin: "0 0 6px", letterSpacing: "-0.01em" }}>
+              Cancel this order?
+            </h3>
+            <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "0 0 18px", lineHeight: 1.5 }}>
+              The order stays in your history marked as cancelled. You won&apos;t be able to resume it — the customer will need a fresh referral.
+            </p>
+            {cancelError && (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  background: "var(--urgent-tint)",
+                  color: "var(--urgent)",
+                  borderRadius: 12,
+                  fontSize: 13,
+                  marginBottom: 14,
+                }}
+              >
+                {cancelError}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                className="t-btn t-btn-ghost"
+                style={{ flex: 1 }}
+                onClick={() => setShowCancel(false)}
+                disabled={cancelling}
+              >
+                Keep order
+              </button>
+              <button
+                type="button"
+                className="t-btn"
+                style={{
+                  flex: 1,
+                  background: "var(--urgent)",
+                  color: "#fff",
+                }}
+                onClick={handleCancel}
+                disabled={cancelling}
+              >
+                {cancelling ? "Cancelling…" : "Yes, cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

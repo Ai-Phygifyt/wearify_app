@@ -13,6 +13,7 @@ const FILTERS = [
   { k: "stitching", lbl: "Stitching" },
   { k: "ready", lbl: "Ready" },
   { k: "delivered", lbl: "Delivered" },
+  { k: "cancelled", lbl: "Cancelled" },
 ];
 
 export default function TailorOrdersPage() {
@@ -124,6 +125,7 @@ function statusPillClass(status: string): string {
     case "stitching": return "t-pill-quoted";
     case "ready": return "t-pill-confirmed";
     case "delivered": return "t-pill-confirmed";
+    case "cancelled": return "t-pill-declined";
     default: return "t-pill-declined";
   }
 }
