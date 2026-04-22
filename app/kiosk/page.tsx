@@ -117,6 +117,11 @@ export default function KioskPage() {
   const [sessionId, setSessionId] = useState("");
   const [hasBodyScan, setHasBodyScan] = useState(false);
 
+  // Webcam stream lives at the page level so ConsentScreen can open it
+  // (on Allow) and BodyScanScreen can consume it, and so cleanup is
+  // owned in one place — stopped on capture, Skip, wipe, or unmount.
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+
   // Language
   const [lang, setLang] = useState("en");
 
@@ -269,6 +274,43 @@ export default function KioskPage() {
     setToastVisible(true);
   }, []);
 
+  // Stop every track on the current webcam stream and clear the ref.
+  // Safe to call even if the stream was already stopped.
+  const stopCamera = useCallback(() => {
+    setCameraStream((prev) => {
+      if (prev) prev.getTracks().forEach((t) => t.stop());
+      return null;
+    });
+  }, []);
+
+  // Triggered by ConsentScreen's "Allow" button. Asks the browser for
+  // webcam access; on success we cache the stream and advance to the
+  // body-scan screen, which renders it as a live <video>. On denial or
+  // missing hardware we stay on the consent modal and surface a toast so
+  // the user can either retry or hit Skip.
+  const handleAllowCamera = useCallback(async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      showToast("Camera is not supported on this device.", "error");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      setCameraStream(stream);
+      navigate("bodyScan");
+    } catch (err) {
+      const name = (err as { name?: string })?.name;
+      const msg =
+        name === "NotAllowedError" || name === "PermissionDeniedError"
+          ? "Camera access denied. Tap Skip to continue without a scan."
+          : "Could not open the camera. Check your device and try again.";
+      showToast(msg, "error");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showToast]);
+
   const handleWipe = useCallback(() => {
     setTrialData(null);
     setCustomerId(null);
@@ -284,9 +326,10 @@ export default function KioskPage() {
     returningRef.current = false;
     scanEligibleRef.current = false;
     hydratedRef.current = null;
+    stopCamera();
     try { localStorage.removeItem("wearify_kiosk_session"); } catch { /* ignore */ }
     setScreen("sessionEnd");
-  }, []);
+  }, [stopCamera]);
 
   const triggerLogout = useCallback(() => {
     navigate("dataSave");
@@ -557,8 +600,9 @@ export default function KioskPage() {
       case "consent":
         return (
           <ConsentScreen
-            onAllow={() => navigate("bodyScan")}
+            onAllow={handleAllowCamera}
             onSkip={() => {
+              stopCamera();
               if (trialItems.length > 0) navigate("trialRoom");
               else navigate("home");
             }}
@@ -568,6 +612,7 @@ export default function KioskPage() {
         return (
           <BodyScanScreen
             storeName={storeName}
+            stream={cameraStream}
             onCapture={() => {
               if (customerId) {
                 recordBodyScan({ customerId }).catch(() => {});
@@ -575,9 +620,13 @@ export default function KioskPage() {
               setHasBodyScan(true);
               scanEligibleRef.current = true;
               persistKioskSession({ hasBodyScan: true });
+              stopCamera();
               navigate("aiProcessing");
             }}
-            onBack={goBack}
+            onBack={() => {
+              stopCamera();
+              goBack();
+            }}
           />
         );
       case "aiProcessing":
