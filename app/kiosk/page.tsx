@@ -10,7 +10,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown,
   Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
-  Minus, Plus, Delete, Loader2, ShieldCheck, Eye,
+  Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal,
 } from "lucide-react";
 import { ScanChoiceScreen } from "./screens/ScanChoiceScreen";
 import { ConsentScreen } from "./screens/ConsentScreen";
@@ -1608,6 +1608,11 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
 }) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
+  // Price band: null = any. Stored as [min, max | null] in rupees.
+  const [priceBand, setPriceBand] = useState<[number, number | null] | null>(null);
+  // Multi-select tags (Premium / Trending / Fast Moving / New — whatever the store curates)
+  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
 
   const isInTrial = (id: string) => trialItems.some((s) => s._id === id);
   const isInWardrobe = (id: string) => wardrobeItems.some((s) => s._id === id);
@@ -1628,7 +1633,44 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
     setSelectedIds(new Set());
   };
 
-  const filtered = query ? sarees.filter((s) => s.name.toLowerCase().includes(query.toLowerCase()) || s.occasion.toLowerCase().includes(query.toLowerCase())) : null;
+  // Predefined price bands (rupees). Matching a saree's price against one
+  // band is enough — we don't combine multiple bands.
+  const PRICE_BANDS: Array<{ label: string; range: [number, number | null] }> = [
+    { label: "Under ₹5K", range: [0, 5000] },
+    { label: "₹5K – ₹15K", range: [5000, 15000] },
+    { label: "₹15K – ₹30K", range: [15000, 30000] },
+    { label: "₹30K – ₹50K", range: [30000, 50000] },
+    { label: "₹50K+", range: [50000, null] },
+  ];
+  const availableTags = Array.from(
+    new Set(sarees.map((s) => s.tag).filter((t): t is string => !!t))
+  ).sort();
+  const activeFilterCount = (priceBand ? 1 : 0) + tagFilter.size;
+
+  // Combined search + filter. If any of query/priceBand/tagFilter is
+  // active we render the flat "results" grid; otherwise the curated
+  // Trending / New Arrivals rails.
+  const anyFilterActive = !!query || !!priceBand || tagFilter.size > 0;
+  const matchesFilters = (s: SareeItem) => {
+    if (query) {
+      const q = query.toLowerCase();
+      if (
+        !s.name.toLowerCase().includes(q) &&
+        !s.occasion.toLowerCase().includes(q) &&
+        !(s.fabric || "").toLowerCase().includes(q)
+      ) return false;
+    }
+    if (priceBand) {
+      const [min, max] = priceBand;
+      if (s.price < min) return false;
+      if (max !== null && s.price >= max) return false;
+    }
+    if (tagFilter.size > 0) {
+      if (!s.tag || !tagFilter.has(s.tag)) return false;
+    }
+    return true;
+  };
+  const filtered = anyFilterActive ? sarees.filter(matchesFilters) : null;
   const trending = sarees.slice(0, 8);
   const newArrivals = [...sarees].reverse().slice(0, 8);
 
@@ -1640,8 +1682,8 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
       <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
 
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 100 }}>
-        {/* Search bar */}
-        <div style={{ padding: "16px 24px 8px", display: "flex", gap: 10 }}>
+        {/* Search bar + filter */}
+        <div style={{ padding: "16px 24px 8px", display: "flex", gap: 10, position: "relative" }}>
           <div style={{
             flex: 1, display: "flex", alignItems: "center", gap: 10,
             padding: "14px 18px", borderRadius: 14,
@@ -1662,6 +1704,138 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
               </button>
             )}
           </div>
+
+          {/* Filter toggle — matches search-bar height, maroon fill when filters are active */}
+          <button
+            onClick={() => setFilterOpen((v) => !v)}
+            aria-label="Filters"
+            className="k-press"
+            style={{
+              position: "relative",
+              width: 52, height: 52, flexShrink: 0,
+              borderRadius: 14,
+              border: activeFilterCount > 0 ? "1px solid var(--k-maroon)" : "1px solid var(--k-border)",
+              background: activeFilterCount > 0 ? "var(--k-maroon)" : "var(--k-card)",
+              color: activeFilterCount > 0 ? "#fff" : "var(--k-text)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer",
+              transition: "all .18s ease",
+            }}
+          >
+            <SlidersHorizontal size={20} />
+            {activeFilterCount > 0 && (
+              <span style={{
+                position: "absolute", top: -4, right: -4,
+                minWidth: 18, height: 18, borderRadius: 9,
+                background: "var(--k-gold)", color: "#fff",
+                fontSize: 11, fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: "0 5px",
+                boxShadow: "0 2px 6px rgba(201,148,26,.35)",
+              }}>{activeFilterCount}</span>
+            )}
+          </button>
+
+          {/* Filter panel */}
+          {filterOpen && (
+            <div
+              className="k-slideUp"
+              style={{
+                position: "absolute",
+                top: "calc(100% - 4px)", right: 24, left: 24,
+                background: "var(--k-card)",
+                border: "1px solid var(--k-border)",
+                borderRadius: 16,
+                boxShadow: "0 14px 40px rgba(0,0,0,.12)",
+                padding: "16px 18px",
+                zIndex: 30,
+              }}
+            >
+              {/* Price */}
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: "var(--k-text-muted)", marginBottom: 8 }}>
+                Price
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                {PRICE_BANDS.map((b) => {
+                  const active = priceBand !== null && priceBand[0] === b.range[0] && priceBand[1] === b.range[1];
+                  return (
+                    <button
+                      key={b.label}
+                      onClick={() => setPriceBand(active ? null : b.range)}
+                      className="k-press"
+                      style={{
+                        padding: "8px 14px", borderRadius: "var(--k-r-pill)",
+                        border: active ? "1.5px solid var(--k-maroon)" : "1.5px solid var(--k-border)",
+                        background: active ? "var(--k-maroon)" : "transparent",
+                        color: active ? "#fff" : "var(--k-text)",
+                        fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      {b.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tags */}
+              {availableTags.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: "var(--k-text-muted)", marginBottom: 8 }}>
+                    Tags
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                    {availableTags.map((tag) => {
+                      const active = tagFilter.has(tag);
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => setTagFilter((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(tag)) next.delete(tag); else next.add(tag);
+                            return next;
+                          })}
+                          className="k-press"
+                          style={{
+                            padding: "8px 14px", borderRadius: "var(--k-r-pill)",
+                            border: active ? "1.5px solid var(--k-gold)" : "1.5px solid var(--k-border)",
+                            background: active ? "var(--k-gold)" : "transparent",
+                            color: active ? "#fff" : "var(--k-text)",
+                            fontSize: 13, fontWeight: 600, cursor: "pointer",
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Footer actions */}
+              <div style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--k-border)", paddingTop: 12 }}>
+                <button
+                  onClick={() => { setPriceBand(null); setTagFilter(new Set()); }}
+                  disabled={activeFilterCount === 0}
+                  style={{
+                    background: "transparent", border: "none",
+                    color: activeFilterCount === 0 ? "var(--k-text-light)" : "var(--k-maroon)",
+                    fontSize: 13, fontWeight: 600,
+                    cursor: activeFilterCount === 0 ? "default" : "pointer",
+                    padding: "6px 10px",
+                  }}
+                >
+                  Clear all
+                </button>
+                <button
+                  onClick={() => setFilterOpen(false)}
+                  className="k-btn k-btn-primary k-btn-pill k-press"
+                  style={{ padding: "8px 22px", fontSize: 13 }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Selection bar */}
