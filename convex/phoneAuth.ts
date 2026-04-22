@@ -11,6 +11,12 @@ import { generateSalt, hashWithSalt, constantTimeEquals } from "./authCrypto";
 const STAFF_PIN_WINDOW_MS = 10 * 60 * 1000;
 const STAFF_PIN_MAX_FAILS = 30;
 
+// Rate-limit loginWithPassword per canonical phone. Budget is generous
+// enough that "I forgot my password" retrying a few times won't lock
+// themselves out, tight enough that online brute-force hits a wall fast.
+const PWD_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const PWD_LOGIN_MAX_FAILS = 10;
+
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Create a new session row for a user (allows multiple devices concurrently).
@@ -243,6 +249,8 @@ async function rehashUserAndEntity(
 // Login with phone + password. Dual-read: accepts both modern PBKDF2
 // hashes (passwordSalt present) and legacy SHA-256 hashes; on legacy
 // match, rehashes the row in-place so we migrate without forcing resets.
+// Rate-limited per canonical phone so a known-phone brute-force attacker
+// burns their budget in ~10 tries per 15-minute window.
 export const loginWithPassword = mutation({
   args: {
     phone: v.string(),
@@ -251,22 +259,57 @@ export const loginWithPassword = mutation({
   },
   handler: async (ctx, args) => {
     const phone = normalizePhone(args.phone);
+    const now = Date.now();
+
+    const attempts = await ctx.db
+      .query("passwordLoginAttempts")
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
+      .unique();
+    const inWindow =
+      attempts && now - attempts.windowStart < PWD_LOGIN_WINDOW_MS;
+    if (inWindow && attempts.count >= PWD_LOGIN_MAX_FAILS) {
+      return {
+        success: false,
+        error: "Too many attempts. Please try again in a few minutes.",
+      };
+    }
+
+    const recordFail = async () => {
+      if (!attempts) {
+        await ctx.db.insert("passwordLoginAttempts", {
+          phone,
+          windowStart: now,
+          count: 1,
+        });
+      } else if (now - attempts.windowStart >= PWD_LOGIN_WINDOW_MS) {
+        await ctx.db.patch(attempts._id, { windowStart: now, count: 1 });
+      } else {
+        await ctx.db.patch(attempts._id, { count: attempts.count + 1 });
+      }
+    };
+    const resetOnSuccess = async () => {
+      if (attempts && attempts.count > 0) {
+        await ctx.db.patch(attempts._id, { windowStart: now, count: 0 });
+      }
+    };
 
     if (args.role === "store_owner") {
       const store = await findStoreByOwnerPhone(ctx, phone);
       if (!store) {
+        await recordFail();
         return { success: false, error: "Store not found for this phone" };
       }
       const user = await ctx.db
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "store_owner"))
         .first();
-      if (!user) return { success: false, error: "Invalid password" };
+      if (!user) { await recordFail(); return { success: false, error: "Invalid password" }; }
       const check = await verifyPassword(args.password, user);
-      if (!check.ok) return { success: false, error: "Invalid password" };
+      if (!check.ok) { await recordFail(); return { success: false, error: "Invalid password" }; }
       if (check.legacy) {
         await rehashUserAndEntity(ctx, user._id, null, null, args.password);
       }
+      await resetOnSuccess();
       const token = await createSession(ctx, user._id, "store_owner");
       return { success: true, token, storeId: store.storeId, storeName: store.name, role: "store_owner" };
     }
@@ -276,19 +319,21 @@ export const loginWithPassword = mutation({
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "customer"))
         .first();
-      if (!user) return { success: false, error: "Invalid phone or password" };
+      if (!user) { await recordFail(); return { success: false, error: "Invalid phone or password" }; }
       const check = await verifyPassword(args.password, user);
-      if (!check.ok) return { success: false, error: "Invalid phone or password" };
+      if (!check.ok) { await recordFail(); return { success: false, error: "Invalid phone or password" }; }
       const customer = await ctx.db
         .query("customers")
         .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (!customer) {
+        await recordFail();
         return { success: false, error: "Customer record not found" };
       }
       if (check.legacy) {
         await rehashUserAndEntity(ctx, user._id, "customers", customer._id, args.password);
       }
+      await resetOnSuccess();
       const token = await createSession(ctx, user._id, "customer");
       return { success: true, token, customerId: customer._id, role: "customer" };
     }
@@ -298,19 +343,21 @@ export const loginWithPassword = mutation({
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "tailor"))
         .first();
-      if (!user) return { success: false, error: "Invalid phone or password" };
+      if (!user) { await recordFail(); return { success: false, error: "Invalid phone or password" }; }
       const check = await verifyPassword(args.password, user);
-      if (!check.ok) return { success: false, error: "Invalid phone or password" };
+      if (!check.ok) { await recordFail(); return { success: false, error: "Invalid phone or password" }; }
       const tailor = await ctx.db
         .query("tailors")
         .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (!tailor) {
+        await recordFail();
         return { success: false, error: "Tailor record not found" };
       }
       if (check.legacy) {
         await rehashUserAndEntity(ctx, user._id, "tailors", tailor._id, args.password);
       }
+      await resetOnSuccess();
       const token = await createSession(ctx, user._id, "tailor");
       return { success: true, token, tailorId: tailor.tailorId, role: "tailor" };
     }

@@ -1,10 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge } from "@/components/ui/wearify-ui";
+
+// Inactivity window for the shared tablet. When the device sits idle this
+// long we assume the customer walked off — wipe the customer + session
+// PII from localStorage and drop back to the staff welcome screen. Staff
+// login (wearify_tablet_staff) is deliberately kept so staff don't have
+// to re-enter their PIN every short break.
+const TABLET_IDLE_MS = 10 * 60 * 1000;
 
 interface StoreConfig {
   storeId: string;
@@ -72,6 +79,36 @@ export default function TabletLayout({
     }
 
     setChecked(true);
+  }, [pathname]);
+
+  // Idle-wipe: after TABLET_IDLE_MS of no user input, clear the active
+  // customer + session from localStorage and bounce to /tablet. Does NOT
+  // run on /tablet/setup or /tablet/pin (auth pages own their own flow).
+  const lastActivity = useRef<number>(0);
+  useEffect(() => {
+    const isAuthPage = pathname === "/tablet/setup" || pathname === "/tablet/pin";
+    if (isAuthPage) return;
+    lastActivity.current = Date.now();
+    const touch = () => { lastActivity.current = Date.now(); };
+    window.addEventListener("touchstart", touch);
+    window.addEventListener("touchmove", touch);
+    window.addEventListener("mousedown", touch);
+    window.addEventListener("keydown", touch);
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivity.current < TABLET_IDLE_MS) return;
+      try {
+        localStorage.removeItem("wearify_tablet_customer");
+        localStorage.removeItem("wearify_tablet_session");
+      } catch { /* ignore */ }
+      window.location.href = "/tablet";
+    }, 15000);
+    return () => {
+      window.removeEventListener("touchstart", touch);
+      window.removeEventListener("touchmove", touch);
+      window.removeEventListener("mousedown", touch);
+      window.removeEventListener("keydown", touch);
+      clearInterval(interval);
+    };
   }, [pathname]);
 
   // Session timer

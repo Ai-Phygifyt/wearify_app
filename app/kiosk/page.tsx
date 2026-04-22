@@ -217,12 +217,17 @@ export default function KioskPage() {
     } catch { /* ignore */ }
   }, []);
 
-  // 5-minute inactivity auto-logout
+  // 5-minute inactivity auto-logout. Also listens to keydown (forms) and
+  // touchmove (scrolling) so a legitimately-engaged customer isn't wiped
+  // mid-flow. handleWipe clears local state + wearify_kiosk_session so
+  // the next customer on this shared mirror doesn't inherit PII.
   const lastActivity = useRef(Date.now());
   useEffect(() => {
     const handler = () => { lastActivity.current = Date.now(); };
     window.addEventListener("touchstart", handler);
+    window.addEventListener("touchmove", handler);
     window.addEventListener("mousedown", handler);
+    window.addEventListener("keydown", handler);
     const interval = setInterval(() => {
       if (screen !== "idle" && screen !== "sessionEnd") {
         if (Date.now() - lastActivity.current > CFG.inactivitySec * 1000) {
@@ -232,7 +237,9 @@ export default function KioskPage() {
     }, 10000);
     return () => {
       window.removeEventListener("touchstart", handler);
+      window.removeEventListener("touchmove", handler);
       window.removeEventListener("mousedown", handler);
+      window.removeEventListener("keydown", handler);
       clearInterval(interval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

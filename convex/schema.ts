@@ -151,6 +151,16 @@ export default defineSchema({
     count: v.number(),
   }).index("by_storeId", ["storeId"]),
 
+  // Rolling-window failed-attempt counter for loginWithPassword, keyed by
+  // canonical phone. Caps brute-force guessing against a known phone; the
+  // legitimate "I forgot my password" user still has a comfortable budget
+  // before throttling.
+  passwordLoginAttempts: defineTable({
+    phone: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_phone", ["phone"]),
+
   // ============================
   // SAREES (catalog items, per store)
   // ============================
