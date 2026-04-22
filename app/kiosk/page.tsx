@@ -631,7 +631,6 @@ export default function KioskPage() {
       case "bodyScan":
         return (
           <BodyScanScreen
-            storeName={storeName}
             stream={cameraStream}
             onCapture={() => {
               if (customerId) {
@@ -646,6 +645,10 @@ export default function KioskPage() {
             onBack={() => {
               stopCamera();
               goBack();
+            }}
+            onHome={() => {
+              stopCamera();
+              goHome();
             }}
           />
         );
