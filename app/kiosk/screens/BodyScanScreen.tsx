@@ -79,91 +79,104 @@ export function BodyScanScreen({
         </p>
       </div>
 
-      {/* Scan frame */}
-      <div style={{
-        flex: 1, position: "relative", borderRadius: 18, overflow: "hidden",
-        background: "#EEE6DA",
-        boxShadow: "0 4px 18px rgba(104,38,42,.08)",
-      }}>
-        {/* Blurred live webcam as backdrop — design intent is ambient,
-            not a mirror. The mannequin overlay is the real positioning guide. */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          style={{
-            position: "absolute", inset: 0, width: "100%", height: "100%",
-            objectFit: "cover",
-            transform: "scaleX(-1)",
-            filter: "blur(14px) brightness(1.05)",
-            // A bit of zoom so the blur doesn't reveal the hard edges of the frame.
-            scale: "1.1",
-          }}
-        />
-
-        {/* Soft wash so the cream mannequin reads cleanly over any backdrop */}
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "linear-gradient(180deg, rgba(238,230,218,.35), rgba(238,230,218,.55))",
-          pointerEvents: "none",
-        }} />
-
-        {/* Corner brackets (L-shape) */}
-        <Corner pos="tl" />
-        <Corner pos="tr" />
-        <Corner pos="bl" />
-        <Corner pos="br" />
-
-        {/* Mannequin silhouette — centered, fills most of the height */}
-        <div style={{
-          position: "absolute", inset: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          pointerEvents: "none",
-        }}>
-          <Mannequin />
-        </div>
-
-        {/* Countdown overlay */}
-        {countdown !== null && countdown > 0 && (
+      {/* Scan frame. Two modes:
+          - Idle  (countdown === null): blurred webcam + cream wash +
+            mannequin guide + "Capture My Look" button.
+          - Capturing (countdown !== null): clear webcam, no wash, no
+            mannequin — just the feed with a countdown number. */}
+      {(() => {
+        const capturing = countdown !== null;
+        return (
           <div style={{
-            position: "absolute", top: "50%", left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: 120, height: 120, borderRadius: "50%",
-            background: "rgba(255,255,255,.92)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 64, fontWeight: 700, color: "var(--k-maroon)",
-            fontFamily: "'DM Mono', monospace",
-            boxShadow: "0 10px 40px rgba(0,0,0,.18)",
-            zIndex: 10,
+            flex: 1, position: "relative", borderRadius: 18, overflow: "hidden",
+            background: "#EEE6DA",
+            boxShadow: "0 4px 18px rgba(104,38,42,.08)",
           }}>
-            {countdown}
-          </div>
-        )}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{
+                position: "absolute", inset: 0, width: "100%", height: "100%",
+                objectFit: "cover",
+                transform: "scaleX(-1)",
+                // Blur until the user taps Capture; then reveal the clean feed.
+                filter: capturing ? "none" : "blur(14px) brightness(1.05)",
+                scale: capturing ? "1" : "1.1",
+                transition: "filter .25s ease, scale .25s ease",
+              }}
+            />
 
-        {/* Capture button (white pill, anchored to frame bottom) */}
-        <div style={{
-          position: "absolute", bottom: 18, left: 0, right: 0,
-          display: "flex", justifyContent: "center",
-        }}>
-          <button
-            onClick={() => { if (countdown === null) setCountdown(3); }}
-            disabled={countdown !== null}
-            className="k-press"
-            style={{
-              padding: "14px 30px", borderRadius: 999,
-              background: "#fff",
-              border: "none",
-              boxShadow: "0 6px 20px rgba(0,0,0,.12)",
-              fontSize: 17, fontWeight: 600, color: "var(--k-text)",
-              cursor: countdown !== null ? "default" : "pointer",
-              opacity: countdown !== null ? 0.6 : 1,
-            }}
-          >
-            Capture My Look
-          </button>
-        </div>
-      </div>
+            {/* Cream wash only in idle mode — it helps the mannequin read
+                over any backdrop but hides the user's real silhouette. */}
+            {!capturing && (
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "linear-gradient(180deg, rgba(238,230,218,.35), rgba(238,230,218,.55))",
+                pointerEvents: "none",
+              }} />
+            )}
+
+            {/* Corner brackets stay in both modes as framing cues */}
+            <Corner pos="tl" />
+            <Corner pos="tr" />
+            <Corner pos="bl" />
+            <Corner pos="br" />
+
+            {/* Mannequin guide — only while idle. */}
+            {!capturing && (
+              <div style={{
+                position: "absolute", inset: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                pointerEvents: "none",
+              }}>
+                <Mannequin />
+              </div>
+            )}
+
+            {/* Countdown overlay */}
+            {capturing && countdown !== null && countdown > 0 && (
+              <div style={{
+                position: "absolute", top: "50%", left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: 140, height: 140, borderRadius: "50%",
+                background: "rgba(255,255,255,.92)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 72, fontWeight: 700, color: "var(--k-maroon)",
+                fontFamily: "'DM Mono', monospace",
+                boxShadow: "0 10px 40px rgba(0,0,0,.18)",
+                zIndex: 10,
+              }}>
+                {countdown}
+              </div>
+            )}
+
+            {/* Capture button — hidden while counting down */}
+            {!capturing && (
+              <div style={{
+                position: "absolute", bottom: 18, left: 0, right: 0,
+                display: "flex", justifyContent: "center",
+              }}>
+                <button
+                  onClick={() => setCountdown(10)}
+                  className="k-press"
+                  style={{
+                    padding: "14px 30px", borderRadius: 999,
+                    background: "#fff",
+                    border: "none",
+                    boxShadow: "0 6px 20px rgba(0,0,0,.12)",
+                    fontSize: 17, fontWeight: 600, color: "var(--k-text)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Capture My Look
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
