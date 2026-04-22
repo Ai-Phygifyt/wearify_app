@@ -61,13 +61,29 @@ async function hashPassword(password: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Cryptographically-random session token. 48 chars over a 55-char alphabet
+// = ~277 bits of entropy, sourced from Web Crypto rather than Math.random().
 function generateToken(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(48);
+  crypto.getRandomValues(bytes);
   let token = "";
-  for (let i = 0; i < 48; i++) {
-    token += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < bytes.length; i++) {
+    token += chars[bytes[i] % chars.length];
   }
   return token;
+}
+
+// Cryptographically-random 6-digit numeric suffix for generated entity IDs
+// (tailor, etc.). Replaces Math.random() so IDs aren't enumerable.
+function generateSixDigits(): string {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    out += (bytes[i] % 10).toString();
+  }
+  return out;
 }
 
 // Verify OTP (dummy: always 123456)
@@ -127,8 +143,7 @@ export const register = mutation({
         return { success: false, error: "Phone number already registered" };
       }
       const hash = await hashPassword(args.password);
-      const randomDigits = Math.floor(100000 + Math.random() * 900000).toString();
-      const tailorId = `TL-${randomDigits}`;
+      const tailorId = `TL-${generateSixDigits()}`;
       const id = await ctx.db.insert("tailors", {
         tailorId,
         phone,
@@ -427,6 +442,9 @@ export const staffPinLogin = mutation({
       .first();
     if (!staffMember) {
       return { success: false, error: "Invalid PIN" };
+    }
+    if (staffMember.status === "inactive") {
+      return { success: false, error: "Staff account is inactive. Contact your store owner." };
     }
     return {
       success: true,

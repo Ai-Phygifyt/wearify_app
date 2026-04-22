@@ -16,6 +16,16 @@ function computeTier(points: number): string {
 // ============================
 // Shared helpers (used by phoneAuth and tablet/kiosk creation flows)
 // ============================
+// Format + calendar check. Rejects "2024-02-30", "2025-13-01", empty, etc.
+// Date.parse on the bare ISO prefix accepts invalid calendar dates silently
+// (rolls 2024-02-30 → March 1), so we round-trip and re-stringify to confirm.
+function isValidIsoDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toISOString().slice(0, 10) === s;
+}
+
 export function computeInitials(name: string): string {
   return name
     .split(/\s+/)
@@ -220,7 +230,7 @@ export const completeProfile = mutation({
     if (!customer) throw new Error("Customer not found");
     const name = args.name.trim();
     if (!name) throw new Error("Name is required");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.dateOfBirth)) {
+    if (!isValidIsoDate(args.dateOfBirth)) {
       throw new Error("Invalid date of birth");
     }
     if (args.heightCm < 50 || args.heightCm > 250) {

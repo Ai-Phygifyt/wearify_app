@@ -3,10 +3,15 @@ import { v } from "convex/values";
 
 const CODE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
+// 6-digit trial-room code sourced from Web Crypto, not Math.random().
+// Code space is still 1M — real brute-force protection needs rate limiting
+// on validateCode (tracked alongside the rest of the auth-pass work).
 function generateNumericCode(): string {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
   let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += Math.floor(Math.random() * 10).toString();
+  for (let i = 0; i < bytes.length; i++) {
+    code += (bytes[i] % 10).toString();
   }
   return code;
 }
@@ -109,10 +114,21 @@ export const validateCode = query({
       .take(100);
     const mirrorItems = shortlistItems.filter((item) => item.sentToMirror);
 
-    // Get customer data if linked
+    // Narrow customer projection — the kiosk only reads _id/name/phone/lastBodyScan/language.
+    // Don't return full row (password hash, email, body measurements, preferences, etc.)
+    // so a guessed code can't exfiltrate PII.
     let customer = null;
     if (entry.customerId) {
-      customer = await ctx.db.get(entry.customerId);
+      const row = await ctx.db.get(entry.customerId);
+      if (row) {
+        customer = {
+          _id: row._id,
+          name: row.name,
+          phone: row.phone,
+          lastBodyScan: row.lastBodyScan,
+          language: row.language,
+        };
+      }
     }
 
     // Get session data
@@ -129,7 +145,6 @@ export const validateCode = query({
         sessionId: entry.sessionId,
         storeId: entry.storeId,
         customerId: entry.customerId,
-        customerPhone: entry.customerPhone,
         expiresAt: entry.expiresAt,
       },
       mirrorItems,

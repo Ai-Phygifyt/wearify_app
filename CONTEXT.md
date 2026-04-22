@@ -209,6 +209,21 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Security audit — "do now" batch (crypto RNG + trial-room PII narrowing + small bugs)
+
+- **Context:** audit in [REVIEW.md](REVIEW.md) flagged 6 CRITICAL / 5 HIGH issues. Split into two passes: the cheap, isolated, non-architectural wins go now; the auth-shaped ones (admin client-side gate, kiosk device auth, server-side query authz, rate limiting, bcrypt, PIN hashing) get bundled with the upcoming "secure session middleware" work so they aren't redone.
+- **[convex/phoneAuth.ts](convex/phoneAuth.ts):**
+  - `generateToken` — `Math.random()` → `crypto.getRandomValues(Uint8Array(48))` with modulo-mapping onto the 55-char alphabet. Sessions are no longer predictable.
+  - New `generateSixDigits` helper, also Web-Crypto sourced; used to build `TL-xxxxxx` tailor IDs (previously `Math.random()` — enumerable).
+  - `staffPinLogin` now rejects `status === "inactive"` with a distinct error message (previously silently returned success for deactivated staff).
+- **[convex/trialRoom.ts](convex/trialRoom.ts):**
+  - `generateNumericCode` — `Math.random()` → `crypto.getRandomValues`. Space is still 1M — real brute-force defence still needs rate limiting on `validateCode`, flagged for the auth pass.
+  - `validateCode` response narrowed. Dropped `customerPhone` from the `trialRoom` block (unused in UI — confirmed by grep). `customer` now projects only `{_id, name, phone, lastBodyScan, language}` instead of the full row, so a guessed code can't exfiltrate email / body measurements / preferences / password hash.
+- **[convex/customers.ts](convex/customers.ts):** `completeProfile.dateOfBirth` now goes through a new `isValidIsoDate` helper that round-trips via `new Date(s + "T00:00:00Z").toISOString().slice(0,10)` — so `2024-02-30` is now rejected instead of being silently rolled to March 1 by `Date.parse`. `updateProfile` still only trims (noted as a lesser concern; pair with any future schema-side DOB cleanup).
+- **Review item #8 (typo in files.ts) was stale** — [convex/files.ts:53](convex/files.ts#L53) already reads `shopLicenseFileId`. No change needed.
+- **Explicitly deferred** (need the auth pass, not piecemeal patches): bcrypt with per-user salt (item 1), admin client-side gate (5), staff PIN plaintext (6), rate limiting (7), kiosk localStorage identity (10, 11), server-side authz on queries (13), PIN lockout (14). Password-reset + billing + virus scanning are feature roadmap, not security debt.
+- **Type-check clean** (`npm run type-check`).
+
 ### Customer route rename — /c/wishlist → /c/wardrobe
 
 - **Why:** Wardrobe (kiosk try-on saves) is the headline customer flow; Wishlist (hearted items) is secondary. Route name now matches what the feature is named everywhere else in the UI (home tile "My Wardrobe", kiosk "Wardrobe" screen). The page keeps both tabs; just the hero title flips per active tab.
