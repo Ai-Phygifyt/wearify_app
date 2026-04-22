@@ -51,19 +51,19 @@ export default function LanguagePage() {
 
   if (!customerId || customer === undefined) {
     return (
-      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FDF8F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="cx-typing"><span /><span /><span /></div>
       </div>
     );
   }
 
   return (
-    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FDF8F0" }}>
+    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1" }}>
       {/* Hero */}
       <div
         className="cx-noise cx-paisley"
         style={{
-          background: "linear-gradient(155deg, #0D0418 0%, #1A0A2E 25%, #2D1B4E 55%, #6B1D52 80%, #C9941A 100%)",
+          background: "var(--cx-grad-hero)",
           padding: "28px 18px 24px",
           position: "relative",
           overflow: "hidden",
@@ -87,12 +87,12 @@ export default function LanguagePage() {
                 flexShrink: 0,
               }}
             >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FDF8F0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FBF7F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
             <div>
-              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FDF8F0", fontStyle: "italic", margin: 0 }}>
+              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FBF7F1", fontStyle: "italic", margin: 0 }}>
                 Language
               </h1>
               <div style={{ fontSize: 12, color: "rgba(253,248,240,.5)", marginTop: 2 }}>
@@ -122,11 +122,11 @@ export default function LanguagePage() {
                   justifyContent: "space-between",
                   padding: "14px 16px",
                   borderRadius: 14,
-                  background: isSelected ? "#F4EFF9" : "#FFFFFF",
-                  border: isSelected ? "1.5px solid #2D1B4E" : "1px solid #F2E8EE",
+                  background: isSelected ? "#F5E6E3" : "#FFFFFF",
+                  border: isSelected ? "1.5px solid #8B2E2B" : "1px solid #F0E8DC",
                   cursor: saving ? "not-allowed" : "pointer",
                   textAlign: "left",
-                  boxShadow: isSelected ? "0 2px 14px rgba(45,27,78,.09)" : "none",
+                  boxShadow: isSelected ? "0 2px 14px rgba(139, 46, 43, .09)" : "none",
                   transition: "all .2s",
                 }}
               >
@@ -134,13 +134,13 @@ export default function LanguagePage() {
                   <div style={{
                     fontWeight: 700,
                     fontSize: 16,
-                    color: isSelected ? "#2D1B4E" : "#1A0A1E",
+                    color: isSelected ? "#8B2E2B" : "#1C1108",
                   }}>
                     {lang.native}
                   </div>
                   <div style={{
                     fontSize: 12,
-                    color: isSelected ? "#4A2D6E" : "#8B7EA0",
+                    color: isSelected ? "#A94540" : "#9C8878",
                     fontWeight: 500,
                   }}>
                     {lang.english}
@@ -151,14 +151,14 @@ export default function LanguagePage() {
                     width: 28,
                     height: 28,
                     borderRadius: "50%",
-                    background: "rgba(201,148,26,.15)",
+                    background: "rgba(184, 134, 11, .15)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
                   }}>
                     <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                      <polyline points="20 6 9 17 4 12" stroke="#C9941A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points="20 6 9 17 4 12" stroke="#B8860B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
                 )}
@@ -172,19 +172,19 @@ export default function LanguagePage() {
         {/* Note */}
         <div className="cx-slideUp cx-d4" style={{
           borderRadius: 14,
-          background: "#FDF5E4",
-          border: "1px solid rgba(201,148,26,.18)",
+          background: "#FAF1DD",
+          border: "1px solid rgba(184, 134, 11, .18)",
           padding: "14px 16px",
           display: "flex",
           alignItems: "flex-start",
           gap: 10,
         }}>
           <svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-            <circle cx="12" cy="12" r="10" stroke="#8B6914" strokeWidth="1.6" />
-            <line x1="12" y1="16" x2="12" y2="12" stroke="#8B6914" strokeWidth="1.6" strokeLinecap="round" />
-            <circle cx="12" cy="8" r="1" fill="#8B6914" />
+            <circle cx="12" cy="12" r="10" stroke="#7A5A08" strokeWidth="1.6" />
+            <line x1="12" y1="16" x2="12" y2="12" stroke="#7A5A08" strokeWidth="1.6" strokeLinecap="round" />
+            <circle cx="12" cy="8" r="1" fill="#7A5A08" />
           </svg>
-          <div style={{ fontSize: 12, color: "#8B6914", lineHeight: 1.55 }}>
+          <div style={{ fontSize: 12, color: "#7A5A08", lineHeight: 1.55 }}>
             Changes apply to WhatsApp messages and the Wearify interface.
           </div>
         </div>

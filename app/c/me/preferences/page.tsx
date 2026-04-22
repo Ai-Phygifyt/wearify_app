@@ -20,7 +20,7 @@ const FABRICS = [
 const COLORS = [
   { name: "Crimson", swatch: "#DC143C" },
   { name: "Purple", swatch: "#7B3FA0" },
-  { name: "Gold", swatch: "#C9941A" },
+  { name: "Gold", swatch: "#B8860B" },
   { name: "Green", swatch: "#2D8544" },
   { name: "Blue", swatch: "#2C5F7C" },
   { name: "Pink", swatch: "#E88DAF" },
@@ -99,7 +99,7 @@ export default function PreferencesPage() {
         className="cx-pageIn"
         style={{
           minHeight: "100%",
-          background: "#FDF8F0",
+          background: "#FBF7F1",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -120,18 +120,18 @@ export default function PreferencesPage() {
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
-    border: active ? "none" : "1px solid #E8D5E0",
+    border: active ? "none" : "1px solid #E4D9CC",
     background: active
-      ? "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)"
-      : "#F4EFF9",
-    color: active ? "#FDF8F0" : "#4A3558",
+      ? "var(--cx-grad-primary)"
+      : "#F5E6E3",
+    color: active ? "#FBF7F1" : "#3D2E1E",
     transition: "all .2s",
   });
 
   return (
     <div
       className="cx-pageIn"
-      style={{ minHeight: "100%", background: "#FDF8F0" }}
+      style={{ minHeight: "100%", background: "#FBF7F1" }}
     >
       {/* ── Hero ────────────────────────────────────────── */}
       <div
@@ -165,7 +165,7 @@ export default function PreferencesPage() {
               height={18}
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#FDF8F0"
+              stroke="#FBF7F1"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -179,7 +179,7 @@ export default function PreferencesPage() {
               fontSize: 26,
               fontWeight: 700,
               fontStyle: "italic",
-              color: "#FDF8F0",
+              color: "#FBF7F1",
               margin: 0,
             }}
           >
@@ -207,7 +207,7 @@ export default function PreferencesPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 10,
             }}
@@ -235,7 +235,7 @@ export default function PreferencesPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 10,
             }}
@@ -263,7 +263,7 @@ export default function PreferencesPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 10,
             }}
@@ -289,7 +289,7 @@ export default function PreferencesPage() {
                     height: 14,
                     borderRadius: "50%",
                     background: c.swatch,
-                    border: "1.5px solid rgba(45,27,78,.15)",
+                    border: "1.5px solid rgba(139, 46, 43, .15)",
                     flexShrink: 0,
                   }}
                 />
@@ -306,7 +306,7 @@ export default function PreferencesPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 10,
             }}
@@ -323,10 +323,10 @@ export default function PreferencesPage() {
               width: "100%",
               padding: "12px 14px",
               borderRadius: 16,
-              border: "1px solid #E8D5E0",
+              border: "1px solid #E4D9CC",
               background: "#FFFFFF",
               fontSize: 14,
-              color: budget ? "#1A0A1E" : "#8B7EA0",
+              color: budget ? "#1C1108" : "#9C8878",
               outline: "none",
               WebkitAppearance: "none",
               appearance: "none" as React.CSSProperties["appearance"],
@@ -348,7 +348,7 @@ export default function PreferencesPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 10,
             }}
@@ -368,10 +368,10 @@ export default function PreferencesPage() {
                 flex: 1,
                 padding: "12px 14px",
                 borderRadius: 16,
-                border: "1px solid #E8D5E0",
+                border: "1px solid #E4D9CC",
                 background: "#FFFFFF",
                 fontSize: 14,
-                color: "#1A0A1E",
+                color: "#1C1108",
                 outline: "none",
               }}
             />
@@ -385,10 +385,10 @@ export default function PreferencesPage() {
               style={{
                 padding: "12px 14px",
                 borderRadius: 16,
-                border: "1px solid #E8D5E0",
+                border: "1px solid #E4D9CC",
                 background: "#FFFFFF",
                 fontSize: 14,
-                color: "#1A0A1E",
+                color: "#1C1108",
                 outline: "none",
               }}
             />
@@ -404,9 +404,9 @@ export default function PreferencesPage() {
             width: "100%",
             padding: "14px",
             borderRadius: 100,
-            background: "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)",
+            background: "var(--cx-grad-primary)",
             border: "none",
-            color: "#FDF8F0",
+            color: "#FBF7F1",
             fontSize: 15,
             fontWeight: 700,
             cursor: saving ? "default" : "pointer",
