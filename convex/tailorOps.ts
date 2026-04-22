@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { assertFile, GUARDS } from "./fileValidation";
+import { requireAdmin } from "./adminAuth";
 
 // ============================
 // TAILORS
@@ -210,6 +211,7 @@ export const updateVerification = mutation({
     kycRejectionReason: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const tailor = await ctx.db
       .query("tailors")
       .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))

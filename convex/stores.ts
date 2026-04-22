@@ -4,6 +4,7 @@ import { MutationCtx, QueryCtx } from "./_generated/server";
 import { Doc } from "./_generated/dataModel";
 import { assertFile, GUARDS } from "./fileValidation";
 import { generateSalt, hashWithSalt, constantTimeEquals } from "./authCrypto";
+import { requireAdmin } from "./adminAuth";
 
 // Scan helper used by createStaff/updateStaff uniqueness checks and by
 // staffPinLogin to resolve a plaintext PIN to a staff row. Handles the
@@ -93,6 +94,7 @@ export const create = mutation({
     gstin: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     return await ctx.db.insert("stores", {
       storeId: args.storeId.trim(),
       name: args.name.trim(),

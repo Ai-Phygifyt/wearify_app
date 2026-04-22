@@ -209,6 +209,31 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Security audit — remaining CRITICALs (trial-room rate limit + PIN hashing + password PBKDF2 + admin server gate)
+
+- **Context:** follow-up to the "do now" batch below. Closes the four CRITICAL items left open in [REVIEW.md](REVIEW.md) (#1 password hashing, #4 trial-room enumeration, #5 admin client-side auth, #6 plaintext staff PINs). Tackled in ascending blast-radius so each landed as its own verifiable commit.
+- **[convex/authCrypto.ts](convex/authCrypto.ts) — shared PBKDF2 helpers.** Single source of truth for password / PIN hashing. PBKDF2-SHA256, 100k iterations, 16-byte per-row salt, all via `crypto.subtle` so the file stays in the default Convex runtime (no Node action required). Exports `generateSalt`, `hashWithSalt`, `constantTimeEquals`. Reused across phoneAuth, stores, and seed.
+- **Trial-room enumeration (#4).** `validateCode` was an unauth'd query with no rate limit → attacker could brute-force the 1M code space in seconds. Fix:
+  - Converted `query → mutation` so we can write (queries can't).
+  - New `trialCodeAttempts` table, one row per storeId, rolling 5-min window. Pre-check rejects further calls once a store hits 20 failed attempts in the window.
+  - Kiosk UI ([app/kiosk/page.tsx](app/kiosk/page.tsx)) switched to `useMutation` and calls on Continue press instead of reactively on typing — UX is indistinguishable.
+- **Staff PIN plaintext + unlimited retries (#6, partial #14).** PINs were stored as raw strings with a `by_storeId_and_pin` equality index and unlimited login attempts. Fix:
+  - Schema: `staff.pin` now optional (kept readable for un-migrated rows); new `pinHash`/`pinSalt` fields hold the salted hash; `by_storeId_and_pin` index dropped.
+  - `createStaff`/`updateStaff` in [convex/stores.ts](convex/stores.ts) hash on write and check uniqueness via the shared `findStaffWithPin(ctx, storeId, plaintextPin)` scan helper (staff tables are small — max ~20 rows per store).
+  - `staffPinLogin` in [convex/phoneAuth.ts](convex/phoneAuth.ts) now rate-limits per storeId (new `staffPinAttempts` table, 10-min window, 30 fails), does constant-time hash compare, and **lazy-migrates** any legacy plaintext row to hash on first successful login (no forced reset). Failure window is cleared on success.
+  - [convex/seed.ts](convex/seed.ts) hashes PIN inline so fresh seeds never write plaintext.
+- **Password hashing (#1).** SHA-256 + hardcoded static salt → PBKDF2 with per-user salt. Same dual-read migration pattern:
+  - Schema: added `passwordSalt` next to `passwordHash` on `users`, `customers`, `tailors`.
+  - New `verifyPassword(password, { passwordHash, passwordSalt })` accepts both formats — returns `{ ok, legacy }`. Login path calls `rehashUserAndEntity` on legacy match so the user row + the mirrored customer/tailor row both upgrade transparently.
+  - `register`, `setPassword`, and all seed paths always write new format via `makePasswordRecord`. Seed's old static-salt SHA-256 constants are gone.
+  - Demo credentials (`Store@123` / `Customer@123` / `Tailor@123`) still work — they're just rehashed at seed time.
+- **Admin server-side gate (#5, narrow scope).**
+  - New [convex/adminAuth.ts](convex/adminAuth.ts) exports `requireAdmin(ctx)` — fetches the authenticated Better Auth user via `authComponent.safeGetAuthUser`, checks `email` against an allow-list (currently `admin@wearify.com`, mirroring the client), throws `UNAUTHORIZED: admin access required` otherwise.
+  - Applied to the two mutations that are strictly admin-only: `stores.create` (admin onboarding wizard) and `tailorOps.updateVerification` (KYC approve/reject). The old client-side email check in [app/admin/layout.tsx](app/admin/layout.tsx) stays as UX gatekeeping, but it's no longer the only line of defence.
+  - **Not yet protected** (deferred — needs role-aware auth, not just "admin or nothing"): `stores.update`, `stores.createStaff`/`updateStaff`/`removeStaff`, `tailorOps.registerTailor`. Each is called by BOTH admin and the relevant entity owner, so a blanket `requireAdmin` would break the store/tailor self-serve flows. These need an ownership check (`isAdmin OR ownsStore(storeId) OR ownsTailor(tailorId)`) which depends on the still-pending unified session middleware. Flagged in REVIEW.md item #13.
+- **Still open from REVIEW.md** (intentionally deferred to the session-middleware pass): #7 rate limiting on login & OTP (staff PIN rate limit landed here as a partial), #10 kiosk localStorage device identity, #11 localStorage leakage, #13 server-side authz on remaining queries/mutations, #14 full per-staff PIN lockout, #20 sliding session expiration, #21 password reset. All discussed inline above.
+- **Verification:** `npm run type-check` clean on each commit. No new lint issues; the handful of remaining `any`-warnings in stores.ts / seed.ts / tailorOps.ts predate this work.
+
 ### Security audit — "do now" batch (crypto RNG + trial-room PII narrowing + small bugs)
 
 - **Context:** audit in [REVIEW.md](REVIEW.md) flagged 6 CRITICAL / 5 HIGH issues. Split into two passes: the cheap, isolated, non-architectural wins go now; the auth-shaped ones (admin client-side gate, kiosk device auth, server-side query authz, rate limiting, bcrypt, PIN hashing) get bundled with the upcoming "secure session middleware" work so they aren't redone.
