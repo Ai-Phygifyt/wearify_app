@@ -369,19 +369,39 @@ export default function KioskPage() {
     if (hydratedRef.current === key) return;
     hydratedRef.current = key;
     const sareeMap = new Map(allSarees.map((s) => [s._id, s] as const));
-    const wardrobeForStore = savedWardrobe
-      .filter((w) => w.storeId === storeId)
-      .map((w) => sareeMap.get(w.sareeId))
-      .filter(Boolean) as SareeItem[];
-    const trialForStore = savedTrialCart
-      .map((t) => sareeMap.get(t.sareeId))
-      .filter(Boolean) as SareeItem[];
-    const cartForStore = savedCart
-      .map((c) => {
-        const saree = sareeMap.get(c.sareeId);
-        return saree ? { ...saree, qty: c.qty } : null;
-      })
-      .filter(Boolean) as Array<SareeItem & { qty: number }>;
+    // Dedup *within* the hydrated lists too, not just against prev.
+    // The server can hold multiple wardrobe rows for the same saree
+    // (one per session that added it) — naive flatMap would produce
+    // duplicate _id entries and trigger the "same key" React warning.
+    const uniqBySareeId = <T extends { _id: string }>(items: T[]) => {
+      const seen = new Set<string>();
+      const out: T[] = [];
+      for (const item of items) {
+        if (seen.has(item._id)) continue;
+        seen.add(item._id);
+        out.push(item);
+      }
+      return out;
+    };
+    const wardrobeForStore = uniqBySareeId(
+      savedWardrobe
+        .filter((w) => w.storeId === storeId)
+        .map((w) => sareeMap.get(w.sareeId))
+        .filter(Boolean) as SareeItem[]
+    );
+    const trialForStore = uniqBySareeId(
+      savedTrialCart
+        .map((t) => sareeMap.get(t.sareeId))
+        .filter(Boolean) as SareeItem[]
+    );
+    const cartForStore = uniqBySareeId(
+      savedCart
+        .map((c) => {
+          const saree = sareeMap.get(c.sareeId);
+          return saree ? { ...saree, qty: c.qty } : null;
+        })
+        .filter(Boolean) as Array<SareeItem & { qty: number }>
+    );
     // Merge rather than replace — codeEntry may have already populated trialItems from tablet shortlist.
     setWardrobeItems((prev) => {
       const have = new Set(prev.map((s) => s._id));
@@ -648,20 +668,35 @@ export default function KioskPage() {
               if (customerId) removeTrialCartItem({ customerId, storeId, sareeId: id });
             }}
             onAddToWardrobe={(items) => {
-              if (wardrobeItems.length + items.length > CFG.maxWardrobe) {
+              // Filter out any saree that's already in the wardrobe —
+              // re-adding the same _id would duplicate React keys and
+              // also double-persist on the server.
+              const existingIds = new Set(wardrobeItems.map((w) => w._id));
+              const fresh = items.filter((i) => !existingIds.has(i._id));
+              if (fresh.length === 0) {
+                setTrialItems((prev) =>
+                  prev.filter((s) => !items.some((i) => i._id === s._id))
+                );
+                return;
+              }
+              if (wardrobeItems.length + fresh.length > CFG.maxWardrobe) {
                 showToast(`Wardrobe limit (${CFG.maxWardrobe})`, "warning");
                 return;
               }
-              setWardrobeItems((prev) => [...prev, ...items]);
+              setWardrobeItems((prev) => [...prev, ...fresh]);
               setTrialItems((prev) =>
                 prev.filter((s) => !items.some((i) => i._id === s._id))
               );
               if (customerId) {
+                // Every trial item gets removed from the trial cart — regardless
+                // of whether the wardrobe add was a no-op (already there).
                 for (const item of items) {
                   removeTrialCartItem({ customerId, storeId, sareeId: item._id });
                 }
               }
-              for (const item of items) {
+              // Only persist the fresh sarees. Server-side is idempotent now
+              // too but skipping a round-trip when we know it's a no-op.
+              for (const item of fresh) {
                 addToWardrobeMut({
                   sessionId,
                   customerId: customerId ?? undefined,
@@ -670,7 +705,7 @@ export default function KioskPage() {
                   price: item.price,
                 });
               }
-              showToast(`Added ${items.length} to wardrobe`, "success");
+              showToast(`Added ${fresh.length} to wardrobe`, "success");
             }}
             onGoHome={goHome}
             onGoToWardrobe={() => navigate("wardrobe")}

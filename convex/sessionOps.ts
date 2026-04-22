@@ -526,6 +526,19 @@ export const addToWardrobe = mutation({
     price: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Idempotent: if the same customer already has this saree in their
+    // wardrobe, return the existing row id instead of inserting a duplicate.
+    // Prevents the duplicate-React-key crash on hydration, and keeps the
+    // kiosk UI consistent across sessions for the same customer.
+    if (args.customerId) {
+      const prior = await ctx.db
+        .query("wardrobe")
+        .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+        .take(200);
+      const dup = prior.find((w) => w.sareeId === args.sareeId);
+      if (dup) return dup._id;
+    }
+
     // Max 10 items per session
     const existing = await ctx.db
       .query("wardrobe")
@@ -570,6 +583,33 @@ export const removeFromWardrobe = mutation({
       throw new Error("Wardrobe item does not belong to this customer");
     }
     await ctx.db.delete(args.wardrobeId);
+  },
+});
+
+// One-shot cleanup for wardrobe rows that duplicated before addToWardrobe
+// became idempotent. For every (customerId, sareeId) pair keep the OLDEST
+// row and delete the rest. Run once: `npx convex run sessionOps:dedupeWardrobe '{}'`.
+export const dedupeWardrobe = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("wardrobe").take(5000);
+    const seen = new Map<string, Id<"wardrobe">>(); // key = `${customerId}:${sareeId}`
+    let kept = 0;
+    let deleted = 0;
+    // Walk in ascending _creationTime so the first row we see is the keeper.
+    all.sort((a, b) => a._creationTime - b._creationTime);
+    for (const row of all) {
+      if (!row.customerId) { kept++; continue; } // guest rows: no dedup key
+      const key = `${row.customerId}:${row.sareeId}`;
+      if (seen.has(key)) {
+        await ctx.db.delete(row._id);
+        deleted++;
+      } else {
+        seen.set(key, row._id);
+        kept++;
+      }
+    }
+    return { kept, deleted, total: all.length };
   },
 });
 
