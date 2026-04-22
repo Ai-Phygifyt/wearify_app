@@ -68,10 +68,10 @@ export function BodyScanScreen({
       {/* Scan frame. Two modes:
           - Idle  (countdown === null): blurred webcam + cream wash +
             mannequin guide + cream corner brackets + "Capture" button.
-          - Capturing (countdown !== null): same blur + mannequin, but
-            corners turn green (pulse via k-scan-corner), blue scan line
-            sweeps across, and a small "Ns" pill sits at the top.
-            The button is hidden. */}
+          - Capturing (countdown !== null): clean unblurred feed,
+            green pulsing corners, blue scan line, and a small "Ns"
+            pill at the top. Mannequin/wash/button hidden so the
+            full-body shot isn't obscured. */}
       {(() => {
         const capturing = countdown !== null;
         return (
@@ -90,17 +90,31 @@ export function BodyScanScreen({
                 position: "absolute", inset: 0, width: "100%", height: "100%",
                 objectFit: "cover",
                 transform: "scaleX(-1)",
-                filter: "blur(14px) brightness(1.05)",
-                scale: "1.1",
+                // Blur + zoom only while positioning; fade to clear on Capture
+                // so the countdown frame(s) actually see the customer.
+                filter: capturing ? "none" : "blur(14px) brightness(1.05)",
+                scale: capturing ? "1" : "1.1",
+                transition: "filter .25s ease, scale .25s ease",
               }}
             />
 
-            {/* Cream wash — keeps the mannequin readable on top of any feed. */}
-            <div style={{
-              position: "absolute", inset: 0,
-              background: "linear-gradient(180deg, rgba(238,230,218,.35), rgba(238,230,218,.55))",
-              pointerEvents: "none",
-            }} />
+            {/* Cream wash + mannequin are positioning cues — idle only. */}
+            {!capturing && (
+              <>
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: "linear-gradient(180deg, rgba(238,230,218,.35), rgba(238,230,218,.55))",
+                  pointerEvents: "none",
+                }} />
+                <div style={{
+                  position: "absolute", inset: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  pointerEvents: "none",
+                }}>
+                  <Mannequin />
+                </div>
+              </>
+            )}
 
             {/* Corner brackets: cream in idle, green-pulsing while capturing
                 (.k-scan-corner class drives the colour + pulse animation). */}
@@ -119,16 +133,6 @@ export function BodyScanScreen({
                 <Corner pos="br" />
               </>
             )}
-
-            {/* Mannequin guide — visible in both modes so the user can see
-                themselves "inside" the frame during the countdown. */}
-            <div style={{
-              position: "absolute", inset: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              pointerEvents: "none",
-            }}>
-              <Mannequin />
-            </div>
 
             {/* Capturing-only overlays: scan line + top pill */}
             {capturing && (
