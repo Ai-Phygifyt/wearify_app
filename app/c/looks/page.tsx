@@ -33,6 +33,11 @@ export default function MyLooksPage() {
   const { customerId } = useCustomer();
   const [storeFilter, setStoreFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
+  const [toast, setToast] = useState("");
+  const showToast = React.useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 2000);
+  }, []);
 
   const looks = useQuery(
     api.sessionOps.listByCustomer,
@@ -204,6 +209,7 @@ export default function MyLooksPage() {
                             if (!customerId) return;
                             if (wished && wishedId) {
                               removeFromWishlist({ wishlistId: wishedId });
+                              showToast("Removed from wishlist");
                             } else {
                               addToWishlist({
                                 customerId,
@@ -212,6 +218,7 @@ export default function MyLooksPage() {
                                 sareeName: look.sareeName,
                                 price: look.price ?? undefined,
                               });
+                              showToast("Added to wishlist");
                             }
                           }}
                           className="cx-iconbtn cx-iconbtn-sm cx-iconbtn-glass"
@@ -272,6 +279,14 @@ export default function MyLooksPage() {
           </div>
         )}
       </div>
+
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 96, left: "50%", transform: "translateX(-50%)",
+          padding: "10px 18px", borderRadius: 100, background: "#8B2E2B", color: "white",
+          fontSize: 13, fontWeight: 600, boxShadow: "var(--cx-shadow-md)", zIndex: 50,
+        }}>{toast}</div>
+      )}
     </div>
   );
 }

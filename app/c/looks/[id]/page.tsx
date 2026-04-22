@@ -89,8 +89,18 @@ export default function LookDetailPage() {
     api.sessionOps.listByCustomer,
     customerId ? { customerId } : "skip"
   );
-  const toggleFav = useMutation(api.sessionOps.toggleFav);
-  const toggleWish = useMutation(api.sessionOps.toggleWish);
+  const wishlist = useQuery(
+    api.customers.getWishlist,
+    customerId ? { customerId } : "skip"
+  );
+  const addToWishlist = useMutation(api.customers.addToWishlist);
+  const removeFromWishlist = useMutation(api.customers.removeFromWishlist);
+
+  const [toast, setToast] = useState("");
+  const showToast = React.useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 2000);
+  }, []);
 
   const look = allLooks?.find((l) => l._id === lookId);
 
@@ -144,6 +154,30 @@ export default function LookDetailPage() {
   const shareMessage = encodeURIComponent(
     `Check out this beautiful ${look.sareeName} saree I tried on at Wearify! ${look.price ? fmt(look.price) : ""}`
   );
+
+  // Match the current look's saree against the customer's wishlist so both
+  // the top-right heart and the big "Add to Wishlist" button reflect (and
+  // toggle) the same underlying state. `lookRow` pins the narrowed non-null
+  // type so inner closures (button handlers) don't trip on re-widening.
+  const lookRow = look;
+  const wishedEntry = (wishlist ?? []).find((w) => w.sareeId === lookRow.sareeId);
+  const wished = !!wishedEntry;
+  function toggleWishlist() {
+    if (!customerId) return;
+    if (wished && wishedEntry) {
+      removeFromWishlist({ wishlistId: wishedEntry._id });
+      showToast("Removed from wishlist");
+    } else {
+      addToWishlist({
+        customerId,
+        sareeId: lookRow.sareeId,
+        storeId: lookRow.storeId,
+        sareeName: lookRow.sareeName,
+        price: lookRow.price ?? undefined,
+      });
+      showToast("Added to wishlist");
+    }
+  }
 
   function handleShare() {
     window.open(`https://wa.me/?text=${shareMessage}`, "_blank");
@@ -209,17 +243,18 @@ export default function LookDetailPage() {
         {/* fav + share buttons (top-right) */}
         <div style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 10, zIndex: 5 }}>
           <button
-            onClick={() => toggleFav({ lookId: look._id })}
+            onClick={toggleWishlist}
             className="cx-press"
+            aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
             style={{
               width: 38, height: 38, borderRadius: "50%", border: "none",
               background: "rgba(255,255,255,.15)", backdropFilter: "blur(8px)",
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: "pointer",
-              animation: look.isFav ? "cx-heartBeat .55s ease" : "none",
+              animation: wished ? "cx-heartBeat .55s ease" : "none",
             }}
           >
-            <HeartIcon filled={!!look.isFav} />
+            <HeartIcon filled={wished} />
           </button>
           <button
             onClick={handleShare}
@@ -290,25 +325,26 @@ export default function LookDetailPage() {
 
       {/* ── 3. Action buttons row ───────────────────────────────── */}
       <div style={{ padding: "16px 20px 0", display: "flex", gap: 10 }}>
-        {/* Wishlist toggle */}
+        {/* Wishlist toggle — writes to the wishlist table so /c/wardrobe
+            Wishlist tab stays in sync. Tapping again removes. */}
         <button
-          onClick={() => toggleWish({ lookId: look._id })}
+          onClick={toggleWishlist}
           className="cx-press"
           style={{
             flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
             padding: "12px 10px", borderRadius: P.r,
-            border: look.isWished ? "none" : `1.5px solid ${P.plum}`,
-            background: look.isWished
+            border: wished ? "none" : `1.5px solid ${P.plum}`,
+            background: wished
               ? `linear-gradient(135deg, ${P.plum}, ${P.plumL})`
               : P.white,
-            color: look.isWished ? P.white : P.plum,
+            color: wished ? P.white : P.plum,
             fontSize: 12, fontWeight: 700, cursor: "pointer",
             transition: "all .25s",
-            boxShadow: look.isWished ? P.shadowMd : "none",
+            boxShadow: wished ? P.shadowMd : "none",
           }}
         >
           <WishlistIcon />
-          {look.isWished ? "In Wishlist" : "Add to Wishlist"}
+          {wished ? "In Wishlist — tap to remove" : "Add to Wishlist"}
         </button>
 
         {/* Find a Tailor */}
@@ -482,6 +518,14 @@ export default function LookDetailPage() {
 
       {/* bottom spacing */}
       {(!similarLooks || similarLooks.length === 0) && <div style={{ height: 28 }} />}
+
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 96, left: "50%", transform: "translateX(-50%)",
+          padding: "10px 18px", borderRadius: 100, background: P.plum, color: P.white,
+          fontSize: 13, fontWeight: 600, boxShadow: P.shadowMd, zIndex: 50,
+        }}>{toast}</div>
+      )}
     </div>
   );
 }
