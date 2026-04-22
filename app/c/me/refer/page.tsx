@@ -53,7 +53,7 @@ export default function ReferPage() {
         className="cx-pageIn"
         style={{
           minHeight: "100%",
-          background: "#FDF8F0",
+          background: "#FBF7F1",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -73,16 +73,16 @@ export default function ReferPage() {
       case "Rewarded":
         return { bg: "#E8F5E9", color: "#1B5E20" };
       case "Visited":
-        return { bg: "#FDF5E4", color: "#8B6914" };
+        return { bg: "#FAF1DD", color: "#7A5A08" };
       default:
-        return { bg: "#F4EFF9", color: "#8B7EA0" };
+        return { bg: "#F5E6E3", color: "#9C8878" };
     }
   };
 
   return (
     <div
       className="cx-pageIn"
-      style={{ minHeight: "100%", background: "#FDF8F0" }}
+      style={{ minHeight: "100%", background: "#FBF7F1" }}
     >
       {/* ── Hero ────────────────────────────────────────── */}
       <div
@@ -116,7 +116,7 @@ export default function ReferPage() {
               height={18}
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#FDF8F0"
+              stroke="#FBF7F1"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -130,7 +130,7 @@ export default function ReferPage() {
               fontSize: 26,
               fontWeight: 700,
               fontStyle: "italic",
-              color: "#FDF8F0",
+              color: "#FBF7F1",
               margin: 0,
             }}
           >
@@ -156,7 +156,7 @@ export default function ReferPage() {
           className="cx-slideUp cx-d1 cx-silk"
           style={{
             background:
-              "linear-gradient(135deg, #C9941A 0%, #E8C46A 55%, #C9941A 100%)",
+              "linear-gradient(135deg, #B8860B 0%, #D4A017 55%, #B8860B 100%)",
             borderRadius: 20,
             padding: "22px 20px",
             marginBottom: 20,
@@ -170,7 +170,7 @@ export default function ReferPage() {
             style={{
               fontSize: 22,
               fontWeight: 800,
-              color: "#1A0A2E",
+              color: "#5E1A18",
               fontStyle: "italic",
             }}
           >
@@ -179,7 +179,7 @@ export default function ReferPage() {
           <div
             style={{
               fontSize: 13,
-              color: "rgba(26,10,46,.6)",
+              color: "rgba(58, 15, 13, .6)",
               marginTop: 6,
               lineHeight: 1.5,
             }}
@@ -197,7 +197,7 @@ export default function ReferPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 12,
             }}
@@ -220,10 +220,10 @@ export default function ReferPage() {
                 width: "100%",
                 padding: "12px 14px",
                 borderRadius: 16,
-                border: "1px solid #E8D5E0",
+                border: "1px solid #E4D9CC",
                 background: "#FFFFFF",
                 fontSize: 14,
-                color: "#1A0A1E",
+                color: "#1C1108",
                 outline: "none",
                 boxSizing: "border-box",
               }}
@@ -237,10 +237,10 @@ export default function ReferPage() {
                 width: "100%",
                 padding: "12px 14px",
                 borderRadius: 16,
-                border: "1px solid #E8D5E0",
+                border: "1px solid #E4D9CC",
                 background: "#FFFFFF",
                 fontSize: 14,
-                color: "#1A0A1E",
+                color: "#1C1108",
                 outline: "none",
                 boxSizing: "border-box",
               }}
@@ -253,9 +253,9 @@ export default function ReferPage() {
                 width: "100%",
                 padding: "14px",
                 borderRadius: 100,
-                background: "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)",
+                background: "var(--cx-grad-primary)",
                 border: "none",
-                color: "#FDF8F0",
+                color: "#FBF7F1",
                 fontSize: 15,
                 fontWeight: 700,
                 cursor:
@@ -304,7 +304,7 @@ export default function ReferPage() {
               width: "100%",
               padding: "14px",
               borderRadius: 100,
-              background: "linear-gradient(135deg, #1A3A2A, #25D366)",
+              background: "var(--cx-grad-whatsapp)",
               border: "1px solid #25D366",
               color: "#fff",
               fontSize: 14,
@@ -330,7 +330,7 @@ export default function ReferPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 12,
             }}
@@ -352,7 +352,7 @@ export default function ReferPage() {
                   style={{
                     height: 56,
                     borderRadius: 12,
-                    background: "#F2E8EE",
+                    background: "#F0E8DC",
                   }}
                 />
               ))}
@@ -363,7 +363,7 @@ export default function ReferPage() {
                 textAlign: "center",
                 padding: "32px 0",
                 fontSize: 13,
-                color: "#8B7EA0",
+                color: "#9C8878",
               }}
             >
               No referrals yet. Share your link to get started!
@@ -384,12 +384,12 @@ export default function ReferPage() {
                     style={{
                       background: "#FFFFFF",
                       borderRadius: 14,
-                      border: "1px solid #F2E8EE",
+                      border: "1px solid #F0E8DC",
                       padding: "12px 14px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      boxShadow: "0 2px 14px rgba(45,27,78,.09)",
+                      boxShadow: "0 2px 14px rgba(139, 46, 43, .09)",
                     }}
                   >
                     <div>
@@ -397,7 +397,7 @@ export default function ReferPage() {
                         style={{
                           fontSize: 14,
                           fontWeight: 600,
-                          color: "#1A0A1E",
+                          color: "#1C1108",
                         }}
                       >
                         {ref.referredName as string}
@@ -405,7 +405,7 @@ export default function ReferPage() {
                       <div
                         style={{
                           fontSize: 11,
-                          color: "#8B7EA0",
+                          color: "#9C8878",
                           marginTop: 2,
                         }}
                       >
@@ -425,7 +425,7 @@ export default function ReferPage() {
                             style={{
                               fontSize: 12,
                               fontWeight: 700,
-                              color: "#C9941A",
+                              color: "#B8860B",
                             }}
                           >
                             +{ref.reward as number} pts

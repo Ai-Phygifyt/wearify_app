@@ -8,14 +8,14 @@ import { Id } from "@/convex/_generated/dataModel";
 
 /* ── colour tokens (inline) ──────────────────────────────────────── */
 const P = {
-  plum: "#2D1B4E", plumD: "#1A0A2E", plumL: "#4A2D6E", plumGhost: "#F4EFF9",
-  gold: "#C9941A", goldL: "#E8C46A", goldD: "#8B6914",
+  plum: "#8B2E2B", plumD: "#5E1A18", plumL: "#A94540", plumGhost: "#F5E6E3",
+  gold: "#B8860B", goldL: "#D4A017", goldD: "#7A5A08",
   rose: "#C2848A", roseD: "#8B4A52", roseL: "#F0D0D4",
-  ivory: "#FDF8F0", blush: "#FBF0F4", white: "#FFFFFF",
-  text: "#1A0A1E", textMid: "#4A3558", textMuted: "#8B7EA0", textGhost: "#B8A8C8", onDark: "#FDF8F0",
-  success: "#1B5E20", error: "#B71C1C",
-  shadow: "0 2px 14px rgba(45,27,78,.09)",
-  shadowMd: "0 6px 24px rgba(45,27,78,.14)",
+  ivory: "#FBF7F1", blush: "#F8F2E9", white: "#FFFFFF",
+  text: "#1C1108", textMid: "#3D2E1E", textMuted: "#9C8878", textGhost: "#C4B5A8", onDark: "#FBF7F1",
+  success: "#1B5E20", error: "#8B0000",
+  shadow: "0 2px 14px rgba(139, 46, 43, .09)",
+  shadowMd: "0 6px 24px rgba(139, 46, 43, .14)",
   r: 16, pill: 100,
 };
 
@@ -187,7 +187,7 @@ export default function LookDetailPage() {
         {/* dark-to-transparent gradient at bottom */}
         <div style={{
           position: "absolute", bottom: 0, left: 0, right: 0, height: 120,
-          background: "linear-gradient(to top, rgba(26,10,46,.7) 0%, transparent 100%)",
+          background: "linear-gradient(to top, rgba(58, 15, 13, .7) 0%, transparent 100%)",
           pointerEvents: "none",
         }} />
 

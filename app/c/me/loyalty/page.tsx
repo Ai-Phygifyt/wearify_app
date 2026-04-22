@@ -5,12 +5,13 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
+import { Circle, Diamond, Sparkles, Crown } from "lucide-react";
 
 const TIERS = [
-  { name: "Regular", min: 0, max: 999, color: "#8B7EA0", icon: "\u2022" },
-  { name: "Silver", min: 1000, max: 4999, color: "#A0A0A0", icon: "\u25C7" },
-  { name: "Gold", min: 5000, max: 14999, color: "#C9941A", icon: "\u2726" },
-  { name: "VIP", min: 15000, max: Infinity, color: "#6B1D52", icon: "\u2605" },
+  { name: "Regular", min: 0, max: 999, color: "#9C8878", Icon: Circle },
+  { name: "Silver", min: 1000, max: 4999, color: "#A0A0A0", Icon: Diamond },
+  { name: "Gold", min: 5000, max: 14999, color: "#B8860B", Icon: Sparkles },
+  { name: "VIP", min: 15000, max: Infinity, color: "#8B2E2B", Icon: Crown },
 ];
 
 const TIER_BENEFITS: Record<string, string[]> = {
@@ -55,7 +56,7 @@ export default function LoyaltyPage() {
         className="cx-pageIn"
         style={{
           minHeight: "100%",
-          background: "#FDF8F0",
+          background: "#FBF7F1",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -84,7 +85,7 @@ export default function LoyaltyPage() {
   return (
     <div
       className="cx-pageIn"
-      style={{ minHeight: "100%", background: "#FDF8F0" }}
+      style={{ minHeight: "100%", background: "#FBF7F1" }}
     >
       {/* ── Hero ────────────────────────────────────────── */}
       <div
@@ -118,7 +119,7 @@ export default function LoyaltyPage() {
               height={18}
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#FDF8F0"
+              stroke="#FBF7F1"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -132,7 +133,7 @@ export default function LoyaltyPage() {
               fontSize: 26,
               fontWeight: 700,
               fontStyle: "italic",
-              color: "#FDF8F0",
+              color: "#FBF7F1",
               margin: 0,
             }}
           >
@@ -187,7 +188,7 @@ export default function LoyaltyPage() {
                 style={{
                   fontSize: 28,
                   fontWeight: 800,
-                  color: "#FDF8F0",
+                  color: "#FBF7F1",
                   fontStyle: "italic",
                   marginTop: 2,
                 }}
@@ -210,7 +211,7 @@ export default function LoyaltyPage() {
                 style={{
                   fontSize: 26,
                   fontWeight: 800,
-                  color: "#FDF8F0",
+                  color: "#FBF7F1",
                   marginTop: 2,
                 }}
               >
@@ -247,7 +248,7 @@ export default function LoyaltyPage() {
                   style={{
                     height: "100%",
                     borderRadius: 100,
-                    background: "#FDF8F0",
+                    background: "#FBF7F1",
                     width: `${progressPct}%`,
                     transition: "width .6s ease",
                   }}
@@ -272,7 +273,7 @@ export default function LoyaltyPage() {
           className="cx-slideUp cx-d2"
           style={{
             background:
-              "linear-gradient(135deg, #C9941A 0%, #E8C46A 55%, #C9941A 100%)",
+              "linear-gradient(135deg, #B8860B 0%, #D4A017 55%, #B8860B 100%)",
             borderRadius: 16,
             padding: "14px 18px",
             marginBottom: 20,
@@ -282,12 +283,12 @@ export default function LoyaltyPage() {
           }}
         >
           <div>
-            <div style={{ fontSize: 12, color: "rgba(45,27,78,.6)", fontWeight: 500 }}>
+            <div style={{ fontSize: 12, color: "rgba(139, 46, 43, .6)", fontWeight: 500 }}>
               Wearify Credit
             </div>
             <div
               className="cx-mono"
-              style={{ fontSize: 22, fontWeight: 800, color: "#1A0A2E" }}
+              style={{ fontSize: 22, fontWeight: 800, color: "#5E1A18" }}
             >
               \u20B9{storeCredit.toLocaleString()}
             </div>
@@ -297,7 +298,7 @@ export default function LoyaltyPage() {
             height={28}
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#1A0A2E"
+            stroke="#5E1A18"
             strokeWidth="1.6"
             opacity={0.5}
           >
@@ -313,7 +314,7 @@ export default function LoyaltyPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 12,
             }}
@@ -332,8 +333,8 @@ export default function LoyaltyPage() {
                 key={tier.name}
                 style={{
                   background:
-                    tier.name === currentTierName ? "#F4EFF9" : "#FFFFFF",
-                  border: `1.5px solid ${tier.name === currentTierName ? "#E8D5E0" : "#F2E8EE"}`,
+                    tier.name === currentTierName ? "#F5E6E3" : "#FFFFFF",
+                  border: `1.5px solid ${tier.name === currentTierName ? "#E4D9CC" : "#F0E8DC"}`,
                   borderRadius: 16,
                   padding: "12px 14px",
                 }}
@@ -348,17 +349,18 @@ export default function LoyaltyPage() {
                 >
                   <span
                     style={{
-                      fontSize: 14,
+                      display: "inline-flex",
+                      alignItems: "center",
                       color: tier.color,
                     }}
                   >
-                    {tier.icon}
+                    <tier.Icon size={15} strokeWidth={2} fill={tier.name === "Gold" || tier.name === "VIP" ? tier.color : "transparent"} />
                   </span>
                   <span
                     style={{
                       fontWeight: 700,
                       fontSize: 13,
-                      color: "#1A0A1E",
+                      color: "#1C1108",
                     }}
                   >
                     {tier.name}
@@ -369,8 +371,8 @@ export default function LoyaltyPage() {
                         fontSize: 9,
                         padding: "1px 6px",
                         borderRadius: 100,
-                        background: "#2D1B4E",
-                        color: "#FDF8F0",
+                        background: "#8B2E2B",
+                        color: "#FBF7F1",
                         fontWeight: 700,
                         marginLeft: "auto",
                       }}
@@ -391,7 +393,7 @@ export default function LoyaltyPage() {
                       key={i}
                       style={{
                         fontSize: 11,
-                        color: "#4A3558",
+                        color: "#3D2E1E",
                         display: "flex",
                         alignItems: "flex-start",
                         gap: 4,
@@ -417,7 +419,7 @@ export default function LoyaltyPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 12,
             }}
@@ -439,7 +441,7 @@ export default function LoyaltyPage() {
                   style={{
                     height: 56,
                     borderRadius: 12,
-                    background: "#F2E8EE",
+                    background: "#F0E8DC",
                   }}
                 />
               ))}
@@ -450,7 +452,7 @@ export default function LoyaltyPage() {
                 textAlign: "center",
                 padding: "32px 0",
                 fontSize: 13,
-                color: "#8B7EA0",
+                color: "#9C8878",
               }}
             >
               No transactions yet
@@ -469,12 +471,12 @@ export default function LoyaltyPage() {
                   style={{
                     background: "#FFFFFF",
                     borderRadius: 14,
-                    border: "1px solid #F2E8EE",
+                    border: "1px solid #F0E8DC",
                     padding: "12px 14px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    boxShadow: "0 2px 14px rgba(45,27,78,.09)",
+                    boxShadow: "0 2px 14px rgba(139, 46, 43, .09)",
                   }}
                 >
                   <div>
@@ -482,7 +484,7 @@ export default function LoyaltyPage() {
                       style={{
                         fontSize: 13,
                         fontWeight: 600,
-                        color: "#1A0A1E",
+                        color: "#1C1108",
                         textTransform: "capitalize" as const,
                       }}
                     >
@@ -491,7 +493,7 @@ export default function LoyaltyPage() {
                     <div
                       style={{
                         fontSize: 11,
-                        color: "#8B7EA0",
+                        color: "#9C8878",
                         marginTop: 2,
                       }}
                     >
@@ -506,7 +508,7 @@ export default function LoyaltyPage() {
                       color:
                         (txn.type as string) === "earn"
                           ? "#1B5E20"
-                          : "#B71C1C",
+                          : "#8B0000",
                     }}
                   >
                     {(txn.type as string) === "earn" ? "+" : "-"}

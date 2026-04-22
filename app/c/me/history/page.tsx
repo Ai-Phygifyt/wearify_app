@@ -27,7 +27,7 @@ export default function VisitHistoryPage() {
         className="cx-pageIn"
         style={{
           minHeight: "100%",
-          background: "#FDF8F0",
+          background: "#FBF7F1",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -65,7 +65,7 @@ export default function VisitHistoryPage() {
   return (
     <div
       className="cx-pageIn"
-      style={{ minHeight: "100%", background: "#FDF8F0" }}
+      style={{ minHeight: "100%", background: "#FBF7F1" }}
     >
       {/* ── Hero ────────────────────────────────────────── */}
       <div
@@ -99,7 +99,7 @@ export default function VisitHistoryPage() {
               height={18}
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#FDF8F0"
+              stroke="#FBF7F1"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -113,7 +113,7 @@ export default function VisitHistoryPage() {
               fontSize: 26,
               fontWeight: 700,
               fontStyle: "italic",
-              color: "#FDF8F0",
+              color: "#FBF7F1",
               margin: 0,
             }}
           >
@@ -142,17 +142,17 @@ export default function VisitHistoryPage() {
             style={{
               marginBottom: 16,
               background: "#FFFFFF",
-              border: "1px solid #F2E8EE",
+              border: "1px solid #F0E8DC",
               borderRadius: 16,
               padding: "14px 16px",
-              boxShadow: "0 2px 14px rgba(45,27,78,.06)",
+              boxShadow: "0 2px 14px rgba(139, 46, 43, .06)",
             }}
           >
             <div
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                color: "#8B7EA0",
+                color: "#9C8878",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
                 marginBottom: 10,
@@ -171,7 +171,7 @@ export default function VisitHistoryPage() {
                     gap: 12,
                   }}
                 >
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A0A1E", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1C1108", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {s.storeName}
                   </span>
                   <span
@@ -179,8 +179,8 @@ export default function VisitHistoryPage() {
                     style={{
                       padding: "3px 10px",
                       borderRadius: 100,
-                      background: "#F4EFF9",
-                      color: "#2D1B4E",
+                      background: "#F5E6E3",
+                      color: "#8B2E2B",
                       fontSize: 11,
                       fontWeight: 700,
                       flexShrink: 0,
@@ -203,7 +203,7 @@ export default function VisitHistoryPage() {
                 style={{
                   height: 80,
                   borderRadius: 16,
-                  background: "linear-gradient(90deg, #F2E8EE 0%, #F4EFF9 50%, #F2E8EE 100%)",
+                  background: "linear-gradient(90deg, #F0E8DC 0%, #F5E6E3 50%, #F0E8DC 100%)",
                   animation: "cx-shimmerBg 1.5s ease infinite",
                   backgroundSize: "200% auto",
                 }}
@@ -221,7 +221,7 @@ export default function VisitHistoryPage() {
                 width: 64,
                 height: 64,
                 borderRadius: "50%",
-                background: "#F4EFF9",
+                background: "#F5E6E3",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -233,7 +233,7 @@ export default function VisitHistoryPage() {
                 height={28}
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#B8A8C8"
+                stroke="#C4B5A8"
                 strokeWidth="1.6"
               >
                 <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -247,13 +247,13 @@ export default function VisitHistoryPage() {
               style={{
                 fontSize: 18,
                 fontWeight: 600,
-                color: "#4A3558",
+                color: "#3D2E1E",
                 fontStyle: "italic",
               }}
             >
               No visits yet
             </div>
-            <div style={{ fontSize: 13, color: "#8B7EA0", marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: "#9C8878", marginTop: 4 }}>
               Your visit history will appear here
             </div>
           </div>
@@ -268,9 +268,9 @@ export default function VisitHistoryPage() {
                   animationDelay: `${0.05 * Math.min(idx, 6)}s`,
                   background: "#FFFFFF",
                   borderRadius: 16,
-                  border: "1px solid #F2E8EE",
+                  border: "1px solid #F0E8DC",
                   padding: "14px 16px",
-                  boxShadow: "0 2px 14px rgba(45,27,78,.09)",
+                  boxShadow: "0 2px 14px rgba(139, 46, 43, .09)",
                 }}
               >
                 {/* Top row: date + purchase badge */}
@@ -286,7 +286,7 @@ export default function VisitHistoryPage() {
                       style={{
                         fontWeight: 700,
                         fontSize: 14,
-                        color: "#1A0A1E",
+                        color: "#1C1108",
                       }}
                     >
                       {visit.date as string}
@@ -294,7 +294,7 @@ export default function VisitHistoryPage() {
                     <div
                       style={{
                         fontSize: 12,
-                        color: "#8B7EA0",
+                        color: "#9C8878",
                         marginTop: 2,
                       }}
                     >
@@ -320,8 +320,8 @@ export default function VisitHistoryPage() {
                       style={{
                         padding: "3px 10px",
                         borderRadius: 100,
-                        background: "#F4EFF9",
-                        color: "#8B7EA0",
+                        background: "#F5E6E3",
+                        color: "#9C8878",
                         fontSize: 11,
                         fontWeight: 600,
                       }}
@@ -339,7 +339,7 @@ export default function VisitHistoryPage() {
                     gap: 14,
                     marginTop: 10,
                     fontSize: 12,
-                    color: "#4A3558",
+                    color: "#3D2E1E",
                   }}
                 >
                   {visit.sareesTried !== undefined && (
@@ -349,7 +349,7 @@ export default function VisitHistoryPage() {
                     </span>
                   )}
                   {visit.staffName && (
-                    <span style={{ color: "#8B7EA0" }}>
+                    <span style={{ color: "#9C8878" }}>
                       Staff: {visit.staffName as string}
                     </span>
                   )}
@@ -363,7 +363,7 @@ export default function VisitHistoryPage() {
                         marginTop: 8,
                         fontSize: 12,
                         fontWeight: 700,
-                        color: "#C9941A",
+                        color: "#B8860B",
                       }}
                     >
                       +{visit.pointsEarned as number} points earned

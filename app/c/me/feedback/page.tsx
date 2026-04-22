@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
+import { Star } from "lucide-react";
 
 const QUICK_CHIPS = [
   "Great Service",
@@ -59,7 +60,7 @@ export default function FeedbackPage() {
         className="cx-pageIn"
         style={{
           minHeight: "100%",
-          background: "#FDF8F0",
+          background: "#FBF7F1",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -79,7 +80,7 @@ export default function FeedbackPage() {
     return (
       <div
         className="cx-pageIn"
-        style={{ minHeight: "100%", background: "#FDF8F0" }}
+        style={{ minHeight: "100%", background: "#FBF7F1" }}
       >
         {/* Hero */}
         <div
@@ -113,7 +114,7 @@ export default function FeedbackPage() {
                 height={18}
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#FDF8F0"
+                stroke="#FBF7F1"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -127,7 +128,7 @@ export default function FeedbackPage() {
                 fontSize: 26,
                 fontWeight: 700,
                 fontStyle: "italic",
-                color: "#FDF8F0",
+                color: "#FBF7F1",
                 margin: 0,
               }}
             >
@@ -172,7 +173,7 @@ export default function FeedbackPage() {
             style={{
               fontSize: 24,
               fontWeight: 700,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
             }}
           >
@@ -181,7 +182,7 @@ export default function FeedbackPage() {
           <div
             style={{
               fontSize: 14,
-              color: "#8B7EA0",
+              color: "#9C8878",
               marginTop: 8,
               lineHeight: 1.5,
             }}
@@ -197,9 +198,9 @@ export default function FeedbackPage() {
               width: "100%",
               padding: "14px",
               borderRadius: 100,
-              background: "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)",
+              background: "var(--cx-grad-primary)",
               border: "none",
-              color: "#FDF8F0",
+              color: "#FBF7F1",
               fontSize: 15,
               fontWeight: 700,
               cursor: "pointer",
@@ -216,7 +217,7 @@ export default function FeedbackPage() {
   return (
     <div
       className="cx-pageIn"
-      style={{ minHeight: "100%", background: "#FDF8F0" }}
+      style={{ minHeight: "100%", background: "#FBF7F1" }}
     >
       {/* ── Hero ────────────────────────────────────────── */}
       <div
@@ -250,7 +251,7 @@ export default function FeedbackPage() {
               height={18}
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#FDF8F0"
+              stroke="#FBF7F1"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -264,7 +265,7 @@ export default function FeedbackPage() {
               fontSize: 26,
               fontWeight: 700,
               fontStyle: "italic",
-              color: "#FDF8F0",
+              color: "#FBF7F1",
               margin: 0,
             }}
           >
@@ -292,7 +293,7 @@ export default function FeedbackPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 14,
               textAlign: "center",
@@ -318,12 +319,12 @@ export default function FeedbackPage() {
                   cursor: "pointer",
                   fontSize: 28,
                   lineHeight: 1,
-                  color: star <= rating ? "#C9941A" : "#E8D5E0",
+                  color: star <= rating ? "#B8860B" : "#E4D9CC",
                   transition: "color .15s, transform .15s",
                   padding: 4,
                 }}
               >
-                {star <= rating ? "\u2605" : "\u2606"}
+                <Star size={32} fill={star <= rating ? "var(--cx-gold)" : "transparent"} strokeWidth={1.6} />
               </button>
             ))}
           </div>
@@ -332,7 +333,7 @@ export default function FeedbackPage() {
               style={{
                 textAlign: "center",
                 fontSize: 13,
-                color: "#8B7EA0",
+                color: "#9C8878",
                 marginTop: 8,
               }}
             >
@@ -356,7 +357,7 @@ export default function FeedbackPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 10,
             }}
@@ -377,11 +378,11 @@ export default function FeedbackPage() {
                     fontSize: 13,
                     fontWeight: 600,
                     cursor: "pointer",
-                    border: active ? "none" : "1px solid #E8D5E0",
+                    border: active ? "none" : "1px solid #E4D9CC",
                     background: active
-                      ? "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)"
-                      : "#F4EFF9",
-                    color: active ? "#FDF8F0" : "#4A3558",
+                      ? "var(--cx-grad-primary)"
+                      : "#F5E6E3",
+                    color: active ? "#FBF7F1" : "#3D2E1E",
                     transition: "all .2s",
                   }}
                 >
@@ -399,13 +400,13 @@ export default function FeedbackPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "#1A0A1E",
+              color: "#1C1108",
               fontStyle: "italic",
               marginBottom: 10,
             }}
           >
             Tell us more{" "}
-            <span style={{ fontWeight: 400, color: "#8B7EA0" }}>
+            <span style={{ fontWeight: 400, color: "#9C8878" }}>
               (optional)
             </span>
           </div>
@@ -418,10 +419,10 @@ export default function FeedbackPage() {
               width: "100%",
               padding: "14px",
               borderRadius: 16,
-              border: "1px solid #E8D5E0",
+              border: "1px solid #E4D9CC",
               background: "#FFFFFF",
               fontSize: 14,
-              color: "#1A0A1E",
+              color: "#1C1108",
               outline: "none",
               resize: "none",
               lineHeight: 1.55,
@@ -441,10 +442,10 @@ export default function FeedbackPage() {
             borderRadius: 100,
             background:
               rating === 0
-                ? "#E8D5E0"
-                : "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)",
+                ? "#E4D9CC"
+                : "var(--cx-grad-primary)",
             border: "none",
-            color: rating === 0 ? "#8B7EA0" : "#FDF8F0",
+            color: rating === 0 ? "#9C8878" : "#FBF7F1",
             fontSize: 15,
             fontWeight: 700,
             cursor: rating === 0 || submitting ? "default" : "pointer",

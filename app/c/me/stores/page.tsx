@@ -17,19 +17,19 @@ export default function MyStoresPage() {
 
   if (!customerId) {
     return (
-      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FDF8F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="cx-typing"><span /><span /><span /></div>
       </div>
     );
   }
 
   return (
-    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FDF8F0" }}>
+    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1" }}>
       {/* Hero */}
       <div
         className="cx-noise cx-paisley"
         style={{
-          background: "linear-gradient(155deg, #0D0418 0%, #1A0A2E 25%, #2D1B4E 55%, #6B1D52 80%, #C9941A 100%)",
+          background: "var(--cx-grad-hero)",
           padding: "28px 18px 24px",
           position: "relative",
           overflow: "hidden",
@@ -53,12 +53,12 @@ export default function MyStoresPage() {
                 flexShrink: 0,
               }}
             >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FDF8F0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FBF7F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
             <div>
-              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FDF8F0", fontStyle: "italic", margin: 0 }}>
+              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FBF7F1", fontStyle: "italic", margin: 0 }}>
                 My Stores
               </h1>
               <div style={{ fontSize: 12, color: "rgba(253,248,240,.5)", marginTop: 2 }}>
@@ -75,7 +75,7 @@ export default function MyStoresPage() {
         {storeLinks === undefined ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[1, 2, 3].map((i) => (
-              <div key={i} style={{ height: 140, borderRadius: 16, background: "linear-gradient(135deg, #F4EFF9, #F2E8EE)", opacity: 0.6 }} className="cx-fadeIn" />
+              <div key={i} style={{ height: 140, borderRadius: 16, background: "linear-gradient(135deg, #F5E6E3, #F0E8DC)", opacity: 0.6 }} className="cx-fadeIn" />
             ))}
           </div>
         ) : storeLinks.length === 0 ? (
@@ -84,19 +84,19 @@ export default function MyStoresPage() {
               width: 64,
               height: 64,
               borderRadius: "50%",
-              background: "#F4EFF9",
+              background: "#F5E6E3",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               margin: "0 auto 14px",
             }}>
               <svg width={28} height={28} viewBox="0 0 24 24" fill="none">
-                <path d="M3 9V21h18V9" stroke="#2D1B4E" strokeWidth="1.6" strokeLinejoin="round" />
-                <path d="M1 7l2-4h18l2 4H1Z" stroke="#2D1B4E" strokeWidth="1.6" strokeLinejoin="round" fill="#C9941A" opacity=".18" />
+                <path d="M3 9V21h18V9" stroke="#8B2E2B" strokeWidth="1.6" strokeLinejoin="round" />
+                <path d="M1 7l2-4h18l2 4H1Z" stroke="#8B2E2B" strokeWidth="1.6" strokeLinejoin="round" fill="#B8860B" opacity=".18" />
               </svg>
             </div>
-            <div className="cx-serif" style={{ fontSize: 17, fontWeight: 600, color: "#1A0A1E", fontStyle: "italic" }}>No stores visited yet</div>
-            <div style={{ fontSize: 13, color: "#8B7EA0", marginTop: 6 }}>Visit a Wearify-powered store to see it here</div>
+            <div className="cx-serif" style={{ fontSize: 17, fontWeight: 600, color: "#1C1108", fontStyle: "italic" }}>No stores visited yet</div>
+            <div style={{ fontSize: 13, color: "#9C8878", marginTop: 6 }}>Visit a Wearify-powered store to see it here</div>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -108,14 +108,14 @@ export default function MyStoresPage() {
                   borderRadius: 16,
                   overflow: "hidden",
                   background: "#FFFFFF",
-                  border: "1px solid #F2E8EE",
-                  boxShadow: "0 2px 14px rgba(45,27,78,.09)",
+                  border: "1px solid #F0E8DC",
+                  boxShadow: "0 2px 14px rgba(139, 46, 43, .09)",
                 }}
               >
                 {/* Store gradient header */}
                 <div className="cx-silk" style={{
                   height: 56,
-                  background: "linear-gradient(145deg, #2D1B4E, #4A2D6E)",
+                  background: "linear-gradient(145deg, #8B2E2B, #A94540)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -124,21 +124,21 @@ export default function MyStoresPage() {
                 }}>
                   <svg width={24} height={24} viewBox="0 0 24 24" fill="none" style={{ position: "relative", zIndex: 1 }}>
                     <path d="M3 9V21h18V9" stroke="rgba(255,255,255,.85)" strokeWidth="1.6" strokeLinejoin="round" />
-                    <path d="M1 7l2-4h18l2 4H1Z" stroke="rgba(255,255,255,.85)" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(201,148,26,.25)" />
+                    <path d="M1 7l2-4h18l2 4H1Z" stroke="rgba(255,255,255,.85)" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(184, 134, 11, .25)" />
                   </svg>
                 </div>
 
                 {/* Store details */}
                 <div style={{ padding: "14px 16px" }}>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: "#1A0A1E" }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: "#1C1108" }}>
                     {store.storeName || store.storeId}
                   </div>
 
                   {(store.storeCity || store.storeState) && (
-                    <div style={{ fontSize: 13, color: "#8B7EA0", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ fontSize: 13, color: "#9C8878", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}>
                       <svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0Z" stroke="#8B7EA0" strokeWidth="1.6" />
-                        <circle cx="12" cy="10" r="3" stroke="#8B7EA0" strokeWidth="1.6" />
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0Z" stroke="#9C8878" strokeWidth="1.6" />
+                        <circle cx="12" cy="10" r="3" stroke="#9C8878" strokeWidth="1.6" />
                       </svg>
                       {[store.storeCity, store.storeState].filter(Boolean).join(", ")}
                     </div>
@@ -148,19 +148,19 @@ export default function MyStoresPage() {
                   <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                        <path d="M16 21v-2a4 4 0 0 0-8 0v2" stroke="#C9941A" strokeWidth="1.6" strokeLinecap="round" />
-                        <circle cx="12" cy="7" r="4" stroke="#C9941A" strokeWidth="1.6" />
+                        <path d="M16 21v-2a4 4 0 0 0-8 0v2" stroke="#B8860B" strokeWidth="1.6" strokeLinecap="round" />
+                        <circle cx="12" cy="7" r="4" stroke="#B8860B" strokeWidth="1.6" />
                       </svg>
-                      <span className="cx-mono" style={{ fontSize: 13, fontWeight: 700, color: "#1A0A1E" }}>
+                      <span className="cx-mono" style={{ fontSize: 13, fontWeight: 700, color: "#1C1108" }}>
                         {store.visits || 0}
                       </span>
-                      <span style={{ fontSize: 11, color: "#8B7EA0" }}>visits</span>
+                      <span style={{ fontSize: 11, color: "#9C8878" }}>visits</span>
                     </div>
                     {store.lastVisit && (
-                      <div style={{ fontSize: 11, color: "#8B7EA0", display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ fontSize: 11, color: "#9C8878", display: "flex", alignItems: "center", gap: 4 }}>
                         <svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                          <circle cx="12" cy="12" r="9" stroke="#B8A8C8" strokeWidth="1.6" />
-                          <polyline points="12,7 12,12 15,15" stroke="#B8A8C8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          <circle cx="12" cy="12" r="9" stroke="#C4B5A8" strokeWidth="1.6" />
+                          <polyline points="12,7 12,12 15,15" stroke="#C4B5A8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                         Last: {store.lastVisit}
                       </div>
@@ -169,19 +169,19 @@ export default function MyStoresPage() {
 
                   {/* Address */}
                   {store.storeAddress && (
-                    <div style={{ fontSize: 12, color: "#8B7EA0", marginTop: 8, lineHeight: 1.45 }}>
+                    <div style={{ fontSize: 12, color: "#9C8878", marginTop: 8, lineHeight: 1.45 }}>
                       {store.storeAddress}
                     </div>
                   )}
 
                   {/* Hours */}
                   {(store.storeHours || store.storeClosedOn) && (
-                    <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 11, color: "#8B7EA0" }}>
+                    <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 11, color: "#9C8878" }}>
                       {store.storeHours && (
                         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <svg width={11} height={11} viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="#B8A8C8" strokeWidth="1.6" />
-                            <polyline points="12,6 12,12 16,14" stroke="#B8A8C8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                            <circle cx="12" cy="12" r="10" stroke="#C4B5A8" strokeWidth="1.6" />
+                            <polyline points="12,6 12,12 16,14" stroke="#C4B5A8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                           {store.storeHours}
                         </span>
@@ -204,7 +204,7 @@ export default function MyStoresPage() {
                           flex: 1,
                           padding: "9px 12px",
                           borderRadius: 100,
-                          background: "linear-gradient(135deg, #1A3A2A, #25D366)",
+                          background: "var(--cx-grad-whatsapp)",
                           border: "none",
                           color: "#fff",
                           fontSize: 12,
@@ -229,8 +229,8 @@ export default function MyStoresPage() {
                           padding: "9px 12px",
                           borderRadius: 100,
                           background: "transparent",
-                          border: "1.5px solid #2D1B4E",
-                          color: "#2D1B4E",
+                          border: "1.5px solid #8B2E2B",
+                          color: "#8B2E2B",
                           fontSize: 12,
                           fontWeight: 600,
                           cursor: "pointer",
@@ -241,8 +241,8 @@ export default function MyStoresPage() {
                         }}
                       >
                         <svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0Z" stroke="#2D1B4E" strokeWidth="1.8" />
-                          <circle cx="12" cy="10" r="3" stroke="#2D1B4E" strokeWidth="1.8" />
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0Z" stroke="#8B2E2B" strokeWidth="1.8" />
+                          <circle cx="12" cy="10" r="3" stroke="#8B2E2B" strokeWidth="1.8" />
                         </svg>
                         Directions
                       </button>
