@@ -631,6 +631,7 @@ export default function KioskPage() {
       case "bodyScan":
         return (
           <BodyScanScreen
+            storeName={storeName}
             stream={cameraStream}
             onCapture={() => {
               if (customerId) {

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Home } from "lucide-react";
+import { ChevronLeft, Home } from "lucide-react";
 
 export function BodyScanScreen({
+  storeName,
   stream,
   onCapture,
   onBack,
   onHome,
 }: {
+  storeName: string;
   stream: MediaStream | null;
   onCapture: () => void;
   onBack: () => void;
@@ -38,40 +40,24 @@ export function BodyScanScreen({
     return () => clearTimeout(t);
   }, [countdown, onCapture]);
 
-  const shell: React.CSSProperties = {
-    minHeight: "100vh",
-    background: "#fff",
-    display: "flex",
-    flexDirection: "column",
-    padding: "18px 20px 32px",
-    maxWidth: 520,
-    margin: "0 auto",
-    width: "100%",
-  };
-  const iconBtn: React.CSSProperties = {
-    width: 40, height: 40, borderRadius: "50%",
-    border: "1px solid rgba(104,38,42,.15)",
-    background: "#fff",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    color: "var(--k-maroon)",
-    cursor: "pointer",
-  };
-
   return (
-    <div style={shell}>
-      {/* Top bar — back (left), home (right) */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button onClick={onBack} style={iconBtn} aria-label="Back">
-          <ArrowLeft size={18} strokeWidth={2.2} />
+    <div className="k-shell">
+      {/* Top bar — same shape as PhoneAuthScreen so these screens read
+          as a consistent pair. Back button (left), store name (center),
+          home icon (right) where the phone screen has a blank spacer. */}
+      <div className="k-topbar">
+        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
+          <ChevronLeft size={20} />
         </button>
-        <button onClick={onHome} style={iconBtn} aria-label="Home">
-          <Home size={18} strokeWidth={2.2} />
+        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
+        <button onClick={onHome} className="k-iconbtn k-press" aria-label="Home">
+          <Home size={18} />
         </button>
       </div>
 
       {/* Title + subtitle */}
-      <div style={{ textAlign: "center", marginTop: 14, marginBottom: 16 }}>
-        <h1 className="k-display" style={{ fontSize: 26, margin: 0, color: "var(--k-text)" }}>
+      <div style={{ textAlign: "center", marginTop: 4, marginBottom: 14, padding: "0 20px" }}>
+        <h1 className="k-display" style={{ fontSize: 24, margin: 0, color: "var(--k-text)" }}>
           Create Your Digital Look
         </h1>
         <p style={{ fontSize: 14, color: "var(--k-text-muted)", margin: "6px 0 0" }}>
@@ -88,9 +74,10 @@ export function BodyScanScreen({
         const capturing = countdown !== null;
         return (
           <div style={{
-            flex: 1, position: "relative", borderRadius: 18, overflow: "hidden",
-            background: "#EEE6DA",
+            flex: 1, margin: "0 20px 20px", position: "relative", borderRadius: 18, overflow: "hidden",
+            background: "rgba(200,190,175,.2)",
             boxShadow: "0 4px 18px rgba(104,38,42,.08)",
+            minHeight: 0,
           }}>
             <video
               ref={videoRef}
