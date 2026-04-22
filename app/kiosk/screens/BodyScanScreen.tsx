@@ -67,13 +67,15 @@ export function BodyScanScreen({
 
       {/* Scan frame. Two modes:
           - Idle  (countdown === null): blurred webcam + cream wash +
-            mannequin guide + "Capture My Look" button.
-          - Capturing (countdown !== null): clear webcam, no wash, no
-            mannequin — just the feed with a countdown number. */}
+            mannequin guide + cream corner brackets + "Capture" button.
+          - Capturing (countdown !== null): same blur + mannequin, but
+            corners turn green (pulse via k-scan-corner), blue scan line
+            sweeps across, and a small "Ns" pill sits at the top.
+            The button is hidden. */}
       {(() => {
         const capturing = countdown !== null;
         return (
-          <div style={{
+          <div className="k-scan-frame" style={{
             flex: 1, margin: "0 20px 20px", position: "relative", borderRadius: 18, overflow: "hidden",
             background: "rgba(200,190,175,.2)",
             boxShadow: "0 4px 18px rgba(104,38,42,.08)",
@@ -88,55 +90,64 @@ export function BodyScanScreen({
                 position: "absolute", inset: 0, width: "100%", height: "100%",
                 objectFit: "cover",
                 transform: "scaleX(-1)",
-                // Blur until the user taps Capture; then reveal the clean feed.
-                filter: capturing ? "none" : "blur(14px) brightness(1.05)",
-                scale: capturing ? "1" : "1.1",
-                transition: "filter .25s ease, scale .25s ease",
+                filter: "blur(14px) brightness(1.05)",
+                scale: "1.1",
               }}
             />
 
-            {/* Cream wash only in idle mode — it helps the mannequin read
-                over any backdrop but hides the user's real silhouette. */}
-            {!capturing && (
-              <div style={{
-                position: "absolute", inset: 0,
-                background: "linear-gradient(180deg, rgba(238,230,218,.35), rgba(238,230,218,.55))",
-                pointerEvents: "none",
-              }} />
+            {/* Cream wash — keeps the mannequin readable on top of any feed. */}
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(180deg, rgba(238,230,218,.35), rgba(238,230,218,.55))",
+              pointerEvents: "none",
+            }} />
+
+            {/* Corner brackets: cream in idle, green-pulsing while capturing
+                (.k-scan-corner class drives the colour + pulse animation). */}
+            {capturing ? (
+              <>
+                <div className="k-scan-corner tl" />
+                <div className="k-scan-corner tr" />
+                <div className="k-scan-corner bl" />
+                <div className="k-scan-corner br" />
+              </>
+            ) : (
+              <>
+                <Corner pos="tl" />
+                <Corner pos="tr" />
+                <Corner pos="bl" />
+                <Corner pos="br" />
+              </>
             )}
 
-            {/* Corner brackets stay in both modes as framing cues */}
-            <Corner pos="tl" />
-            <Corner pos="tr" />
-            <Corner pos="bl" />
-            <Corner pos="br" />
+            {/* Mannequin guide — visible in both modes so the user can see
+                themselves "inside" the frame during the countdown. */}
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              pointerEvents: "none",
+            }}>
+              <Mannequin />
+            </div>
 
-            {/* Mannequin guide — only while idle. */}
-            {!capturing && (
-              <div style={{
-                position: "absolute", inset: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                pointerEvents: "none",
-              }}>
-                <Mannequin />
-              </div>
-            )}
-
-            {/* Countdown overlay */}
-            {capturing && countdown !== null && countdown > 0 && (
-              <div style={{
-                position: "absolute", top: "50%", left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: 140, height: 140, borderRadius: "50%",
-                background: "rgba(255,255,255,.92)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 72, fontWeight: 700, color: "var(--k-maroon)",
-                fontFamily: "'DM Mono', monospace",
-                boxShadow: "0 10px 40px rgba(0,0,0,.18)",
-                zIndex: 10,
-              }}>
-                {countdown}
-              </div>
+            {/* Capturing-only overlays: scan line + top pill */}
+            {capturing && (
+              <>
+                <div className="k-scan-line" />
+                <div style={{
+                  position: "absolute", top: 18, left: "50%",
+                  transform: "translateX(-50%)",
+                  padding: "6px 16px", borderRadius: "var(--k-r-pill)",
+                  background: "rgba(255,255,255,.92)",
+                  border: "1px solid rgba(104,38,42,.08)",
+                  fontFamily: "'Roboto Mono', 'DM Mono', monospace",
+                  fontSize: 15, fontWeight: 700, color: "var(--k-text)",
+                  boxShadow: "0 4px 14px rgba(0,0,0,.10)",
+                  zIndex: 10,
+                }}>
+                  {countdown}s
+                </div>
+              </>
             )}
 
             {/* Capture button — hidden while counting down */}
