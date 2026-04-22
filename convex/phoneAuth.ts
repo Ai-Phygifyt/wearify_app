@@ -468,8 +468,24 @@ export const loginWithOtp = mutation({
   },
 });
 
+// Revoke every userSessions row for a given user. Called from setPassword
+// so a password change forces re-login everywhere — matches the standard
+// POS/banking pattern and closes the "stolen session survives a password
+// change" part of REVIEW.md #20.
+async function revokeAllSessionsForUser(ctx: MutationCtx, userId: Id<"users">) {
+  const rows = await ctx.db
+    .query("userSessions")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .collect();
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
+}
+
 // Set password (after OTP login, user can set a password). Always writes
-// the modern PBKDF2 format with a fresh salt.
+// the modern PBKDF2 format with a fresh salt AND revokes every existing
+// session for the user — the caller will be redirected to the login
+// screen on their next render of any session-gated page.
 export const setPassword = mutation({
   args: {
     phone: v.string(),
@@ -507,6 +523,8 @@ export const setPassword = mutation({
         await ctx.db.patch(tailor._id, record);
       }
     }
+
+    await revokeAllSessionsForUser(ctx, user._id);
 
     return { success: true };
   },

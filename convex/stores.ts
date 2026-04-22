@@ -34,6 +34,7 @@ export async function findStaffWithPin(
 export const list = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     return await ctx.db.query("stores").order("asc").take(100);
   },
 });
@@ -58,6 +59,7 @@ export const get = query({
 export const getStats = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     const stores = await ctx.db.query("stores").take(100);
     const active = stores.filter((s) => s.status === "active").length;
     const trial = stores.filter((s) => s.status === "trial").length;

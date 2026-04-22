@@ -30,6 +30,7 @@ export const getByPhone = query({
 export const listAll = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     return await ctx.db.query("tailors").order("asc").take(100);
   },
 });
@@ -277,6 +278,7 @@ export const submitKycDocument = mutation({
 export const listKycQueue = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     const all = await ctx.db.query("tailors").take(500);
     return all.filter((t) => {
       const hasDocs = !!(t.aadhaarFileId || t.panFileId || t.addressProofFileId);
