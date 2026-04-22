@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { ensureCustomerByPhone } from "./customers";
 import { findStaffWithPin } from "./stores";
-import { generateSalt, hashWithSalt } from "./authCrypto";
+import { generateSalt, hashWithSalt, constantTimeEquals } from "./authCrypto";
 
 // Rate-limit staff PIN login per storeId. Matches the trialRoom
 // pattern — per-storeId rolling window; prevents unlimited 4-digit
@@ -59,14 +59,44 @@ async function findStoreByOwnerPhone(ctx: QueryCtx, phone: string) {
     .first();
 }
 
-// Simple hash for passwords (not bcrypt, but adequate for demo + Convex runtime)
-// In production, use an action with Node.js bcrypt
-async function hashPassword(password: string): Promise<string> {
+// Legacy password hash — SHA-256 over (password + static salt). Only used
+// by verifyPassword to accept credentials saved before the PBKDF2 migration.
+// Any row hashed this way is rehashed with a per-user salt on first
+// successful login. Never call this from write paths.
+async function hashLegacyPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password + "wearify-salt-2024");
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Verify a plaintext password against a stored row. Returns `true` if the
+// password matches either the modern PBKDF2 hash (requires passwordSalt)
+// or the legacy SHA-256+static-salt format. `legacy` is set when the
+// caller should re-save with the modern format.
+async function verifyPassword(
+  password: string,
+  stored: { passwordHash?: string; passwordSalt?: string },
+): Promise<{ ok: boolean; legacy: boolean }> {
+  if (!stored.passwordHash) return { ok: false, legacy: false };
+  if (stored.passwordSalt) {
+    const candidate = await hashWithSalt(password, stored.passwordSalt);
+    return { ok: constantTimeEquals(candidate, stored.passwordHash), legacy: false };
+  }
+  const legacy = await hashLegacyPassword(password);
+  return { ok: constantTimeEquals(legacy, stored.passwordHash), legacy: true };
+}
+
+// Build a fresh { passwordHash, passwordSalt } pair for a new password.
+// Always use this when writing to the DB — never store bare legacy hashes.
+async function makePasswordRecord(password: string): Promise<{
+  passwordHash: string;
+  passwordSalt: string;
+}> {
+  const passwordSalt = generateSalt();
+  const passwordHash = await hashWithSalt(password, passwordSalt);
+  return { passwordHash, passwordSalt };
 }
 
 // Cryptographically-random session token. 48 chars over a 55-char alphabet
@@ -128,13 +158,13 @@ export const register = mutation({
       if (existing) {
         return { success: false, error: "Phone number already registered" };
       }
-      const hash = await hashPassword(args.password);
+      const record = await makePasswordRecord(args.password);
       const ensured = await ensureCustomerByPhone(ctx, phone, { name: args.name });
-      // Attach password hash to the freshly created customer row
-      await ctx.db.patch(ensured.customerId, { passwordHash: hash });
+      // Attach password hash + salt to the freshly created customer row
+      await ctx.db.patch(ensured.customerId, record);
       const userId = await ctx.db.insert("users", {
         phone,
-        passwordHash: hash,
+        ...record,
         name: args.name,
         role: "customer",
       });
@@ -150,13 +180,13 @@ export const register = mutation({
       if (existing) {
         return { success: false, error: "Phone number already registered" };
       }
-      const hash = await hashPassword(args.password);
+      const record = await makePasswordRecord(args.password);
       const tailorId = `TL-${generateSixDigits()}`;
       const id = await ctx.db.insert("tailors", {
         tailorId,
         phone,
         name: args.name,
-        passwordHash: hash,
+        ...record,
         city: "",
         status: "pending",
         rating: 0,
@@ -178,7 +208,7 @@ export const register = mutation({
       });
       const userId = await ctx.db.insert("users", {
         phone,
-        passwordHash: hash,
+        ...record,
         name: args.name,
         role: "tailor",
         tailorId,
@@ -192,7 +222,27 @@ export const register = mutation({
   },
 });
 
-// Login with phone + password
+// Rehash a legacy SHA-256 password row with the modern PBKDF2 format.
+// Called transparently from login on a successful legacy match — the
+// caller never notices, and the DB stops carrying the weak hash.
+async function rehashUserAndEntity(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  entityTable: "customers" | "tailors" | null,
+  entityId: Id<"customers"> | Id<"tailors"> | null,
+  password: string,
+) {
+  const record = await makePasswordRecord(password);
+  await ctx.db.patch(userId, record);
+  if (entityTable && entityId) {
+    // entityId type is verified via entityTable — safe to cast.
+    await ctx.db.patch(entityId as never, record);
+  }
+}
+
+// Login with phone + password. Dual-read: accepts both modern PBKDF2
+// hashes (passwordSalt present) and legacy SHA-256 hashes; on legacy
+// match, rehashes the row in-place so we migrate without forcing resets.
 export const loginWithPassword = mutation({
   args: {
     phone: v.string(),
@@ -201,7 +251,6 @@ export const loginWithPassword = mutation({
   },
   handler: async (ctx, args) => {
     const phone = normalizePhone(args.phone);
-    const hash = await hashPassword(args.password);
 
     if (args.role === "store_owner") {
       const store = await findStoreByOwnerPhone(ctx, phone);
@@ -212,8 +261,11 @@ export const loginWithPassword = mutation({
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "store_owner"))
         .first();
-      if (!user || user.passwordHash !== hash) {
-        return { success: false, error: "Invalid password" };
+      if (!user) return { success: false, error: "Invalid password" };
+      const check = await verifyPassword(args.password, user);
+      if (!check.ok) return { success: false, error: "Invalid password" };
+      if (check.legacy) {
+        await rehashUserAndEntity(ctx, user._id, null, null, args.password);
       }
       const token = await createSession(ctx, user._id, "store_owner");
       return { success: true, token, storeId: store.storeId, storeName: store.name, role: "store_owner" };
@@ -224,16 +276,18 @@ export const loginWithPassword = mutation({
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "customer"))
         .first();
-      if (!user || user.passwordHash !== hash) {
-        return { success: false, error: "Invalid phone or password" };
-      }
-      // Look up the customer record for the customerId
+      if (!user) return { success: false, error: "Invalid phone or password" };
+      const check = await verifyPassword(args.password, user);
+      if (!check.ok) return { success: false, error: "Invalid phone or password" };
       const customer = await ctx.db
         .query("customers")
         .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (!customer) {
         return { success: false, error: "Customer record not found" };
+      }
+      if (check.legacy) {
+        await rehashUserAndEntity(ctx, user._id, "customers", customer._id, args.password);
       }
       const token = await createSession(ctx, user._id, "customer");
       return { success: true, token, customerId: customer._id, role: "customer" };
@@ -244,16 +298,18 @@ export const loginWithPassword = mutation({
         .query("users")
         .withIndex("by_phone_and_role", (q) => q.eq("phone", phone).eq("role", "tailor"))
         .first();
-      if (!user || user.passwordHash !== hash) {
-        return { success: false, error: "Invalid phone or password" };
-      }
-      // Look up the tailor record for the tailorId
+      if (!user) return { success: false, error: "Invalid phone or password" };
+      const check = await verifyPassword(args.password, user);
+      if (!check.ok) return { success: false, error: "Invalid phone or password" };
       const tailor = await ctx.db
         .query("tailors")
         .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (!tailor) {
         return { success: false, error: "Tailor record not found" };
+      }
+      if (check.legacy) {
+        await rehashUserAndEntity(ctx, user._id, "tailors", tailor._id, args.password);
       }
       const token = await createSession(ctx, user._id, "tailor");
       return { success: true, token, tailorId: tailor.tailorId, role: "tailor" };
@@ -365,7 +421,8 @@ export const loginWithOtp = mutation({
   },
 });
 
-// Set password (after OTP login, user can set a password)
+// Set password (after OTP login, user can set a password). Always writes
+// the modern PBKDF2 format with a fresh salt.
 export const setPassword = mutation({
   args: {
     phone: v.string(),
@@ -374,7 +431,7 @@ export const setPassword = mutation({
   },
   handler: async (ctx, args) => {
     const phone = normalizePhone(args.phone);
-    const hash = await hashPassword(args.password);
+    const record = await makePasswordRecord(args.password);
 
     const user = await ctx.db
       .query("users")
@@ -383,7 +440,7 @@ export const setPassword = mutation({
     if (!user) {
       return { success: false, error: "User not found" };
     }
-    await ctx.db.patch(user._id, { passwordHash: hash });
+    await ctx.db.patch(user._id, record);
 
     // Also update password in the entity table
     if (args.role === "customer") {
@@ -392,7 +449,7 @@ export const setPassword = mutation({
         .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (customer) {
-        await ctx.db.patch(customer._id, { passwordHash: hash });
+        await ctx.db.patch(customer._id, record);
       }
     } else if (args.role === "tailor") {
       const tailor = await ctx.db
@@ -400,7 +457,7 @@ export const setPassword = mutation({
         .withIndex("by_phone", (q) => q.eq("phone", phone))
         .first();
       if (tailor) {
-        await ctx.db.patch(tailor._id, { passwordHash: hash });
+        await ctx.db.patch(tailor._id, record);
       }
     }
 

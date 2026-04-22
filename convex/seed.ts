@@ -25,13 +25,17 @@ export const seedAll = internalMutation({
     }
 
     // ===================== USER ACCOUNTS (for store owners) =====================
-    // Real SHA-256 hash of "Store@123" + "wearify-salt-2024"
-    const storeOwnerHash = "49138034eb9cb992dfaedb8dcb377e77801ffd1109736a20be469d96cc3a04f1";
+    // Each row gets its own PBKDF2 salt/hash — no static-salt hashes at rest.
+    const makePwd = async (password: string) => {
+      const passwordSalt = generateSalt();
+      const passwordHash = await hashWithSalt(password, passwordSalt);
+      return { passwordHash, passwordSalt };
+    };
     for (const store of stores) {
       if (store.ownerPhone) {
         await ctx.db.insert("users", {
           phone: store.ownerPhone,
-          passwordHash: storeOwnerHash,
+          ...(await makePwd("Store@123")),
           name: store.ownerName || "Store Owner",
           role: "store_owner",
           storeId: store.storeId,
@@ -91,16 +95,15 @@ export const seedAll = internalMutation({
       { phone: "+919900000005", name: "Prerna Joshi", initials: "PJ", totalVisits: 15, totalLooks: 48, totalStores: 2, storeCredit: 2000, loyaltyPoints: 16000, loyaltyTier: "VIP", preferredOccasions: ["Wedding", "Party", "Gift"], preferredFabrics: ["Silk", "Linen", "Organza"], preferredColors: ["Purple", "Gold", "Rose"], budgetRange: "₹50K-1L", consentHistory: true, consentMessages: true, consentAiPersonal: true, consentPhotos: true, consentGrantedDate: "2024-12-01", language: "hi" },
     ];
 
-    // Real SHA-256 hash of "Customer@123" + "wearify-salt-2024"
-    const customerHash = "2f810dbeff5c43831cda2292f4af49f77b044f0ad05f90ef12f5ee9598e7b312";
     const customerIds: string[] = [];
     for (const c of customers) {
-      const id = await ctx.db.insert("customers", { ...c, passwordHash: customerHash });
+      const pwd = await makePwd("Customer@123");
+      const id = await ctx.db.insert("customers", { ...c, ...pwd });
       customerIds.push(id);
       // Create user record
       await ctx.db.insert("users", {
         phone: c.phone,
-        passwordHash: customerHash,
+        ...pwd,
         name: c.name,
         role: "customer",
       });
@@ -143,13 +146,12 @@ export const seedAll = internalMutation({
       { tailorId: "TL-004", name: "Geeta Bai", phone: "+919800100004", city: "Chennai", area: "T Nagar", specialties: ["silk_blouse", "petticoat", "fall_pico"], experience: "12 years", bio: "Traditional South Indian blouse specialist", badge: "verified", status: "verified", rating: 4.6, reviewCount: 95, revenue: 195000, referrals: 32, leadsThisMonth: 6, earnedThisMonth: 22000, available: true, subscription: "free", serviceRadius: 8, services: [{ id: "s1", name: "Silk Blouse", priceMin: 600, priceMax: 2000, days: 4, active: true }, { id: "s2", name: "Petticoat", priceMin: 400, priceMax: 800, days: 3, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: false }, hoursOpen: "09:00", hoursClose: "18:00", joinDate: "2024-08-10", aadhaarVerified: true, panVerified: true, addressVerified: true },
     ];
 
-    // Real SHA-256 hash of "Tailor@123" + "wearify-salt-2024"
-    const tailorHash = "def85e4b3f98b1fbe9a4eefc94ff9dffcdbf42216eef358262538d6522689812";
     for (const t of tailors) {
-      await ctx.db.insert("tailors", { ...t, passwordHash: tailorHash });
+      const pwd = await makePwd("Tailor@123");
+      await ctx.db.insert("tailors", { ...t, ...pwd });
       await ctx.db.insert("users", {
         phone: t.phone,
-        passwordHash: tailorHash,
+        ...pwd,
         name: t.name,
         role: "tailor",
         tailorId: t.tailorId,

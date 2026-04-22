@@ -7,7 +7,12 @@ export default defineSchema({
   // ============================
   users: defineTable({
     phone: v.string(),
-    passwordHash: v.optional(v.string()), // bcrypt hash, optional if OTP-only
+    // PBKDF2-SHA256 hex (authCrypto.hashWithSalt). passwordSalt is the
+    // per-user hex salt. Rows without passwordSalt but with passwordHash
+    // are legacy SHA-256+static-salt and are rehashed on next successful
+    // login.
+    passwordHash: v.optional(v.string()),
+    passwordSalt: v.optional(v.string()),
     name: v.string(),
     role: v.string(), // "store_owner" | "customer" | "tailor" | "staff"
     storeId: v.optional(v.string()), // for store_owner/staff
@@ -257,8 +262,10 @@ export default defineSchema({
     bodyScanFileId: v.optional(v.id("_storage")),
     // Language
     language: v.optional(v.string()),
-    // Password (optional for login)
+    // Password (optional for login). See users.passwordHash comment —
+    // passwordSalt present = new PBKDF2 format; absent = legacy.
     passwordHash: v.optional(v.string()),
+    passwordSalt: v.optional(v.string()),
   })
     .index("by_phone", ["phone"]),
 
@@ -531,8 +538,9 @@ export default defineSchema({
     kycRejectionReason: v.optional(v.string()),
     // Language
     language: v.optional(v.string()),
-    // Password
+    // Password — passwordSalt present = new PBKDF2 format; absent = legacy.
     passwordHash: v.optional(v.string()),
+    passwordSalt: v.optional(v.string()),
     // DPDP
     consentProfile: v.optional(v.boolean()),
     consentLocation: v.optional(v.boolean()),
