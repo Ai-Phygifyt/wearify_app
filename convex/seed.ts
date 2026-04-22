@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { generateSalt, hashWithSalt } from "./authCrypto";
 
 export const seedAll = internalMutation({
   args: {},
@@ -51,7 +52,10 @@ export const seedAll = internalMutation({
     ];
 
     for (const s of staffList) {
-      await ctx.db.insert("staff", s);
+      const { pin, ...rest } = s;
+      const pinSalt = generateSalt();
+      const pinHash = await hashWithSalt(pin, pinSalt);
+      await ctx.db.insert("staff", { ...rest, pinHash, pinSalt });
     }
 
     // ===================== SAREES (catalog for ST-001 MAUVE Sarees) =====================

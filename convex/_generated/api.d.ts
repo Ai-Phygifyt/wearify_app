@@ -9,6 +9,7 @@
  */
 
 import type * as agents from "../agents.js";
+import type * as authCrypto from "../authCrypto.js";
 import type * as billing from "../billing.js";
 import type * as campaignOps from "../campaignOps.js";
 import type * as customers from "../customers.js";
@@ -41,6 +42,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agents: typeof agents;
+  authCrypto: typeof authCrypto;
   billing: typeof billing;
   campaignOps: typeof campaignOps;
   customers: typeof customers;

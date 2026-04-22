@@ -2,6 +2,14 @@ import { query, mutation, internalMutation, MutationCtx, QueryCtx } from "./_gen
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { ensureCustomerByPhone } from "./customers";
+import { findStaffWithPin } from "./stores";
+import { generateSalt, hashWithSalt } from "./authCrypto";
+
+// Rate-limit staff PIN login per storeId. Matches the trialRoom
+// pattern — per-storeId rolling window; prevents unlimited 4-digit
+// enumeration from the API.
+const STAFF_PIN_WINDOW_MS = 10 * 60 * 1000;
+const STAFF_PIN_MAX_FAILS = 30;
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -427,25 +435,75 @@ export const validateSession = query({
   },
 });
 
-// Staff PIN login (within a store context)
+// Staff PIN login (within a store context). Lookup is a staff-by-store
+// scan + hash compare because PINs are stored salted — the old plaintext
+// equality index was removed. Legacy plaintext rows are accepted and
+// lazy-migrated to hash on first successful login so existing seeds keep
+// working without a blocking migration.
 export const staffPinLogin = mutation({
   args: {
     storeId: v.string(),
     pin: v.string(),
   },
   handler: async (ctx, args) => {
-    const staffMember = await ctx.db
-      .query("staff")
-      .withIndex("by_storeId_and_pin", (q) =>
-        q.eq("storeId", args.storeId).eq("pin", args.pin)
-      )
-      .first();
+    const now = Date.now();
+    if (!/^\d{4}$/.test(args.pin)) {
+      return { success: false, error: "Invalid PIN" };
+    }
+
+    // Rate-limit gate per store (DoS-safer than per-staff lockout since we
+    // don't know which staff the caller meant until after a match).
+    const attempts = await ctx.db
+      .query("staffPinAttempts")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .unique();
+    const inWindow =
+      attempts && now - attempts.windowStart < STAFF_PIN_WINDOW_MS;
+    if (inWindow && attempts.count >= STAFF_PIN_MAX_FAILS) {
+      return {
+        success: false,
+        error: "Too many attempts. Please try again in a few minutes.",
+      };
+    }
+
+    const matches = await findStaffWithPin(ctx, args.storeId, args.pin);
+    const staffMember = matches.find((m) => m.status !== "inactive") ?? matches[0];
+
+    const recordFail = async () => {
+      if (!attempts) {
+        await ctx.db.insert("staffPinAttempts", {
+          storeId: args.storeId,
+          windowStart: now,
+          count: 1,
+        });
+      } else if (now - attempts.windowStart >= STAFF_PIN_WINDOW_MS) {
+        await ctx.db.patch(attempts._id, { windowStart: now, count: 1 });
+      } else {
+        await ctx.db.patch(attempts._id, { count: attempts.count + 1 });
+      }
+    };
+
     if (!staffMember) {
+      await recordFail();
       return { success: false, error: "Invalid PIN" };
     }
     if (staffMember.status === "inactive") {
+      await recordFail();
       return { success: false, error: "Staff account is inactive. Contact your store owner." };
     }
+
+    // Lazy-migrate legacy plaintext PIN: hash + salt and clear the plaintext.
+    if (!staffMember.pinHash || !staffMember.pinSalt) {
+      const pinSalt = generateSalt();
+      const pinHash = await hashWithSalt(args.pin, pinSalt);
+      await ctx.db.patch(staffMember._id, { pinHash, pinSalt, pin: undefined });
+    }
+
+    // Reset the store's failure window on successful login.
+    if (attempts && attempts.count > 0) {
+      await ctx.db.patch(attempts._id, { windowStart: now, count: 0 });
+    }
+
     return {
       success: true,
       staffId: staffMember._id,

@@ -115,7 +115,12 @@ export default defineSchema({
   staff: defineTable({
     name: v.string(),
     phone: v.string(),
-    pin: v.string(), // 4 digit PIN for tablet/mirror login
+    // Deprecated plaintext PIN. Still optional to keep any un-migrated rows
+    // readable; staffPinLogin lazy-migrates these to pinHash/pinSalt on
+    // first successful login. No new writes should ever include this.
+    pin: v.optional(v.string()),
+    pinHash: v.optional(v.string()), // PBKDF2-SHA256 hex
+    pinSalt: v.optional(v.string()), // hex salt
     role: v.string(), // "R03" owner | "R04" manager | "R05" salesperson
     storeRef: v.optional(v.id("stores")),
     storeId: v.string(),
@@ -128,8 +133,18 @@ export default defineSchema({
   })
     .index("by_storeId", ["storeId"])
     .index("by_role", ["role"])
-    .index("by_phone", ["phone"])
-    .index("by_storeId_and_pin", ["storeId", "pin"]),
+    .index("by_phone", ["phone"]),
+  // by_storeId_and_pin index removed — PINs are hashed per-row so a raw
+  // equality lookup no longer makes sense. Uniqueness/login both scan
+  // staff-by-store (small N, ~5-20 rows) and compare hashes in memory.
+
+  // Rolling-window failed-attempt counter for staffPinLogin. Same shape
+  // as trialCodeAttempts; one row per storeId.
+  staffPinAttempts: defineTable({
+    storeId: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_storeId", ["storeId"]),
 
   // ============================
   // SAREES (catalog items, per store)
@@ -355,6 +370,15 @@ export default defineSchema({
     .index("by_storeId", ["storeId"])
     .index("by_sessionId", ["sessionId"])
     .index("by_status", ["status"]),
+
+  // Rolling-window failed-attempt counter for trialRoom.validateCode.
+  // One row per storeId; used to rate-limit brute-force enumeration of
+  // 6-digit codes. Window resets on the first attempt after it expires.
+  trialCodeAttempts: defineTable({
+    storeId: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_storeId", ["storeId"]),
 
   // ============================
   // WISHLIST (customer saved items)

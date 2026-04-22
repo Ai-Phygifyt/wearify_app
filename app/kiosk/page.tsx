@@ -1327,20 +1327,29 @@ function CodeEntryScreen({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const validation = useQuery(
-    api.trialRoom.validateCode,
-    code.length === 6 ? { code, storeId } : "skip"
-  );
+  // validateCode is a mutation now (rate-limited — can't be a query).
+  // We call it on Continue press, not reactively on typing.
+  const validateCodeMut = useMutation(api.trialRoom.validateCode);
 
   const handleKey = (k: string) => { setError(""); if (code.length < 6) setCode((v) => v + k); };
   const handleDel = () => { setError(""); setCode((v) => v.slice(0, -1)); };
-  const handleSubmit = () => {
-    if (code.length !== 6) return;
+  const handleSubmit = async () => {
+    if (code.length !== 6 || loading) return;
     setLoading(true);
-    if (!validation) { setError("Validating..."); setLoading(false); return; }
-    if (!validation.valid) { setError(validation.error || "Invalid code"); setCode(""); setLoading(false); return; }
-    onValidCode(validation);
-    setLoading(false);
+    try {
+      const validation = await validateCodeMut({ code, storeId });
+      if (!validation.valid) {
+        setError(validation.error || "Invalid code");
+        setCode("");
+        return;
+      }
+      onValidCode(validation);
+    } catch {
+      setError("Could not verify code. Try again.");
+      setCode("");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const activeIdx = code.length;

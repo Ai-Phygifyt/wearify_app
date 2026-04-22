@@ -1,7 +1,40 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 
 const CODE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
+
+// Rate-limit validateCode to cap brute-force enumeration of the 6-digit
+// code space. 20 failed attempts per store per 5-minute window — normal
+// typo-and-retry stays unaffected; an attacker hitting the API directly
+// burns their budget in ~1s and then has to wait.
+const ATTEMPT_WINDOW_MS = 5 * 60 * 1000;
+const MAX_FAILED_ATTEMPTS = 20;
+
+// Atomic failure-record helper. Either inserts the first row for a store,
+// extends the existing window's count, or resets the window if it lapsed.
+async function recordFailedAttempt(
+  ctx: MutationCtx,
+  storeId: string,
+  now: number,
+) {
+  const existing = await ctx.db
+    .query("trialCodeAttempts")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .unique();
+  if (!existing) {
+    await ctx.db.insert("trialCodeAttempts", {
+      storeId,
+      windowStart: now,
+      count: 1,
+    });
+    return;
+  }
+  if (now - existing.windowStart >= ATTEMPT_WINDOW_MS) {
+    await ctx.db.patch(existing._id, { windowStart: now, count: 1 });
+    return;
+  }
+  await ctx.db.patch(existing._id, { count: existing.count + 1 });
+}
 
 // 6-digit trial-room code sourced from Web Crypto, not Math.random().
 // Code space is still 1M — real brute-force protection needs rate limiting
@@ -83,13 +116,31 @@ export const generateCode = mutation({
   },
 });
 
-// Validate a code entered on the kiosk
-export const validateCode = query({
+// Validate a code entered on the kiosk. Mutation (not query) so we can
+// record failed-attempt counters for rate limiting — queries can't write.
+// UX-wise the kiosk calls this once when the user presses Continue.
+export const validateCode = mutation({
   args: {
     code: v.string(),
     storeId: v.string(),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Rate-limit gate — reject before any lookup when a store's window is full.
+    const attempts = await ctx.db
+      .query("trialCodeAttempts")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .unique();
+    const inWindow =
+      attempts && now - attempts.windowStart < ATTEMPT_WINDOW_MS;
+    if (inWindow && attempts.count >= MAX_FAILED_ATTEMPTS) {
+      return {
+        valid: false,
+        error: "Too many attempts. Please try again in a few minutes.",
+      } as const;
+    }
+
     const entries = await ctx.db
       .query("trialRoom")
       .withIndex("by_code_and_storeId", (q) =>
@@ -100,10 +151,12 @@ export const validateCode = query({
     const entry = entries.find((tr) => tr.status === "active");
 
     if (!entry) {
+      await recordFailedAttempt(ctx, args.storeId, now);
       return { valid: false, error: "Invalid code" } as const;
     }
 
-    if (entry.expiresAt < Date.now()) {
+    if (entry.expiresAt < now) {
+      await recordFailedAttempt(ctx, args.storeId, now);
       return { valid: false, error: "Code expired" } as const;
     }
 
