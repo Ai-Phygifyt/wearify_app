@@ -42,7 +42,22 @@ export default function MyLooksPage() {
     api.customers.listStoreLinksEnriched,
     customerId ? { customerId } : "skip"
   );
-  const toggleFav = useMutation(api.sessionOps.toggleFav);
+  const wishlist = useQuery(
+    api.customers.getWishlist,
+    customerId ? { customerId } : "skip"
+  );
+  const addToWishlist = useMutation(api.customers.addToWishlist);
+  const removeFromWishlist = useMutation(api.customers.removeFromWishlist);
+
+  // Map of sareeId → wishlistRowId. Heart button uses this both to show
+  // filled/outlined state and to pick add vs remove on tap. Keyed by
+  // sareeId so toggling a look flips every other look of the same saree
+  // too (same-saree try-ons share a wishlist entry).
+  const wishlistBySareeId = React.useMemo(() => {
+    const map = new Map<string, Id<"wishlist">>();
+    for (const w of wishlist ?? []) map.set(String(w.sareeId), w._id);
+    return map;
+  }, [wishlist]);
 
   if (!customerId) {
     return (
@@ -178,20 +193,40 @@ export default function MyLooksPage() {
                     {displayImageId && <LookImage fileId={displayImageId} alt={look.sareeName} />}
                     {!displayImageId && <SareeSVG />}
 
-                    {/* heart */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleFav({ lookId: look._id }); }}
-                      className="cx-iconbtn cx-iconbtn-sm cx-iconbtn-glass"
-                      style={{ position: "absolute", top: 8, right: 8 }}
-                      aria-label="Toggle favourite"
-                    >
-                      <Heart
-                        size={15}
-                        color={look.isFav ? "var(--cx-gold-l)" : "#fff"}
-                        fill={look.isFav ? "var(--cx-gold-l)" : "transparent"}
-                        strokeWidth={2}
-                      />
-                    </button>
+                    {/* heart → wishlist toggle (appears in /c/wardrobe Wishlist tab) */}
+                    {(() => {
+                      const wishedId = wishlistBySareeId.get(String(look.sareeId));
+                      const wished = !!wishedId;
+                      return (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!customerId) return;
+                            if (wished && wishedId) {
+                              removeFromWishlist({ wishlistId: wishedId });
+                            } else {
+                              addToWishlist({
+                                customerId,
+                                sareeId: look.sareeId,
+                                storeId: look.storeId,
+                                sareeName: look.sareeName,
+                                price: look.price ?? undefined,
+                              });
+                            }
+                          }}
+                          className="cx-iconbtn cx-iconbtn-sm cx-iconbtn-glass"
+                          style={{ position: "absolute", top: 8, right: 8 }}
+                          aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
+                        >
+                          <Heart
+                            size={15}
+                            color={wished ? "var(--cx-gold-l)" : "#fff"}
+                            fill={wished ? "var(--cx-gold-l)" : "transparent"}
+                            strokeWidth={2}
+                          />
+                        </button>
+                      );
+                    })()}
 
                     {/* store city */}
                     {storeInfo?.storeCity && (

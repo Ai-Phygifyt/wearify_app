@@ -149,13 +149,16 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   }, []);
 
   useEffect(() => {
+    // Always sync React's token state to what's actually in localStorage.
+    // The old code only called setTokenState on the "has token" branch,
+    // so once a token was set, React kept it forever even after clearToken
+    // wiped localStorage — leading to useQuery subscribing with an invalid
+    // token and session handler redirecting on /c/login→/c navigation.
     const t = getToken();
-    if (!t) {
-      if (!PUBLIC_ROUTES.has(pathname)) router.replace("/c/login");
-      setReady(true);
-      return;
-    }
     setTokenState(t);
+    if (!t && !PUBLIC_ROUTES.has(pathname)) {
+      router.replace("/c/login");
+    }
     setReady(true);
   }, [router, pathname]);
 
@@ -172,6 +175,11 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   useEffect(() => {
     if (!ready) return;
     if (PUBLIC_ROUTES.has(pathname)) return;
+    // Stale-state bailout: if React's token state doesn't match localStorage,
+    // the token-reader effect is about to re-sync and re-fire us. Don't
+    // redirect on a session === null read from the previous (stale) token —
+    // that's the "goes back to phone login on first try" bug.
+    if (token !== getToken()) return;
     if (session === undefined) return;
     if (session === null) {
       clearToken();
@@ -190,7 +198,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       phone: session.phone,
       customer: customerData as Record<string, unknown> | null,
     });
-  }, [session, ready, router, pathname, customerData]);
+  }, [session, ready, router, pathname, customerData, token]);
 
   if (splashing) return <Splash />;
 
