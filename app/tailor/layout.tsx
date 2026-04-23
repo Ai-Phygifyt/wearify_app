@@ -136,6 +136,7 @@ export default function TailorLayout({ children }: { children: React.ReactNode }
     }
     const savedToken = localStorage.getItem("wearify_auth_token");
     if (!savedToken) {
+      setToken(null);
       router.replace("/tailor/login");
       setAuthState("unauthenticated");
       return;
@@ -147,7 +148,7 @@ export default function TailorLayout({ children }: { children: React.ReactNode }
     } catch {
       // ignore
     }
-  }, [isLoginPage, router]);
+  }, [isLoginPage, pathname, router]);
 
   const session = useQuery(
     api.phoneAuth.validateSession,
@@ -168,6 +169,11 @@ export default function TailorLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (isLoginPage || !token) return;
+    // Stale-state bailout: if React's token state doesn't match localStorage,
+    // the token-reader effect is about to re-sync and re-fire us. Don't
+    // redirect on a session === null read from the previous (stale) token —
+    // that's the "takes 2 login attempts" bug.
+    if (token !== localStorage.getItem("wearify_auth_token")) return;
     if (session === undefined) return;
     if (session === null) {
       redirectToLogin();
