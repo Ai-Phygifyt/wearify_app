@@ -663,6 +663,38 @@ export const cancelOrder = mutation({
   },
 });
 
+// Recompute tailor rating + reviewCount from the canonical tailorOrders
+// rows. Always correct — fixes rounding drift from the old incremental
+// update and stays right if a rating is ever edited, deleted, or the
+// order is cancelled post-rating. Call from any path that writes/clears
+// tailorOrders.rating.
+async function recomputeTailorRating(
+  ctx: { db: import("./_generated/server").MutationCtx["db"] },
+  tailorId: string
+) {
+  const tailor = await ctx.db
+    .query("tailors")
+    .withIndex("by_tailorId", (q) => q.eq("tailorId", tailorId))
+    .unique();
+  if (!tailor) return;
+
+  const orders = await ctx.db
+    .query("tailorOrders")
+    .withIndex("by_tailorId", (q) => q.eq("tailorId", tailorId))
+    .collect();
+
+  let sum = 0;
+  let count = 0;
+  for (const o of orders) {
+    if (typeof o.rating === "number" && o.rating > 0) {
+      sum += o.rating;
+      count += 1;
+    }
+  }
+  const avg = count === 0 ? 0 : Math.round((sum / count) * 10) / 10;
+  await ctx.db.patch(tailor._id, { rating: avg, reviewCount: count });
+}
+
 export const rateOrder = mutation({
   args: {
     id: v.id("tailorOrders"),
@@ -670,6 +702,9 @@ export const rateOrder = mutation({
     ratingComment: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.rating < 1 || args.rating > 5) {
+      throw new Error("Rating must be between 1 and 5");
+    }
     const order = await ctx.db.get(args.id);
     if (!order) throw new Error("Order not found");
 
@@ -678,26 +713,78 @@ export const rateOrder = mutation({
       ratingComment: args.ratingComment,
     });
 
-    // Update tailor's average rating
-    const tailor = await ctx.db
-      .query("tailors")
-      .withIndex("by_tailorId", (q) => q.eq("tailorId", order.tailorId))
-      .unique();
-    if (tailor) {
-      const currentCount = tailor.reviewCount ?? 0;
-      const currentRating = tailor.rating;
-      const newCount = currentCount + 1;
-      const newRating =
-        Math.round(
-          ((currentRating * currentCount + args.rating) / newCount) * 10
-        ) / 10;
-      await ctx.db.patch(tailor._id, {
-        rating: newRating,
-        reviewCount: newCount,
-      });
-    }
+    await recomputeTailorRating(ctx, order.tailorId);
   },
 });
+
+// One-shot backfill: re-derive every tailor's rating + reviewCount from
+// the orders table. Run once after deploying the recompute helper to
+// correct any drift left over from the old incremental math.
+export const backfillTailorRatings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const tailors = await ctx.db.query("tailors").collect();
+    let touched = 0;
+    for (const t of tailors) {
+      const prevRating = t.rating;
+      const prevCount = t.reviewCount ?? 0;
+      await recomputeTailorRating(ctx, t.tailorId);
+      const after = await ctx.db.get(t._id);
+      if (!after) continue;
+      if (after.rating !== prevRating || (after.reviewCount ?? 0) !== prevCount) {
+        touched += 1;
+      }
+    }
+    return { scanned: tailors.length, touched };
+  },
+});
+
+// Public reviews list for a tailor — one row per delivered order that
+// has a rating. Masks customer identity to first name + initial. Used
+// by the tailor's own /tailor/profile/ratings page and (later) the
+// customer-facing kiosk "Connect tailor" card.
+export const listReviewsForTailor = query({
+  args: { tailorId: v.string() },
+  handler: async (ctx, args) => {
+    const orders = await ctx.db
+      .query("tailorOrders")
+      .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))
+      .order("desc")
+      .collect();
+
+    const rated = orders.filter(
+      (o) => typeof o.rating === "number" && o.rating > 0
+    );
+
+    // rating distribution (1..5 buckets) for the summary card
+    const distribution = [0, 0, 0, 0, 0];
+    for (const o of rated) {
+      const r = Math.max(1, Math.min(5, Math.round(o.rating!)));
+      distribution[r - 1] += 1;
+    }
+
+    return {
+      reviews: rated.map((o) => ({
+        _id: o._id,
+        rating: o.rating!,
+        comment: o.ratingComment ?? null,
+        service: o.service,
+        orderDate: o.orderDate,
+        customerMasked: maskCustomerName(o.customerName),
+      })),
+      distribution, // index 0 = 1★, index 4 = 5★
+    };
+  },
+});
+
+function maskCustomerName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "Customer";
+  const parts = trimmed.split(/\s+/);
+  const first = parts[0];
+  const lastInitial = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return lastInitial ? `${first} ${lastInitial.toUpperCase()}.` : first;
+}
 
 // ============================
 // COMMISSION

@@ -209,6 +209,32 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Customer feedback loop — wired to last visit, surfaced on store customer detail
+
+- **Problem:** `/c/me/feedback` wrote feedback rows with `storeId: "general"` — not a real store id, so `listFeedbackByStore` (which is exact-match on `storeId`) never picked them up. The page's own tile copy promised "Share feedback on your last store visit" but nothing in the flow identified the last visit. Feedback was write-only dead data.
+- **Fix — write path:** new `customers.getLastVisit({ customerId })` query returns the most-recent `visitHistory` row (or null) via the `by_customerId` index. `/c/me/feedback` subscribes to it and, on submit, passes the row's real `storeId` + `sessionId` to `submitFeedback`. Hero now shows "How was {storeName}?" with the visit date. If `getLastVisit` returns `null`, page renders a dedicated empty state ("No visits yet") instead of letting the user submit orphan rows.
+- **Fix — read path:** new `customers.listFeedbackByCustomerAndStore({ customerId, storeId })` query (indexed `by_customerId`, filtered to `storeId` in memory — per-customer feedback is small). Consumed by a new **Feedback tab** on [app/store/customers/[id]/page.tsx](app/store/customers/[id]/page.tsx) showing: avg rating + count badge in the header, then per-row stars + chips (as teal pills) + serif-italic comment + session attribution (`SESSION <id>` in mono). Empty state if no feedback yet.
+- **Not in this pass (flagged):** duplicate-rating guard (customer can currently rate the same visit twice — each click creates a new row), staff attribution on feedback (would need feedback rows to carry `staffId` from the session for coaching patterns), `/store/analytics` rating rollup, `/admin/network` cross-store ratings, and a post-checkout kiosk nudge to collect feedback while the visit is fresh. Foundation is now in place — any of these is a pure add-on.
+- **Caveat:** pre-existing `feedback` rows written with `storeId: "general"` are not migrated. They'll sit in the table unread. If volume is non-trivial, add an internal mutation that maps each legacy row to the customer's nearest-in-time `visitHistory` row by `customerId + date`. Currently deferred.
+
+### Tailor ratings — recompute-from-orders + real `/tailor/profile/ratings` page
+
+- **Driver:** the menu item "Ratings & reviews" on `/tailor/profile` just pointed at `/tailor/orders`. And the running-average on `tailors.rating` had two correctness holes: it drifted because of repeated `round × 10` on each add, and it was irreversible — if an order rating was ever edited/deleted/cancelled post-rating, the aggregate couldn't be corrected without scanning anyway. So: fix the write path and build the read surface it deserved.
+- **Canonical source is now `tailorOrders`.** New private helper `recomputeTailorRating(ctx, tailorId)` in [convex/tailorOps.ts](convex/tailorOps.ts) scans the tailor's orders, computes `sum / count` with a single round, and patches both `rating` and `reviewCount` on the tailor row. `rateOrder` calls it instead of doing incremental math. Any future `editRating` / `deleteRating` / cancel-clears-rating path just calls the same helper — no special cases.
+- **`backfillTailorRatings` internalMutation** one-shot to correct drift from orders written under the old math. Run with `npx convex run tailorOps:backfillTailorRatings '{}'` when ready. Not wired to anything — safe to call multiple times (idempotent by construction).
+- **New query `listReviewsForTailor({ tailorId })`** returns `{ reviews: [...], distribution: [1★count, 2★count, 3★count, 4★count, 5★count] }`. Reviews carry `{ rating, comment, service, orderDate, customerMasked }`. Masking is **first name + last-initial** via local `maskCustomerName` helper — product default; change there if marketing wants different PII rules.
+- **`rateOrder` now range-checks** `1 <= rating <= 5` (previously accepted anything). Throws early before patching.
+- **New route [app/tailor/profile/ratings/page.tsx](app/tailor/profile/ratings/page.tsx)** — uses `.t-*` design system. Summary card with big serif `avg/5`, star row, and a 5-row distribution bar (maroon→gold gradient, normalized to the tallest bucket so a single 5★ still fills visually). Review list renders customer handle + service + date + stars, with the comment pulled out in serif italic if present. Empty state if `total === 0`.
+- **Menu wiring:** `MENU_ITEMS` in [app/tailor/profile/page.tsx](app/tailor/profile/page.tsx) now points "Ratings & reviews" at `/tailor/profile/ratings`. Two other `href: "#"` entries (Language, Privacy, Help) are still placeholders and render greyed-out.
+- **Not built yet (flagged):** customer-facing review display on the kiosk "Connect tailor" card — the `listReviewsForTailor` query is already public so a future customer-side render is a pure UI task, no backend changes needed.
+
+### Tailor login "takes 2 attempts" — stale-state bailout (mirrors customer-layout fix)
+
+- **Symptom:** on `/tailor/login`, first successful OTP bounced the user straight back to login; second attempt worked. Same bug the customer layout already fixed.
+- **Root cause** in [app/tailor/layout.tsx](app/tailor/layout.tsx): after `router.replace("/tailor")`, the layout re-renders with React state still holding the previous token and Convex's cached `validateSession` result (`null`, because the prior token was invalid). Both `useEffect`s run after that render — and the session-watcher effect fires first with `session === null` on the stale token, calls `redirectToLogin()`, and wipes the freshly-written new token from localStorage before the token-reader effect has a chance to re-sync React state.
+- **Fix:** guard the session-watcher with `if (token !== localStorage.getItem("wearify_auth_token")) return;` so we never act on a `session === null` read against a token React is about to replace. Also added `pathname` to the token-reader's deps (so it re-runs on same-layout navigations even if `isLoginPage` happens not to flip), and `setToken(null)` on the "no saved token" branch to keep React state in sync with the cleared localStorage.
+- **Prior art:** [app/c/layout.tsx:151-163](app/c/layout.tsx#L151-L163) and [:175-201](app/c/layout.tsx#L175-L201). If any other module layout adopts the "token in React state + useQuery(validateSession, {token})" pattern, copy this guard — don't re-derive.
+
 ### Security audit — remaining CRITICALs (trial-room rate limit + PIN hashing + password PBKDF2 + admin server gate)
 
 - **Context:** follow-up to the "do now" batch below. Closes the four CRITICAL items left open in [REVIEW.md](REVIEW.md) (#1 password hashing, #4 trial-room enumeration, #5 admin client-side auth, #6 plaintext staff PINs). Tackled in ascending blast-radius so each landed as its own verifiable commit.
@@ -337,7 +363,7 @@ Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When
   - Commission ([/tailor/profile/commission](app/tailor/profile/commission/page.tsx)) — dark hero with total-earned mono number, 10% platform-fee card, ledger list.
   - Edit profile ([/tailor/profile/edit](app/tailor/profile/edit/page.tsx)) — standard form with specialty chip-toggles.
   - Bottom nav redesigned with uppercase labels, maroon active state, and a Leads entry added for direct referrals access (was only reachable via dashboard before).
-- **Not touched:** `/tailor/login` and `/tailor/orders/create` still use the global wearify theme. They work fine under `.t-app` (CSS vars overlay without breaking existing Tailwind classes) but weren't re-skinned in this pass. Follow-up candidates.
+- **Not touched:** `/tailor/login` still uses the global wearify theme. It works fine under `.t-app` (CSS vars overlay without breaking existing Tailwind classes) but wasn't re-skinned in this pass. Follow-up candidate. `/tailor/orders/create` was re-skinned in a follow-up pass (uses `t-screen` / `t-topbar` / `t-field` / `t-input` / phone prefix cell matching the login `PhoneField`).
 
 ### File-upload validation — size + MIME, client + server
 

@@ -13,7 +13,7 @@ const MENU_ITEMS = [
   { label: "Services & pricing", href: "/tailor/profile/services", icon: "tag" },
   { label: "Verification (KYC)", href: "/tailor/profile/verification", icon: "shield" },
   { label: "Commission & earnings", href: "/tailor/profile/commission", icon: "wallet" },
-  { label: "Ratings & reviews", href: "/tailor/orders", icon: "star" },
+  { label: "Ratings & reviews", href: "/tailor/profile/ratings", icon: "star" },
   { label: "Language", href: "#", icon: "globe" },
   { label: "Privacy & consent", href: "#", icon: "lock" },
   { label: "Help & support", href: "#", icon: "help" },

@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
-type Tab = "Overview" | "Visits" | "Consent";
+type Tab = "Overview" | "Visits" | "Feedback" | "Consent";
 
 const SEGMENT_BADGE: Record<string, string> = {
   VIP:       "w-badge w-badge-gold",
@@ -106,6 +106,10 @@ export default function CustomerDetailPage() {
   const customer     = useQuery(api.customers.getById, customerId ? { customerId } : "skip");
   const storeLink    = useQuery(api.customers.getStoreLink, storeId && customerId ? { customerId, storeId } : "skip");
   const visitHistory = useQuery(api.customers.listVisitHistory, customerId ? { customerId } : "skip");
+  const feedback     = useQuery(
+    api.customers.listFeedbackByCustomerAndStore,
+    storeId && customerId ? { customerId, storeId } : "skip"
+  );
   const updateConsent = useMutation(api.customers.updateConsent);
 
   /* ── Loading ── */
@@ -151,7 +155,14 @@ export default function CustomerDetailPage() {
     await updateConsent({ customerId, [field]: !current, consentGrantedDate: new Date().toISOString().split("T")[0] });
   }
 
-  const TABS: Tab[] = ["Overview", "Visits", "Consent"];
+  const TABS: Tab[] = ["Overview", "Visits", "Feedback", "Consent"];
+  const feedbackCount = feedback?.length ?? 0;
+  const feedbackAvg =
+    feedback && feedback.length > 0
+      ? Math.round(
+          (feedback.reduce((s, f) => s + f.rating, 0) / feedback.length) * 10
+        ) / 10
+      : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -400,6 +411,108 @@ export default function CustomerDetailPage() {
                   <div className="w-mono" style={{ fontSize: 11.5, color: "var(--w-ink-ghost)", flexShrink: 0, paddingTop: 2 }}>
                     {visit.date}
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Feedback ── */}
+      {activeTab === "Feedback" && (
+        <div className="w-card" style={{ padding: "18px 20px" }}>
+          <div className="w-card-header" style={{ marginBottom: 16 }}>
+            <span className="w-card-title">Feedback from this customer</span>
+            {feedbackCount > 0 && (
+              <span className="w-badge w-badge-gold">
+                {feedbackAvg.toFixed(1)} ★ · {feedbackCount}
+              </span>
+            )}
+          </div>
+
+          {feedback === undefined ? (
+            <div style={{ textAlign: "center", padding: "28px 0" }}>
+              <span className="w-load-dots"><span /><span /><span /></span>
+            </div>
+          ) : !feedback || feedback.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px 0" }}>
+              <svg
+                width="28" height="28" viewBox="0 0 24 24" fill="none"
+                stroke="var(--w-ink-ghost)" strokeWidth="1.5"
+                style={{ marginBottom: 10 }}
+              >
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              <p className="w-serif" style={{ fontSize: 15, fontStyle: "italic", color: "var(--w-ink-muted)" }}>
+                No feedback yet
+              </p>
+              <p style={{ fontSize: 12, color: "var(--w-ink-ghost)", marginTop: 4 }}>
+                Invite them to rate their visit from the Wearify app.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {feedback.map((f, idx) => (
+                <div
+                  key={f._id}
+                  style={{
+                    padding: "14px 0",
+                    borderBottom: idx < feedback.length - 1 ? "1px solid var(--w-cream-border)" : "none",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+                    <div style={{ display: "inline-flex", gap: 2 }}>
+                      {[1, 2, 3, 4, 5].map((n) => {
+                        const filled = n <= f.rating;
+                        return (
+                          <svg
+                            key={n}
+                            width="14" height="14" viewBox="0 0 24 24"
+                            fill={filled ? "var(--w-gold)" : "none"}
+                            stroke={filled ? "var(--w-gold)" : "var(--w-ink-ghost)"}
+                            strokeWidth="1.8" strokeLinejoin="round"
+                          >
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                          </svg>
+                        );
+                      })}
+                    </div>
+                    <span className="w-mono" style={{ fontSize: 11.5, color: "var(--w-ink-ghost)" }}>
+                      {f.date}
+                    </span>
+                  </div>
+
+                  {f.chips && f.chips.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, marginBottom: f.comment ? 8 : 0 }}>
+                      {f.chips.map((c) => (
+                        <span key={c} className="w-badge w-badge-teal">{c}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {f.comment && (
+                    <div
+                      className="w-serif"
+                      style={{
+                        fontSize: 13.5,
+                        fontStyle: "italic",
+                        color: "var(--w-ink-soft)",
+                        lineHeight: 1.55,
+                        marginTop: 4,
+                      }}
+                    >
+                      &ldquo;{f.comment}&rdquo;
+                    </div>
+                  )}
+
+                  {f.sessionId && (
+                    <div
+                      className="w-mono"
+                      style={{ fontSize: 10.5, color: "var(--w-ink-ghost)", marginTop: 6, letterSpacing: "0.04em" }}
+                    >
+                      SESSION {f.sessionId}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

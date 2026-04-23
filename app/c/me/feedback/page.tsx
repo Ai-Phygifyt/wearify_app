@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,14 @@ export default function FeedbackPage() {
 
   const submitFeedback = useMutation(api.customers.submitFeedback);
 
+  // Target the most-recent visit. Without this the submit has no real
+  // store to attribute to (was hardcoded "general", which no store
+  // surface reads — so the feedback effectively went nowhere).
+  const lastVisit = useQuery(
+    api.customers.getLastVisit,
+    customerId ? { customerId } : "skip"
+  );
+
   const [rating, setRating] = useState(0);
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
   const [comment, setComment] = useState("");
@@ -35,13 +43,14 @@ export default function FeedbackPage() {
   }
 
   async function handleSubmit() {
-    if (rating === 0 || !customerId) return;
+    if (rating === 0 || !customerId || !lastVisit) return;
     setSubmitting(true);
     try {
       await submitFeedback({
         customerId,
         customerPhone: phone,
-        storeId: "general",
+        storeId: lastVisit.storeId,
+        sessionId: lastVisit.sessionId,
         rating,
         chips: selectedChips.length > 0 ? selectedChips : undefined,
         comment: comment.trim() || undefined,
@@ -54,7 +63,7 @@ export default function FeedbackPage() {
     setSubmitting(false);
   }
 
-  if (!customerId) {
+  if (!customerId || lastVisit === undefined) {
     return (
       <div
         className="cx-pageIn"
@@ -70,6 +79,130 @@ export default function FeedbackPage() {
           <span />
           <span />
           <span />
+        </div>
+      </div>
+    );
+  }
+
+  /* ── No visits yet ──────────────────────────────────── */
+  if (lastVisit === null) {
+    return (
+      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1" }}>
+        <div
+          className="cx-noise cx-paisley"
+          style={{
+            background: "var(--cx-grad-hero)",
+            padding: "28px 18px 22px",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <button
+              onClick={() => router.back()}
+              className="cx-press"
+              style={{
+                background: "rgba(253,248,240,.12)",
+                border: "1px solid rgba(253,248,240,.18)",
+                borderRadius: 100,
+                width: 36,
+                height: 36,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                marginBottom: 14,
+              }}
+            >
+              <svg
+                width={18}
+                height={18}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#FBF7F1"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <h1
+              className="cx-serif"
+              style={{
+                fontSize: 26,
+                fontWeight: 700,
+                fontStyle: "italic",
+                color: "#FBF7F1",
+                margin: 0,
+              }}
+            >
+              Feedback
+            </h1>
+          </div>
+        </div>
+        <div className="cx-zari" />
+
+        <div
+          className="cx-scaleIn"
+          style={{ textAlign: "center", padding: "56px 24px" }}
+        >
+          <div
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: "50%",
+              background: "#F5E6E3",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 20px",
+            }}
+          >
+            <Star size={30} color="#B8860B" strokeWidth={1.6} />
+          </div>
+          <div
+            className="cx-serif"
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: "#1C1108",
+              fontStyle: "italic",
+            }}
+          >
+            No visits yet
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              color: "#9C8878",
+              marginTop: 8,
+              lineHeight: 1.5,
+              maxWidth: 280,
+              margin: "8px auto 0",
+            }}
+          >
+            Once you&apos;ve visited a Wearify store, you&apos;ll be able to rate your experience here.
+          </div>
+
+          <button
+            onClick={() => router.push("/c/me")}
+            className="cx-press"
+            style={{
+              marginTop: 28,
+              width: "100%",
+              padding: "14px",
+              borderRadius: 100,
+              background: "var(--cx-grad-primary)",
+              border: "none",
+              color: "#FBF7F1",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Back to Profile
+          </button>
         </div>
       </div>
     );
@@ -274,11 +407,21 @@ export default function FeedbackPage() {
           <p
             style={{
               fontSize: 13,
-              color: "rgba(253,248,240,.55)",
+              color: "rgba(253,248,240,.7)",
               margin: "4px 0 0",
             }}
           >
-            We value your feedback
+            {lastVisit.storeName
+              ? `How was ${lastVisit.storeName}?`
+              : "How was your last visit?"}
+            {lastVisit.date && (
+              <span
+                className="cx-mono"
+                style={{ color: "rgba(253,248,240,.5)", marginLeft: 6 }}
+              >
+                · {lastVisit.date}
+              </span>
+            )}
           </p>
         </div>
       </div>

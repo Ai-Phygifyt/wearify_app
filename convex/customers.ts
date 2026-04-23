@@ -735,6 +735,44 @@ export const listFeedbackByStore = query({
 });
 
 // ============================
+// 22a. listFeedbackByCustomerAndStore
+//     Per-customer feedback filtered to a specific store. Used by the
+//     store-side customer detail page to surface ratings this customer
+//     has given *this* store. Indexed by_customerId then filtered in
+//     memory — per-customer feedback is small.
+// ============================
+export const listFeedbackByCustomerAndStore = query({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("feedback")
+      .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+      .order("desc")
+      .take(100);
+    return rows.filter((r) => r.storeId === args.storeId);
+  },
+});
+
+// ============================
+// 22b. getLastVisit
+//     Returns the most-recent visitHistory row for a customer, or null.
+//     Used by /c/me/feedback to target the right store + session.
+// ============================
+export const getLastVisit = query({
+  args: { customerId: v.id("customers") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("visitHistory")
+      .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+      .order("desc")
+      .first();
+  },
+});
+
+// ============================
 // 23. updateNotifPrefs
 // ============================
 export const updateNotifPrefs = mutation({
