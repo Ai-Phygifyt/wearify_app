@@ -966,22 +966,22 @@ function KioskToast({ msg, type, onClose }: { msg: string; type: string; onClose
 /* ── IDLE ── */
 const IDLE_SLIDES = [
   {
-    img: "/inventory/Chanderi-Floral.jpeg",
+    img: "/kiosk/img1.jpg",
     h: "See Yourself in This Beautiful Saree",
     s: "Experience our curated collection with virtual try-on",
   },
   {
-    img: "/inventory/Kanjeevaram-Temple-Border.webp",
+    img: "/kiosk/img2.webp",
     h: "New Bridal Collection",
     s: "Kanjivaram & Banarasi silks, handpicked for your big day",
   },
   {
-    img: "/inventory/Paithani-Heritage.webp",
+    img: "/kiosk/img3.webp",
     h: "Festival Specials",
     s: "Celebrate every occasion in exclusive weaves",
   },
   {
-    img: "/inventory/Organza-Pastel-Dream.jpeg",
+    img: "/kiosk/img4.jpg",
     h: "Light. Luxurious. Effortless.",
     s: "Explore organzas and chiffons for every day",
   },
@@ -1127,6 +1127,9 @@ function PhoneAuthScreen({ storeName, onSubmitPhone, onBack }: {
     onSubmitPhone(inp);
   };
 
+  const complete = inp.length === 10 && !error;
+  const formattedInp = inp.length > 5 ? `${inp.slice(0, 5)} ${inp.slice(5)}` : inp;
+
   return (
     <div className="k-shell">
       <div className="k-topbar">
@@ -1137,28 +1140,101 @@ function PhoneAuthScreen({ storeName, onSubmitPhone, onBack }: {
         <div style={{ width: 44 }} />
       </div>
       <div className="k-form-col">
-        <h2 className="k-display k-slideUp" style={{ fontSize: 22, marginBottom: 4 }}>Enter Mobile Number</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 16 }}>OTP will be sent to verify</p>
-
-        {/* Phone display */}
-        <div className="k-slideUp k-d2" style={{
-          width: "100%", padding: "14px 16px", borderRadius: 12,
-          border: `1.5px solid ${error ? "var(--k-red)" : inp ? "var(--k-maroon)" : "var(--k-border)"}`,
-          background: "var(--k-card)",
-          display: "flex", alignItems: "center", gap: 10, marginBottom: 8,
-          boxShadow: inp ? "0 0 0 3px rgba(104,38,42,.08)" : "none",
-          transition: "all .2s ease",
+        {/* Hero badge */}
+        <div className="k-slideUp k-float" style={{
+          width: 64, height: 64, borderRadius: "50%",
+          background: "linear-gradient(135deg, var(--k-maroon) 0%, var(--k-maroon-l) 100%)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#fff", marginTop: 6, marginBottom: 16,
+          boxShadow: "0 10px 24px rgba(104,38,42,.28), inset 0 1px 0 rgba(255,255,255,.18)",
         }}>
-          <Phone size={18} color="var(--k-text-muted)" />
-          <span className="k-mono" style={{ fontSize: 16, color: "var(--k-text-muted)" }}>+91</span>
-          <span className="k-mono" style={{ fontSize: 18, fontWeight: 500, flex: 1, letterSpacing: "0.12em" }}>
-            {inp || <span style={{ color: "var(--k-text-light)" }}>Phone number</span>}
-          </span>
+          <Phone size={26} strokeWidth={2} />
         </div>
 
-        {error && <div style={{ fontSize: 13, color: "var(--k-red)", marginBottom: 8, fontWeight: 500 }}>{error}</div>}
+        <h2 className="k-display k-slideUp k-d1" style={{ fontSize: 24, marginBottom: 6, textAlign: "center" }}>
+          Sign in with your mobile
+        </h2>
+        <div className="k-divider-gold k-slideUp k-d1" style={{ margin: "4px auto 10px" }} />
+        <p className="k-slideUp k-d2" style={{
+          fontSize: 13, color: "var(--k-text-muted)", marginBottom: 22,
+          textAlign: "center", lineHeight: 1.5, maxWidth: 280,
+        }}>
+          We'll send a one-time code to verify your number
+        </p>
 
-        <div className="k-numpad k-slideUp k-d3" style={{ width: "100%", marginTop: 8 }}>
+        {/* Phone display */}
+        <div className="k-slideUp k-d3" style={{
+          width: "100%", padding: "10px 12px 10px 10px", borderRadius: 14,
+          border: `1.5px solid ${error ? "var(--k-red)" : inp ? "var(--k-maroon)" : "var(--k-border)"}`,
+          background: "var(--k-card)",
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
+          boxShadow: complete
+            ? "0 0 0 4px rgba(104,38,42,.08), 0 10px 24px rgba(104,38,42,.12)"
+            : inp ? "0 0 0 3px rgba(104,38,42,.06)" : "var(--k-shadow-xs)",
+          transition: "all .22s cubic-bezier(.22,1,.36,1)",
+        }}>
+          {/* +91 pill */}
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "8px 11px", borderRadius: 10,
+            background: "var(--k-bg-warm)",
+            border: "1px solid var(--k-border-l)",
+            color: "var(--k-text-mid)", flexShrink: 0,
+          }}>
+            <Phone size={13} strokeWidth={2.25} />
+            <span className="k-mono" style={{ fontSize: 13, fontWeight: 600 }}>+91</span>
+          </div>
+
+          {/* digits */}
+          <span className="k-mono" style={{
+            fontSize: 19, fontWeight: 600, flex: 1,
+            letterSpacing: inp ? "0.14em" : "0.04em",
+            color: "var(--k-text)",
+            whiteSpace: "nowrap", overflow: "hidden",
+          }}>
+            {inp
+              ? formattedInp
+              : <span style={{ color: "var(--k-text-light)", fontWeight: 400 }}>Mobile number</span>}
+          </span>
+
+          {complete && (
+            <div className="k-popIn" style={{
+              width: 24, height: 24, borderRadius: "50%",
+              background: "var(--k-green)", color: "#fff",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <Check size={14} strokeWidth={3} />
+            </div>
+          )}
+        </div>
+
+        {/* Progress dots */}
+        <div className="k-slideUp k-d3" style={{
+          display: "flex", gap: 5, marginBottom: error ? 10 : 14, alignSelf: "center",
+        }}>
+          {Array.from({ length: 10 }).map((_, i) => (
+            <span key={i} style={{
+              width: i < inp.length ? 16 : 6, height: 3, borderRadius: 2,
+              background: i < inp.length
+                ? (error ? "var(--k-red)" : "var(--k-maroon)")
+                : "rgba(104,38,42,.14)",
+              transition: "all .25s cubic-bezier(.22,1,.36,1)",
+            }} />
+          ))}
+        </div>
+
+        {error && (
+          <div className="k-slideDown" style={{
+            fontSize: 12, color: "var(--k-red)", fontWeight: 500,
+            marginBottom: 10, textAlign: "center",
+            padding: "6px 12px", borderRadius: 999,
+            background: "var(--k-red-bg)",
+            border: "1px solid rgba(192,57,43,.18)",
+          }}>{error}</div>
+        )}
+
+        <div className="k-numpad k-slideUp k-d4" style={{ width: "100%", marginTop: 4 }}>
           {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
             if (k === "") return <div key={i} />;
             if (k === "del") return (
@@ -1170,10 +1246,22 @@ function PhoneAuthScreen({ storeName, onSubmitPhone, onBack }: {
           })}
         </div>
 
-        <button onClick={handleSubmit} disabled={inp.length !== 10} className="k-btn k-btn-primary k-btn-pill k-slideUp k-d4" style={{ width: "100%", marginTop: 18, fontSize: 16, fontWeight: 600 }}>
+        <button
+          onClick={handleSubmit}
+          disabled={!complete}
+          className={`k-btn k-btn-primary k-btn-pill k-slideUp k-d5 ${complete ? "k-silk" : ""}`}
+          style={{ width: "100%", marginTop: 16, fontSize: 16, fontWeight: 600, minHeight: 52 }}
+        >
           Continue
           <ChevronRight size={18} />
         </button>
+
+        <p className="k-slideUp k-d6" style={{
+          marginTop: 12, fontSize: 11, color: "var(--k-text-light)",
+          textAlign: "center", letterSpacing: "0.02em", lineHeight: 1.5,
+        }}>
+          By continuing you agree to our Terms & Privacy Policy
+        </p>
       </div>
     </div>
   );

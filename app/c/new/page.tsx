@@ -25,6 +25,14 @@ function getGrad(occasion?: string, grad?: string[]): [string, string] {
   return DEFAULT_GRADS.default;
 }
 
+const KIOSK_IMAGES = [
+  "/kiosk/img1.jpg",
+  "/kiosk/img2.webp",
+  "/kiosk/img3.webp",
+  "/kiosk/img4.jpg",
+];
+const pickImg = (i: number) => KIOSK_IMAGES[i % KIOSK_IMAGES.length];
+
 type SareeItem = {
   _id: string;
   name: string;
@@ -68,10 +76,12 @@ export default function NewArrivalsPage() {
   return (
     <div className="cx-pageIn cx-page">
       {/* Hero */}
-      <div className="cx-hero cx-noise cx-paisley">
+      <div className="cx-hero cx-hero-img cx-noise cx-paisley">
+        <div className="cx-hero-img-zoom" style={{ backgroundImage: `url(${pickImg(0)})` }} />
         <button onClick={() => router.back()} className="cx-back" style={{ marginBottom: 14 }}>
           <ArrowLeft size={18} />
         </button>
+        <div className="cx-hero-eyebrow" style={{ color: "var(--cx-gold-l)" }}>Freshly curated</div>
         <div className="cx-hero-title">New Arrivals</div>
         <div className="cx-hero-sub">
           {totalSarees} new sarees across <strong>{storeEntries.length} store{storeEntries.length !== 1 ? "s" : ""}</strong>
@@ -142,7 +152,13 @@ export default function NewArrivalsPage() {
                       className={`cx-card cx-press cx-scaleIn cx-hover-lift cx-d${Math.min(i + 1, 6)}`}
                       style={{ cursor: "pointer" }}
                     >
-                      <div className="cx-silk" style={{ height: 110, background: `linear-gradient(148deg, ${g[0]}, ${g[1]})`, position: "relative" }}>
+                      <div
+                        className="cx-tile-img cx-silk"
+                        style={{
+                          height: 150,
+                          backgroundImage: `linear-gradient(160deg, ${g[0]}55, ${g[1]}88), url(${pickImg(i)})`,
+                        }}
+                      >
                         {saree.tag && (
                           <span
                             style={{
@@ -156,6 +172,7 @@ export default function NewArrivalsPage() {
                               fontWeight: 700,
                               color: "var(--cx-plum-d)",
                               letterSpacing: ".04em",
+                              zIndex: 2,
                             }}
                           >
                             {saree.tag}
@@ -174,6 +191,7 @@ export default function NewArrivalsPage() {
                               fontSize: 9,
                               fontWeight: 600,
                               color: "var(--cx-on-dark)",
+                              zIndex: 2,
                             }}
                           >
                             {saree.occasion}

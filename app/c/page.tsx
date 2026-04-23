@@ -34,6 +34,14 @@ const DEFAULT_OFFER_GRADS: string[][] = [
   ["#5E1A18", "#8B4A52"],
 ];
 
+const KIOSK_IMAGES = [
+  "/kiosk/img1.jpg",
+  "/kiosk/img2.webp",
+  "/kiosk/img3.webp",
+  "/kiosk/img4.jpg",
+];
+const pickImg = (i: number) => KIOSK_IMAGES[i % KIOSK_IMAGES.length];
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function CustomerHomePage() {
   const router = useRouter();
@@ -78,7 +86,8 @@ export default function CustomerHomePage() {
   return (
     <div className="cx-pageIn cx-page">
       {/* HERO */}
-      <div className="cx-hero cx-noise cx-paisley">
+      <div className="cx-hero cx-hero-img cx-noise cx-paisley">
+        <div className="cx-hero-img-zoom" style={{ backgroundImage: `url(${pickImg(2)})` }} />
         <div className="cx-brand-row cx-scaleIn">
           <div className="cx-brand-mark">
             <Flower size={18} strokeWidth={2} />
@@ -278,16 +287,32 @@ export default function CustomerHomePage() {
                 style={{ flexShrink: 0, width: 156, cursor: "pointer", animationDelay: `${0.05 * i}s` }}
               >
                 <div
+                  className="cx-tile-img"
                   style={{
-                    height: 54,
-                    background: "var(--cx-grad-plum)",
+                    height: 82,
+                    backgroundImage: `url(${pickImg(i)})`,
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--cx-on-dark)",
+                    alignItems: "flex-end",
+                    padding: 8,
                   }}
                 >
-                  <Store size={22} strokeWidth={1.6} />
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "3px 8px",
+                      borderRadius: "var(--cx-r-pill)",
+                      background: "rgba(28,17,8,.55)",
+                      backdropFilter: "blur(6px)",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: "var(--cx-on-dark)",
+                    }}
+                  >
+                    <Store size={10} strokeWidth={2.2} />
+                    Store
+                  </span>
                 </div>
                 <div style={{ padding: "10px 12px 12px" }}>
                   <div className="cx-truncate" style={{ fontSize: 13, fontWeight: 700, color: "var(--cx-text)" }}>
@@ -316,33 +341,39 @@ export default function CustomerHomePage() {
           onClick={() => router.push("/c/new")}
           style={{
             width: "100%",
-            background: "linear-gradient(135deg, #8B2E2B 0%, #A94540 50%, #B8860B 100%)",
+            backgroundColor: "#5E1A18",
+            backgroundImage: `linear-gradient(130deg, rgba(94,26,24,.92) 0%, rgba(139,46,43,.72) 45%, rgba(184,134,11,.58) 100%), url(${pickImg(3)})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
             borderRadius: "var(--cx-r)",
-            padding: "20px 18px",
+            padding: "22px 20px",
             cursor: "pointer",
             position: "relative",
             overflow: "hidden",
-            border: "none",
+            border: "1px solid rgba(184,134,11,.28)",
             textAlign: "left",
             color: "var(--cx-on-dark)",
             fontFamily: "inherit",
             display: "block",
+            boxShadow: "var(--cx-shadow-primary)",
           }}
         >
           <Sparkles size={22} color="var(--cx-gold-l)" fill="var(--cx-gold-l)" />
-          <div className="cx-serif" style={{ fontSize: 20, fontWeight: 700, fontStyle: "italic", marginTop: 8 }}>
+          <div className="cx-serif" style={{ fontSize: 22, fontWeight: 700, fontStyle: "italic", marginTop: 8, lineHeight: 1.2 }}>
             Discover New Collections
           </div>
-          <div style={{ fontSize: 12, color: "rgba(253,248,240,.72)", marginTop: 4 }}>
+          <div style={{ fontSize: 12.5, color: "rgba(253,248,240,.82)", marginTop: 4, maxWidth: 280 }}>
             Explore curated sarees from your favourite stores
           </div>
           <span
             style={{
-              marginTop: 12,
+              marginTop: 14,
               display: "inline-flex",
               alignItems: "center",
               gap: 4,
-              background: "rgba(255,255,255,.18)",
+              background: "rgba(255,255,255,.20)",
+              border: "1px solid rgba(255,255,255,.28)",
+              backdropFilter: "blur(6px)",
               borderRadius: "var(--cx-r-pill)",
               padding: "6px 14px",
               fontSize: 12,
@@ -407,7 +438,6 @@ export default function CustomerHomePage() {
 
           <div className="cx-no-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 18px" }}>
             {recentLooks.map((look: Record<string, unknown>, i: number) => {
-              const grad = (look.grad as string[]) || ["#8B2E2B", "#B8860B"];
               return (
                 <div
                   key={look._id as string}
@@ -416,30 +446,49 @@ export default function CustomerHomePage() {
                   style={{ flexShrink: 0, width: 156, cursor: "pointer", animationDelay: `${0.05 * i}s` }}
                 >
                   <div
+                    className="cx-tile-img cx-silk"
                     style={{
-                      height: 130,
-                      background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})`,
-                      position: "relative",
+                      height: 180,
+                      backgroundImage: `url(${pickImg(i + 1)})`,
                     }}
                   >
                     {(look.storeId as string) && (
                       <div
                         style={{
                           position: "absolute",
-                          bottom: 6,
-                          left: 6,
-                          background: "rgba(0,0,0,.50)",
+                          bottom: 8,
+                          left: 8,
+                          background: "rgba(28,17,8,.55)",
                           borderRadius: "var(--cx-r-pill)",
                           padding: "3px 9px",
                           fontSize: 9,
                           fontWeight: 600,
                           color: "var(--cx-on-dark)",
-                          backdropFilter: "blur(4px)",
+                          backdropFilter: "blur(6px)",
+                          zIndex: 2,
                         }}
                       >
                         {look.storeId as string}
                       </div>
                     )}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        background: "var(--cx-grad-gold)",
+                        borderRadius: "var(--cx-r-pill)",
+                        padding: "3px 8px",
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: "var(--cx-primary-d)",
+                        letterSpacing: ".04em",
+                        zIndex: 2,
+                      }}
+                    >
+                      <Heart size={9} strokeWidth={2.5} style={{ marginRight: 3, verticalAlign: "-1px" }} />
+                      LOOK
+                    </div>
                   </div>
                   <div style={{ padding: "8px 10px 10px" }}>
                     <div className="cx-truncate" style={{ fontSize: 13, fontWeight: 700, color: "var(--cx-text)" }}>

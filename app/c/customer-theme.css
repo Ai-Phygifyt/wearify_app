@@ -347,7 +347,59 @@ html, body { background: var(--cx-bg); }
 .cx-hero-soft { background: var(--cx-grad-hero-soft); }
 .cx-hero-dark { background: var(--cx-grad-dark); }
 
+/* Hero with a photo backdrop — image fills, dark maroon veil keeps copy legible */
+.cx-hero-img {
+  background-color: var(--cx-primary-xd);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.cx-hero-img::after {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse at 15% 20%, rgba(139,46,43,.18) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(42,22,18,.62) 0%, rgba(42,22,18,.72) 45%, rgba(58,15,13,.92) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .cx-hero > * { position: relative; z-index: 1; }
+
+/* ── Image tiles (card cover photo with gradient scrim) ──────────── */
+.cx-tile-img {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--cx-primary);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.cx-tile-img::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(170deg, rgba(28,17,8,.02) 0%, rgba(28,17,8,.15) 55%, rgba(28,17,8,.62) 100%);
+  pointer-events: none;
+}
+.cx-tile-img > * { position: relative; z-index: 1; }
+
+/* Image presets — fed from /public/kiosk */
+.cx-img-1 { background-image: url("/kiosk/img1.jpg"); }
+.cx-img-2 { background-image: url("/kiosk/img2.webp"); }
+.cx-img-3 { background-image: url("/kiosk/img3.webp"); }
+.cx-img-4 { background-image: url("/kiosk/img4.jpg"); }
+
+/* Subtle Ken-Burns for hero images */
+@keyframes cx-kenburns {
+  0%   { transform: scale(1.04);   filter: saturate(1.05); }
+  100% { transform: scale(1.10);   filter: saturate(1.15); }
+}
+.cx-hero-img-zoom {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  animation: cx-kenburns 18s ease-in-out infinite alternate;
+  z-index: 0;
+}
 
 .cx-hero-eyebrow {
   font-size: 11px;
