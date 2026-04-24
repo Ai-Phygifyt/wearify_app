@@ -1,10 +1,40 @@
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
-import { MutationCtx } from "./_generated/server";
+import { MutationCtx, QueryCtx } from "./_generated/server";
+import { Doc } from "./_generated/dataModel";
+import { assertFile, GUARDS } from "./fileValidation";
+import { generateSalt, hashWithSalt, constantTimeEquals } from "./authCrypto";
+import { requireAdmin } from "./adminAuth";
+
+// Scan helper used by createStaff/updateStaff uniqueness checks and by
+// staffPinLogin to resolve a plaintext PIN to a staff row. Handles the
+// transition period where some rows still have plaintext `pin` and others
+// have pinHash/pinSalt. Returns every row whose PIN matches.
+export async function findStaffWithPin(
+  ctx: QueryCtx,
+  storeId: string,
+  plaintextPin: string,
+): Promise<Array<Doc<"staff">>> {
+  const rows = await ctx.db
+    .query("staff")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .take(200);
+  const matches: Array<Doc<"staff">> = [];
+  for (const row of rows) {
+    if (row.pinHash && row.pinSalt) {
+      const candidate = await hashWithSalt(plaintextPin, row.pinSalt);
+      if (constantTimeEquals(candidate, row.pinHash)) matches.push(row);
+    } else if (row.pin && row.pin === plaintextPin) {
+      matches.push(row);
+    }
+  }
+  return matches;
+}
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     return await ctx.db.query("stores").order("asc").take(100);
   },
 });
@@ -29,6 +59,7 @@ export const get = query({
 export const getStats = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     const stores = await ctx.db.query("stores").take(100);
     const active = stores.filter((s) => s.status === "active").length;
     const trial = stores.filter((s) => s.status === "trial").length;
@@ -65,8 +96,21 @@ export const create = mutation({
     gstin: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     return await ctx.db.insert("stores", {
-      ...args,
+      storeId: args.storeId.trim(),
+      name: args.name.trim(),
+      city: args.city.trim(),
+      state: args.state?.trim(),
+      address: args.address?.trim(),
+      pin: args.pin?.trim(),
+      status: args.status,
+      plan: args.plan,
+      mrr: args.mrr,
+      ownerName: args.ownerName?.trim(),
+      ownerPhone: args.ownerPhone?.trim(),
+      ownerEmail: args.ownerEmail?.trim(),
+      gstin: args.gstin?.trim(),
       healthScore: 0,
       conversionRate: 0,
       sessions: 0,
@@ -106,14 +150,20 @@ export const update = mutation({
     notifyWhatsApp: v.optional(v.boolean()),
     notifyEmail: v.optional(v.boolean()),
     notifySms: v.optional(v.boolean()),
+    logoFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    if (args.logoFileId) await assertFile(ctx, args.logoFileId, GUARDS.storeLogo);
     const { id, ...fields } = args;
+    const TRIM_KEYS = new Set([
+      "name", "city", "state", "address", "pin", "area", "hours", "closedOn",
+      "status", "plan", "discountCode", "subscriptionPlan", "nextBillingDate",
+      "ownerName", "ownerEmail", "whatsappNumber", "agreementStatus",
+    ]);
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+      if (value === undefined) continue;
+      updates[key] = typeof value === "string" && TRIM_KEYS.has(key) ? value.trim() : value;
     }
     await ctx.db.patch(id, updates);
   },
@@ -132,6 +182,12 @@ export const listStaffByStore = query({
   },
 });
 
+// Error message prefix used to signal "this PIN is already taken in this
+// store" so the UI can match on it and show an inline field error instead
+// of a generic toast. Keep in sync with the three createStaff/updateStaff
+// callsites in admin + store UIs.
+const PIN_TAKEN_PREFIX = "PIN_TAKEN:";
+
 export const createStaff = mutation({
   args: {
     name: v.string(),
@@ -141,12 +197,23 @@ export const createStaff = mutation({
     storeId: v.string(),
   },
   handler: async (ctx, args) => {
+    if (!/^\d{4}$/.test(args.pin)) {
+      throw new Error("PIN must be exactly 4 digits");
+    }
+    const storeId = args.storeId.trim();
+    const conflicts = await findStaffWithPin(ctx, storeId, args.pin);
+    if (conflicts.length > 0) {
+      throw new Error(`${PIN_TAKEN_PREFIX} This PIN is already in use at this store. Please pick a different PIN.`);
+    }
+    const pinSalt = generateSalt();
+    const pinHash = await hashWithSalt(args.pin, pinSalt);
     const id = await ctx.db.insert("staff", {
-      name: args.name,
-      phone: args.phone,
-      pin: args.pin,
+      name: args.name.trim(),
+      phone: args.phone.trim(),
+      pinHash,
+      pinSalt,
       role: args.role,
-      storeId: args.storeId,
+      storeId,
       status: "active",
       totalSales: 0,
       conversion: 0,
@@ -167,13 +234,30 @@ export const updateStaff = mutation({
     status: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    let pinHashUpdate: { pinHash: string; pinSalt: string; pin: undefined } | null = null;
+    if (args.pin !== undefined) {
+      if (!/^\d{4}$/.test(args.pin)) {
+        throw new Error("PIN must be exactly 4 digits");
+      }
+      const current = await ctx.db.get(args.id);
+      if (!current) throw new Error("Staff not found");
+      const conflicts = await findStaffWithPin(ctx, current.storeId, args.pin);
+      if (conflicts.some((c) => c._id !== args.id)) {
+        throw new Error(`${PIN_TAKEN_PREFIX} This PIN is already in use at this store. Please pick a different PIN.`);
+      }
+      const pinSalt = generateSalt();
+      const pinHash = await hashWithSalt(args.pin, pinSalt);
+      // `pin: undefined` clears any legacy plaintext PIN left on the row.
+      pinHashUpdate = { pinHash, pinSalt, pin: undefined };
+    }
     const { id, ...fields } = args;
+    const TRIM_KEYS = new Set(["name", "phone", "role", "status"]);
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+      if (key === "pin" || value === undefined) continue; // pin handled via pinHashUpdate
+      updates[key] = typeof value === "string" && TRIM_KEYS.has(key) ? value.trim() : value;
     }
+    if (pinHashUpdate) Object.assign(updates, pinHashUpdate);
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(id, updates);
     }
@@ -337,5 +421,45 @@ export const removeStores = internalMutation({
       totalDeleted += await deleteStoreData(ctx, storeId);
     }
     return { deleted: totalDeleted, stores: args.storeIds };
+  },
+});
+
+// One-shot backfill: trim whitespace on string fields for stores + staff.
+// Same pattern as tailorOps.backfillTrimTailorStrings. Idempotent.
+export const backfillTrimStoreAndStaffStrings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const STORE_KEYS = ["storeId", "name", "city", "state", "address", "pin", "area", "hours", "closedOn", "status", "plan", "discountCode", "subscriptionPlan", "nextBillingDate", "ownerName", "ownerPhone", "ownerEmail", "whatsappNumber", "agreementStatus", "gstin"] as const;
+    const STAFF_KEYS = ["name", "phone", "role", "status", "storeId"] as const;
+
+    const stores = await ctx.db.query("stores").collect();
+    let storesTouched = 0;
+    for (const row of stores) {
+      const updates: Record<string, unknown> = {};
+      for (const key of STORE_KEYS) {
+        const val = (row as Record<string, unknown>)[key];
+        if (typeof val === "string" && val !== val.trim()) updates[key] = val.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(row._id, updates);
+        storesTouched++;
+      }
+    }
+
+    const staffRows = await ctx.db.query("staff").collect();
+    let staffTouched = 0;
+    for (const row of staffRows) {
+      const updates: Record<string, unknown> = {};
+      for (const key of STAFF_KEYS) {
+        const val = (row as Record<string, unknown>)[key];
+        if (typeof val === "string" && val !== val.trim()) updates[key] = val.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(row._id, updates);
+        staffTouched++;
+      }
+    }
+
+    return { stores: { scanned: stores.length, touched: storesTouched }, staff: { scanned: staffRows.length, touched: staffTouched } };
   },
 });

@@ -9,7 +9,11 @@
     "predev": "convex dev --until-success && convex dashboard",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ignore-pattern \"convex/_generated/**\""
+    "lint": "eslint . --ignore-pattern \"convex/_generated/**\"",
+    "type-check": "tsc --noEmit -p .",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\" --ignore-path .gitignore",
+    "seed": "convex run seed:seedAll '{}'",
+    "seed:relational": "convex run seed:seedRelational '{}'"
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.11.4",

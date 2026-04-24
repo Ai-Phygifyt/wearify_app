@@ -8,14 +8,19 @@
  * @module
  */
 
+import type * as adminAuth from "../adminAuth.js";
 import type * as agents from "../agents.js";
+import type * as authCrypto from "../authCrypto.js";
 import type * as billing from "../billing.js";
 import type * as campaignOps from "../campaignOps.js";
 import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
 import type * as devices from "../devices.js";
+import type * as fileValidation from "../fileValidation.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
+import type * as kioskAuth from "../kioskAuth.js";
+import type * as kioskPairing from "../kioskPairing.js";
 import type * as legal from "../legal.js";
 import type * as models from "../models.js";
 import type * as network from "../network.js";
@@ -39,14 +44,19 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  adminAuth: typeof adminAuth;
   agents: typeof agents;
+  authCrypto: typeof authCrypto;
   billing: typeof billing;
   campaignOps: typeof campaignOps;
   customers: typeof customers;
   dashboard: typeof dashboard;
   devices: typeof devices;
+  fileValidation: typeof fileValidation;
   files: typeof files;
   http: typeof http;
+  kioskAuth: typeof kioskAuth;
+  kioskPairing: typeof kioskPairing;
   legal: typeof legal;
   models: typeof models;
   network: typeof network;

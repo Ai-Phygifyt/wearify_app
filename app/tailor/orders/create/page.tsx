@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { PageLoading } from "@/components/ui/wearify-ui";
 
 export default function CreateOrderPage() {
   const router = useRouter();
@@ -86,140 +86,201 @@ export default function CreateOrderPage() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+    <div className="t-screen">
+      <div className="t-topbar">
         <button
+          type="button"
+          className="t-back"
           onClick={() => router.push("/tailor/orders")}
-          className="p-1 rounded-lg hover:bg-wf-card transition-colors bg-transparent border-none cursor-pointer"
+          aria-label="Back"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-wf-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="text-lg font-bold text-wf-text">New Order</h1>
+        <h1>New order</h1>
+        <div style={{ width: 36 }} />
       </div>
 
       {error && (
-        <div className="px-4 py-2.5 rounded-lg bg-wf-red/10 text-wf-red text-sm font-medium">
+        <div
+          style={{
+            margin: "0 20px 12px",
+            padding: "10px 14px",
+            background: "var(--urgent-tint)",
+            color: "var(--urgent)",
+            borderRadius: 12,
+            fontSize: 13,
+          }}
+        >
           {error}
         </div>
       )}
 
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-1.5">Customer Name *</label>
+      <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="t-field">
+          <label>Customer name *</label>
           <input
+            className="t-input"
             type="text"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             placeholder="Customer full name"
-            className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-1.5">Customer Phone *</label>
-          <div className="flex items-center border border-wf-border rounded-lg bg-white overflow-hidden">
-            <span className="px-3 text-sm text-wf-muted font-mono bg-wf-card border-r border-wf-border py-2.5">+91</span>
+        <div className="t-field">
+          <label>Customer phone *</label>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "stretch",
+              background: "var(--paper)",
+              border: "1px solid var(--line-2)",
+              borderRadius: 12,
+              overflow: "hidden",
+            }}
+          >
+            <span
+              className="t-mono"
+              style={{
+                padding: "12px 14px",
+                color: "var(--ink-3)",
+                fontSize: 15,
+                background: "var(--ivory-2)",
+                borderRight: "1px solid var(--line)",
+              }}
+            >
+              +91
+            </span>
             <input
               type="tel"
+              inputMode="numeric"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              placeholder="Phone number"
-              className="flex-1 px-3 py-2.5 text-sm outline-none bg-transparent text-wf-text"
+              placeholder="98765 43210"
+              className="t-mono"
               maxLength={10}
+              style={{
+                flex: 1,
+                padding: "12px 14px",
+                fontSize: 16,
+                border: 0,
+                outline: "none",
+                background: "transparent",
+                color: "var(--ink)",
+                letterSpacing: "0.02em",
+              }}
             />
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-1.5">Saree / Description</label>
+        <div className="t-field">
+          <label>Saree / description</label>
           <input
+            className="t-input"
             type="text"
             value={saree}
             onChange={(e) => setSaree(e.target.value)}
             placeholder="e.g. Banarasi Silk Wedding Saree"
-            className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-1.5">Fabric Type</label>
+        <div className="t-field">
+          <label>Fabric type</label>
           <input
+            className="t-input"
             type="text"
             value={fabric}
             onChange={(e) => setFabric(e.target.value)}
             placeholder="e.g. Silk, Cotton, Georgette"
-            className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-1.5">Service Type *</label>
+        <div className="t-field">
+          <label>Service type *</label>
           {serviceOptions.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {serviceOptions.map((svc) => (
-                <button
-                  key={svc.id}
-                  onClick={() => setService(svc.name)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer border ${
-                    service === svc.name
-                      ? "bg-wf-primary/10 text-wf-primary border-wf-primary"
-                      : "bg-white text-wf-subtext border-wf-border"
-                  }`}
-                >
-                  {svc.name}
-                </button>
-              ))}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {serviceOptions.map((svc) => {
+                const on = service === svc.name;
+                return (
+                  <button
+                    key={svc.id}
+                    type="button"
+                    onClick={() => setService(svc.name)}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      background: on ? "var(--maroon-tint)" : "var(--paper)",
+                      color: on ? "var(--maroon-ink)" : "var(--ink-3)",
+                      border: `1px solid ${on ? "rgba(123, 29, 29, 0.2)" : "var(--line-2)"}`,
+                    }}
+                  >
+                    {svc.name}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <input
+              className="t-input"
               type="text"
               value={service}
               onChange={(e) => setService(e.target.value)}
               placeholder="e.g. Silk Blouse Stitching"
-              className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
             />
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-semibold text-wf-text mb-1.5">Price (Rs.) *</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div className="t-field">
+            <label>Price (₹) *</label>
             <input
+              className="t-input t-mono"
               type="number"
+              min={0}
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               placeholder="0"
-              className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
             />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-wf-text mb-1.5">Due Date</label>
+          <div className="t-field">
+            <label>Due date</label>
             <input
+              className="t-input"
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
             />
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-wf-text mb-1.5">Notes</label>
+        <div className="t-field">
+          <label>Notes</label>
           <textarea
+            className="t-textarea"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Additional notes..."
+            placeholder="Additional notes…"
             rows={3}
-            className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text resize-none"
+            style={{ resize: "none", fontFamily: "inherit" }}
           />
         </div>
+      </div>
 
-        <Btn primary className="w-full" onClick={handleSubmit} disabled={loading}>
-          {loading ? "Creating..." : "Create Order"}
-        </Btn>
+      <div style={{ padding: 20 }}>
+        <button
+          type="button"
+          className="t-btn t-btn-primary t-btn-full t-btn-lg"
+          onClick={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? "Creating…" : "Create order"}
+        </button>
       </div>
     </div>
   );

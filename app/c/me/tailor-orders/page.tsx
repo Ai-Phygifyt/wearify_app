@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
+import { Star } from "lucide-react";
 
 const ORDER_STEPS = ["confirmed", "measurements", "stitching", "ready", "delivered"];
 
@@ -18,9 +19,9 @@ const STEP_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  confirmed: "#4A2D6E",
+  confirmed: "#A94540",
   measurements: "#1A4A65",
-  stitching: "#C9941A",
+  stitching: "#B8860B",
   ready: "#1B5E20",
   delivered: "#1B5E20",
 };
@@ -62,19 +63,19 @@ export default function TailorOrdersPage() {
 
   if (!phone) {
     return (
-      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FDF8F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="cx-typing"><span /><span /><span /></div>
       </div>
     );
   }
 
   return (
-    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FDF8F0" }}>
+    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1" }}>
       {/* Hero */}
       <div
         className="cx-noise cx-paisley"
         style={{
-          background: "linear-gradient(155deg, #0D0418 0%, #1A0A2E 25%, #2D1B4E 55%, #6B1D52 80%, #C9941A 100%)",
+          background: "var(--cx-grad-hero)",
           padding: "28px 18px 24px",
           position: "relative",
           overflow: "hidden",
@@ -98,12 +99,12 @@ export default function TailorOrdersPage() {
                 flexShrink: 0,
               }}
             >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FDF8F0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FBF7F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
             <div>
-              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FDF8F0", fontStyle: "italic", margin: 0 }}>
+              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FBF7F1", fontStyle: "italic", margin: 0 }}>
                 My Tailor Orders
               </h1>
               <div style={{ fontSize: 12, color: "rgba(253,248,240,.5)", marginTop: 2 }}>
@@ -120,7 +121,7 @@ export default function TailorOrdersPage() {
         {orders === undefined ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[1, 2, 3].map((i) => (
-              <div key={i} style={{ height: 110, borderRadius: 16, background: "linear-gradient(135deg, #F4EFF9, #F2E8EE)", opacity: 0.6 }} className="cx-fadeIn" />
+              <div key={i} style={{ height: 110, borderRadius: 16, background: "linear-gradient(135deg, #F5E6E3, #F0E8DC)", opacity: 0.6 }} className="cx-fadeIn" />
             ))}
           </div>
         ) : orders.length === 0 ? (
@@ -129,21 +130,21 @@ export default function TailorOrdersPage() {
               width: 64,
               height: 64,
               borderRadius: "50%",
-              background: "#F4EFF9",
+              background: "#F5E6E3",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               margin: "0 auto 14px",
             }}>
               <svg width={28} height={28} viewBox="0 0 24 24" fill="none">
-                <circle cx="6" cy="6" r="3" stroke="#2D1B4E" strokeWidth="1.6" />
-                <circle cx="6" cy="18" r="3" stroke="#2D1B4E" strokeWidth="1.6" />
-                <line x1="20" y1="4" x2="8.12" y2="15.88" stroke="#C9941A" strokeWidth="1.8" strokeLinecap="round" />
-                <line x1="20" y1="20" x2="8" y2="8" stroke="#2D1B4E" strokeWidth="1.8" strokeLinecap="round" />
+                <circle cx="6" cy="6" r="3" stroke="#8B2E2B" strokeWidth="1.6" />
+                <circle cx="6" cy="18" r="3" stroke="#8B2E2B" strokeWidth="1.6" />
+                <line x1="20" y1="4" x2="8.12" y2="15.88" stroke="#B8860B" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="20" y1="20" x2="8" y2="8" stroke="#8B2E2B" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
             </div>
-            <div className="cx-serif" style={{ fontSize: 17, fontWeight: 600, color: "#1A0A1E", fontStyle: "italic" }}>No tailor orders yet</div>
-            <div style={{ fontSize: 13, color: "#8B7EA0", marginTop: 6 }}>Find a tailor through Wearify to get started</div>
+            <div className="cx-serif" style={{ fontSize: 17, fontWeight: 600, color: "#1C1108", fontStyle: "italic" }}>No tailor orders yet</div>
+            <div style={{ fontSize: 13, color: "#9C8878", marginTop: 6 }}>Find a tailor through Wearify to get started</div>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -151,7 +152,7 @@ export default function TailorOrdersPage() {
               const currentStep = ORDER_STEPS.indexOf(order.status);
               const isExpanded = expandedOrder === order._id;
               const isDelivered = order.status === "delivered";
-              const statusColor = STATUS_COLORS[order.status] || "#4A2D6E";
+              const statusColor = STATUS_COLORS[order.status] || "#A94540";
 
               return (
                 <div
@@ -161,8 +162,8 @@ export default function TailorOrdersPage() {
                     borderRadius: 16,
                     overflow: "hidden",
                     background: "#FFFFFF",
-                    border: "1px solid #F2E8EE",
-                    boxShadow: "0 2px 14px rgba(45,27,78,.09)",
+                    border: "1px solid #F0E8DC",
+                    boxShadow: "0 2px 14px rgba(139, 46, 43, .09)",
                   }}
                 >
                   {/* Order header */}
@@ -172,10 +173,10 @@ export default function TailorOrdersPage() {
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#1A0A1E" }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "#1C1108" }}>
                           {order.tailorName}
                         </div>
-                        <div style={{ fontSize: 12, color: "#8B7EA0", marginTop: 2 }}>
+                        <div style={{ fontSize: 12, color: "#9C8878", marginTop: 2 }}>
                           {order.service}{order.saree ? ` \u00B7 ${order.saree}` : ""}
                         </div>
                       </div>
@@ -201,7 +202,7 @@ export default function TailorOrdersPage() {
                             flex: 1,
                             height: 4,
                             borderRadius: 2,
-                            background: i <= currentStep ? statusColor : "#F2E8EE",
+                            background: i <= currentStep ? statusColor : "#F0E8DC",
                             transition: "background .3s",
                           }}
                         />
@@ -214,7 +215,7 @@ export default function TailorOrdersPage() {
                           style={{
                             fontSize: 8,
                             fontWeight: i <= currentStep ? 600 : 400,
-                            color: i <= currentStep ? statusColor : "#B8A8C8",
+                            color: i <= currentStep ? statusColor : "#C4B5A8",
                           }}
                         >
                           {STEP_LABELS[step]}
@@ -225,16 +226,16 @@ export default function TailorOrdersPage() {
                     {/* Meta row */}
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
                       {order.priceQuoted !== undefined && (
-                        <span className="cx-mono" style={{ fontSize: 13, fontWeight: 700, color: "#C9941A" }}>
+                        <span className="cx-mono" style={{ fontSize: 13, fontWeight: 700, color: "#B8860B" }}>
                           Rs.{order.priceQuoted.toLocaleString("en-IN")}
                         </span>
                       )}
                       {order.dueDate && (
-                        <span style={{ fontSize: 11, color: "#8B7EA0" }}>
+                        <span style={{ fontSize: 11, color: "#9C8878" }}>
                           Due: {order.dueDate}
                         </span>
                       )}
-                      <span style={{ fontSize: 11, color: "#B8A8C8", marginLeft: "auto" }}>
+                      <span style={{ fontSize: 11, color: "#C4B5A8", marginLeft: "auto" }}>
                         {order.orderDate}
                       </span>
                     </div>
@@ -242,30 +243,30 @@ export default function TailorOrdersPage() {
 
                   {/* Expanded details */}
                   {isExpanded && (
-                    <div style={{ borderTop: "1px solid #F2E8EE", padding: "14px 16px" }}>
+                    <div style={{ borderTop: "1px solid #F0E8DC", padding: "14px 16px" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {order.fabric && (
                           <div style={{ fontSize: 12 }}>
-                            <span style={{ color: "#8B7EA0" }}>Fabric: </span>
-                            <span style={{ fontWeight: 600, color: "#1A0A1E" }}>{order.fabric}</span>
+                            <span style={{ color: "#9C8878" }}>Fabric: </span>
+                            <span style={{ fontWeight: 600, color: "#1C1108" }}>{order.fabric}</span>
                           </div>
                         )}
                         {order.depositPaid !== undefined && (
                           <div style={{ fontSize: 12 }}>
-                            <span style={{ color: "#8B7EA0" }}>Deposit: </span>
-                            <span className="cx-mono" style={{ fontWeight: 600, color: "#1A0A1E" }}>
+                            <span style={{ color: "#9C8878" }}>Deposit: </span>
+                            <span className="cx-mono" style={{ fontWeight: 600, color: "#1C1108" }}>
                               Rs.{order.depositPaid.toLocaleString("en-IN")}
                             </span>
                           </div>
                         )}
                         <div style={{ fontSize: 12 }}>
-                          <span style={{ color: "#8B7EA0" }}>Order: </span>
-                          <span style={{ fontWeight: 600, color: "#1A0A1E" }}>{order.orderId}</span>
+                          <span style={{ color: "#9C8878" }}>Order: </span>
+                          <span style={{ fontWeight: 600, color: "#1C1108" }}>{order.orderId}</span>
                         </div>
                       </div>
 
                       {order.note && (
-                        <div style={{ fontSize: 12, color: "#8B7EA0", marginTop: 10, fontStyle: "italic", lineHeight: 1.5 }}>
+                        <div style={{ fontSize: 12, color: "#9C8878", marginTop: 10, fontStyle: "italic", lineHeight: 1.5 }}>
                           Note: {order.note}
                         </div>
                       )}
@@ -283,7 +284,7 @@ export default function TailorOrdersPage() {
                             marginTop: 12,
                             padding: "10px",
                             borderRadius: 100,
-                            background: "linear-gradient(135deg, #1A3A2A, #25D366)",
+                            background: "var(--cx-grad-whatsapp)",
                             border: "none",
                             color: "#fff",
                             fontSize: 13,
@@ -302,10 +303,10 @@ export default function TailorOrdersPage() {
 
                       {/* Rate tailor */}
                       {isDelivered && !order.rating && (
-                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F2E8EE" }}>
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0E8DC" }}>
                           {ratingOrder === order._id ? (
                             <div>
-                              <div className="cx-serif" style={{ fontSize: 14, fontWeight: 600, color: "#1A0A1E", fontStyle: "italic", marginBottom: 10 }}>
+                              <div className="cx-serif" style={{ fontSize: 14, fontWeight: 600, color: "#1C1108", fontStyle: "italic", marginBottom: 10 }}>
                                 Rate this tailor
                               </div>
                               <div style={{ display: "flex", gap: 4, justifyContent: "center", marginBottom: 10 }}>
@@ -317,11 +318,11 @@ export default function TailorOrdersPage() {
                                     style={{
                                       background: "none",
                                       border: "none",
-                                      color: star <= ratingValue ? "#C9941A" : "#E8D5E0",
+                                      color: star <= ratingValue ? "#B8860B" : "#E4D9CC",
                                       cursor: "pointer",
                                     }}
                                   >
-                                    {star <= ratingValue ? "\u2605" : "\u2606"}
+                                    <Star size={26} fill={star <= ratingValue ? "var(--cx-gold)" : "transparent"} strokeWidth={1.6} />
                                   </button>
                                 ))}
                               </div>
@@ -335,10 +336,10 @@ export default function TailorOrdersPage() {
                                   width: "100%",
                                   padding: "10px 14px",
                                   borderRadius: 12,
-                                  border: "1px solid #F2E8EE",
-                                  background: "#FDF8F0",
+                                  border: "1px solid #F0E8DC",
+                                  background: "#FBF7F1",
                                   fontSize: 13,
-                                  color: "#1A0A1E",
+                                  color: "#1C1108",
                                   outline: "none",
                                   marginBottom: 10,
                                   boxSizing: "border-box",
@@ -352,9 +353,9 @@ export default function TailorOrdersPage() {
                                   width: "100%",
                                   padding: "10px",
                                   borderRadius: 100,
-                                  background: ratingValue === 0 ? "#E8D5E0" : "linear-gradient(135deg, #2D1B4E, #4A2D6E)",
+                                  background: ratingValue === 0 ? "#E4D9CC" : "var(--cx-grad-primary)",
                                   border: "none",
-                                  color: "#FDF8F0",
+                                  color: "#FBF7F1",
                                   fontSize: 13,
                                   fontWeight: 600,
                                   cursor: ratingValue === 0 || submittingRating ? "not-allowed" : "pointer",
@@ -373,8 +374,8 @@ export default function TailorOrdersPage() {
                                 padding: "10px",
                                 borderRadius: 100,
                                 background: "transparent",
-                                border: "1.5px solid #2D1B4E",
-                                color: "#2D1B4E",
+                                border: "1.5px solid #8B2E2B",
+                                color: "#8B2E2B",
                                 fontSize: 13,
                                 fontWeight: 600,
                                 cursor: "pointer",
@@ -387,21 +388,27 @@ export default function TailorOrdersPage() {
                       )}
 
                       {/* Existing rating */}
-                      {order.rating && (
-                        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ color: "#C9941A", fontSize: 14 }}>
-                            {"\u2605".repeat(order.rating)}
-                          </span>
-                          <span style={{ color: "#E8D5E0", fontSize: 14 }}>
-                            {"\u2606".repeat(5 - order.rating)}
-                          </span>
+                      {order.rating !== undefined && order.rating > 0 && (() => {
+                        const r = order.rating;
+                        return (
+                        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 3 }}>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <Star
+                              key={n}
+                              size={15}
+                              fill={n <= r ? "var(--cx-gold)" : "transparent"}
+                              color={n <= r ? "var(--cx-gold)" : "var(--cx-border)"}
+                              strokeWidth={1.6}
+                            />
+                          ))}
                           {order.ratingComment && (
-                            <span style={{ fontSize: 12, color: "#8B7EA0", fontStyle: "italic", marginLeft: 4 }}>
+                            <span style={{ fontSize: 12, color: "#9C8878", fontStyle: "italic", marginLeft: 4 }}>
                               {order.ratingComment}
                             </span>
                           )}
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

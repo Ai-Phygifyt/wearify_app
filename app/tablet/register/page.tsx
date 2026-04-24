@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Btn } from "@/components/ui/wearify-ui";
 import { Id } from "@/convex/_generated/dataModel";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import {
   Gender,
   HeightUnit,
@@ -131,10 +132,10 @@ export default function TabletRegisterPage() {
     const localUrl = URL.createObjectURL(file);
     setPhotoPreview(localUrl);
     try {
-      const id = await upload(file);
+      const id = await upload(file, GUARDS.customerPhoto);
       setPhotoFileId(id);
-    } catch {
-      setError("Photo upload failed. Try again.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Photo upload failed. Try again.");
       setPhotoPreview("");
     } finally {
       setPhotoUploading(false);
@@ -246,7 +247,6 @@ export default function TabletRegisterPage() {
                 ))}
               </div>
               {error && <p className="text-sm text-wf-red mt-2 text-center">{error}</p>}
-              <p className="text-xs text-wf-muted mt-2 text-center">Demo OTP: 123456</p>
               <div className="mt-6 flex gap-3">
                 <Btn onClick={() => { setStep("phone"); setOtpDigits(["", "", "", "", "", ""]); setError(""); }}>Back</Btn>
                 <Btn primary onClick={() => submitOtp(otpDigits)} disabled={loading || otpDigits.join("").length !== 6} className="flex-1">

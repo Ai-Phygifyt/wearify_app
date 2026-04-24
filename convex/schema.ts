@@ -7,7 +7,12 @@ export default defineSchema({
   // ============================
   users: defineTable({
     phone: v.string(),
-    passwordHash: v.optional(v.string()), // bcrypt hash, optional if OTP-only
+    // PBKDF2-SHA256 hex (authCrypto.hashWithSalt). passwordSalt is the
+    // per-user hex salt. Rows without passwordSalt but with passwordHash
+    // are legacy SHA-256+static-salt and are rehashed on next successful
+    // login.
+    passwordHash: v.optional(v.string()),
+    passwordSalt: v.optional(v.string()),
     name: v.string(),
     role: v.string(), // "store_owner" | "customer" | "tailor" | "staff"
     storeId: v.optional(v.string()), // for store_owner/staff
@@ -20,7 +25,6 @@ export default defineSchema({
   })
     .index("by_phone", ["phone"])
     .index("by_phone_and_role", ["phone", "role"])
-    .index("by_sessionToken", ["sessionToken"])
     .index("by_role", ["role"]),
 
   // Per-device session tokens. One row per active login so multiple devices
@@ -116,7 +120,12 @@ export default defineSchema({
   staff: defineTable({
     name: v.string(),
     phone: v.string(),
-    pin: v.string(), // 4 digit PIN for tablet/mirror login
+    // Deprecated plaintext PIN. Still optional to keep any un-migrated rows
+    // readable; staffPinLogin lazy-migrates these to pinHash/pinSalt on
+    // first successful login. No new writes should ever include this.
+    pin: v.optional(v.string()),
+    pinHash: v.optional(v.string()), // PBKDF2-SHA256 hex
+    pinSalt: v.optional(v.string()), // hex salt
     role: v.string(), // "R03" owner | "R04" manager | "R05" salesperson
     storeRef: v.optional(v.id("stores")),
     storeId: v.string(),
@@ -129,8 +138,28 @@ export default defineSchema({
   })
     .index("by_storeId", ["storeId"])
     .index("by_role", ["role"])
-    .index("by_phone", ["phone"])
-    .index("by_storeId_and_pin", ["storeId", "pin"]),
+    .index("by_phone", ["phone"]),
+  // by_storeId_and_pin index removed — PINs are hashed per-row so a raw
+  // equality lookup no longer makes sense. Uniqueness/login both scan
+  // staff-by-store (small N, ~5-20 rows) and compare hashes in memory.
+
+  // Rolling-window failed-attempt counter for staffPinLogin. Same shape
+  // as trialCodeAttempts; one row per storeId.
+  staffPinAttempts: defineTable({
+    storeId: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_storeId", ["storeId"]),
+
+  // Rolling-window failed-attempt counter for loginWithPassword, keyed by
+  // canonical phone. Caps brute-force guessing against a known phone; the
+  // legitimate "I forgot my password" user still has a comfortable budget
+  // before throttling.
+  passwordLoginAttempts: defineTable({
+    phone: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_phone", ["phone"]),
 
   // ============================
   // SAREES (catalog items, per store)
@@ -243,8 +272,10 @@ export default defineSchema({
     bodyScanFileId: v.optional(v.id("_storage")),
     // Language
     language: v.optional(v.string()),
-    // Password (optional for login)
+    // Password (optional for login). See users.passwordHash comment —
+    // passwordSalt present = new PBKDF2 format; absent = legacy.
     passwordHash: v.optional(v.string()),
+    passwordSalt: v.optional(v.string()),
   })
     .index("by_phone", ["phone"]),
 
@@ -352,9 +383,19 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_code", ["code"])
+    .index("by_code_and_storeId", ["code", "storeId"])
     .index("by_storeId", ["storeId"])
     .index("by_sessionId", ["sessionId"])
     .index("by_status", ["status"]),
+
+  // Rolling-window failed-attempt counter for trialRoom.validateCode.
+  // One row per storeId; used to rate-limit brute-force enumeration of
+  // 6-digit codes. Window resets on the first attempt after it expires.
+  trialCodeAttempts: defineTable({
+    storeId: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_storeId", ["storeId"]),
 
   // ============================
   // WISHLIST (customer saved items)
@@ -499,10 +540,17 @@ export default defineSchema({
     aadhaarVerified: v.optional(v.boolean()),
     panVerified: v.optional(v.boolean()),
     addressVerified: v.optional(v.boolean()),
+    // KYC document files (uploaded by tailor, reviewed by admin).
+    aadhaarFileId: v.optional(v.id("_storage")),
+    panFileId: v.optional(v.id("_storage")),
+    addressProofFileId: v.optional(v.id("_storage")),
+    // Admin rejection note shown back to the tailor on the verification page.
+    kycRejectionReason: v.optional(v.string()),
     // Language
     language: v.optional(v.string()),
-    // Password
+    // Password — passwordSalt present = new PBKDF2 format; absent = legacy.
     passwordHash: v.optional(v.string()),
+    passwordSalt: v.optional(v.string()),
     // DPDP
     consentProfile: v.optional(v.boolean()),
     consentLocation: v.optional(v.boolean()),
@@ -628,6 +676,25 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   // ============================
+  // CAMPAIGN SENDS (per-recipient dispatch log)
+  // One row per (campaign, recipient) — written by the dispatch pipeline.
+  // status: "sent" (real provider accepted), "simulated" (no API key), "failed".
+  // ============================
+  campaignSends: defineTable({
+    campaignId: v.id("campaigns"),
+    storeId: v.string(),
+    customerId: v.optional(v.id("customers")),
+    channel: v.string(), // "whatsapp" | "sms" | "email"
+    recipient: v.string(), // phone (E.164-ish) or email
+    status: v.string(), // "sent" | "simulated" | "failed"
+    error: v.optional(v.string()),
+    sentAt: v.number(),
+  })
+    .index("by_campaignId", ["campaignId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_customerId", ["customerId"]),
+
+  // ============================
   // CUSTOMER SEGMENTS
   // ============================
   customerSegments: defineTable({
@@ -655,6 +722,33 @@ export default defineSchema({
   })
     .index("by_sessionId", ["sessionId"])
     .index("by_customerId", ["customerId"]),
+
+  // ============================
+  // KIOSK TRIAL CART (per-customer-per-store persistent trial room)
+  // Retains items the customer had in their kiosk trial room across visits.
+  // ============================
+  kioskTrialCart: defineTable({
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+    addedAt: v.number(),
+  })
+    .index("by_customer_store", ["customerId", "storeId"])
+    .index("by_customer_store_saree", ["customerId", "storeId", "sareeId"]),
+
+  // ============================
+  // KIOSK CART (per-customer-per-store persistent checkout cart)
+  // Retains items the customer added to cart across visits; checkout clears.
+  // ============================
+  kioskCart: defineTable({
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+    qty: v.number(),
+    addedAt: v.number(),
+  })
+    .index("by_customer_store", ["customerId", "storeId"])
+    .index("by_customer_store_saree", ["customerId", "storeId", "sareeId"]),
 
   // ============================
   // ORDERS (purchase orders from mirror/checkout)
@@ -707,10 +801,47 @@ export default defineSchema({
     serialNumber: v.optional(v.string()),
     iotDeviceId: v.optional(v.string()),
     firmwareVersion: v.optional(v.string()),
+    // Pairing identity — populated only for kiosks minted via the pairing flow.
+    // deviceToken is the long-lived bearer secret the kiosk sends with every
+    // mutation; revoked tokens are kept (status="revoked") for audit.
+    deviceToken: v.optional(v.string()),
+    pairedAt: v.optional(v.number()),
+    pairedByEmail: v.optional(v.string()),
+    pairedByKind: v.optional(v.string()), // "admin" | "store_owner"
+    revokedAt: v.optional(v.number()),
+    revokedByEmail: v.optional(v.string()),
+    deviceLabel: v.optional(v.string()),
+    lastSeenAt: v.optional(v.number()),
   })
     .index("by_deviceId", ["deviceId"])
     .index("by_storeId", ["storeId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_deviceToken", ["deviceToken"]),
+
+  // Short-lived, single-use codes that authorize a fresh kiosk to mint a
+  // device token. Issued by admin (any store) or a logged-in store owner
+  // (own store only). 2-minute TTL. Row consumed on successful pair.
+  kioskPairings: defineTable({
+    code: v.string(),
+    storeId: v.string(),
+    storeName: v.string(),
+    createdByEmail: v.string(),
+    createdByKind: v.string(), // "admin" | "store_owner"
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    consumedDeviceId: v.optional(v.string()),
+  })
+    .index("by_code", ["code"])
+    .index("by_storeId", ["storeId"]),
+
+  // Rate-limit pairing-code consumption per storeId. Same pattern as
+  // trialCodeAttempts / staffPinAttempts — rolling window, purged lazily.
+  kioskPairingAttempts: defineTable({
+    storeId: v.string(),
+    failures: v.number(),
+    windowStart: v.number(),
+  }).index("by_storeId", ["storeId"]),
 
   // ============================
   // AI AGENTS

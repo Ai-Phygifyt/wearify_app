@@ -1,6 +1,8 @@
-import { query, mutation, MutationCtx } from "./_generated/server";
+import { query, mutation, internalMutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { assertFile, GUARDS } from "./fileValidation";
+import { requireKioskDevice } from "./kioskAuth";
 
 // ============================
 // Loyalty tier helper
@@ -15,6 +17,16 @@ function computeTier(points: number): string {
 // ============================
 // Shared helpers (used by phoneAuth and tablet/kiosk creation flows)
 // ============================
+// Format + calendar check. Rejects "2024-02-30", "2025-13-01", empty, etc.
+// Date.parse on the bare ISO prefix accepts invalid calendar dates silently
+// (rolls 2024-02-30 → March 1), so we round-trip and re-stringify to confirm.
+function isValidIsoDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toISOString().slice(0, 10) === s;
+}
+
 export function computeInitials(name: string): string {
   return name
     .split(/\s+/)
@@ -37,13 +49,14 @@ export function computeInitials(name: string): string {
  */
 export async function ensureCustomerByPhone(
   ctx: MutationCtx,
-  phone: string,
+  phoneRaw: string,
   opts?: {
     name?: string;
     dateOfBirth?: string;
     language?: string;
   }
 ): Promise<{ customerId: Id<"customers">; created: boolean; profileComplete: boolean }> {
+  const phone = phoneRaw.trim();
   const existing = await ctx.db
     .query("customers")
     .withIndex("by_phone", (q) => q.eq("phone", phone))
@@ -73,8 +86,8 @@ export async function ensureCustomerByPhone(
     phone,
     name: name || "Guest",
     initials: computeInitials(name || "Guest"),
-    dateOfBirth: opts?.dateOfBirth,
-    language: opts?.language || "en",
+    dateOfBirth: opts?.dateOfBirth?.trim(),
+    language: opts?.language?.trim() || "en",
     profileComplete: false,
     totalVisits: 0,
     totalLooks: 0,
@@ -154,12 +167,16 @@ export const updateProfile = mutation({
     photoFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    if (args.photoFileId) await assertFile(ctx, args.photoFileId, GUARDS.customerPhoto);
     const { customerId, ...fields } = args;
+    const TRIM_KEYS = new Set([
+      "name", "initials", "phone", "language", "dateOfBirth",
+      "gender", "heightUnit", "email", "city",
+    ]);
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+      if (value === undefined) continue;
+      updates[key] = typeof value === "string" && TRIM_KEYS.has(key) ? value.trim() : value;
     }
     // Recompute profileComplete if any gating field changed
     if (Object.keys(updates).length > 0) {
@@ -209,11 +226,12 @@ export const completeProfile = mutation({
     language: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.photoFileId) await assertFile(ctx, args.photoFileId, GUARDS.customerPhoto);
     const customer = await ctx.db.get(args.customerId);
     if (!customer) throw new Error("Customer not found");
     const name = args.name.trim();
     if (!name) throw new Error("Name is required");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.dateOfBirth)) {
+    if (!isValidIsoDate(args.dateOfBirth)) {
       throw new Error("Invalid date of birth");
     }
     if (args.heightCm < 50 || args.heightCm > 250) {
@@ -222,14 +240,14 @@ export const completeProfile = mutation({
     await ctx.db.patch(args.customerId, {
       name,
       initials: computeInitials(name),
-      dateOfBirth: args.dateOfBirth,
-      gender: args.gender,
+      dateOfBirth: args.dateOfBirth.trim(),
+      gender: args.gender.trim(),
       heightCm: args.heightCm,
-      heightUnit: args.heightUnit ?? "cm",
+      heightUnit: args.heightUnit?.trim() || "cm",
       city: args.city.trim(),
       email: args.email?.trim() || undefined,
       photoFileId: args.photoFileId,
-      language: args.language ?? customer.language ?? "en",
+      language: args.language?.trim() || customer.language || "en",
       profileComplete: true,
     });
     return { success: true };
@@ -320,6 +338,26 @@ export const updateMeasurements = mutation({
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(customerId, updates);
     }
+  },
+});
+
+// ============================
+// 6b. recordBodyScan — kiosk marks scan complete so next visit shows "Welcome back"
+// ============================
+export const recordBodyScan = mutation({
+  args: {
+    customerId: v.id("customers"),
+    bodyScanFileId: v.optional(v.id("_storage")),
+    deviceToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.deviceToken) {
+      await requireKioskDevice(ctx, args.deviceToken);
+    }
+    if (args.bodyScanFileId) await assertFile(ctx, args.bodyScanFileId, GUARDS.bodyScan);
+    const updates: Record<string, unknown> = { lastBodyScan: Date.now() };
+    if (args.bodyScanFileId) updates.bodyScanFileId = args.bodyScanFileId;
+    await ctx.db.patch(args.customerId, updates);
   },
 });
 
@@ -702,6 +740,44 @@ export const listFeedbackByStore = query({
 });
 
 // ============================
+// 22a. listFeedbackByCustomerAndStore
+//     Per-customer feedback filtered to a specific store. Used by the
+//     store-side customer detail page to surface ratings this customer
+//     has given *this* store. Indexed by_customerId then filtered in
+//     memory — per-customer feedback is small.
+// ============================
+export const listFeedbackByCustomerAndStore = query({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("feedback")
+      .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+      .order("desc")
+      .take(100);
+    return rows.filter((r) => r.storeId === args.storeId);
+  },
+});
+
+// ============================
+// 22b. getLastVisit
+//     Returns the most-recent visitHistory row for a customer, or null.
+//     Used by /c/me/feedback to target the right store + session.
+// ============================
+export const getLastVisit = query({
+  args: { customerId: v.id("customers") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("visitHistory")
+      .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+      .order("desc")
+      .first();
+  },
+});
+
+// ============================
 // 23. updateNotifPrefs
 // ============================
 export const updateNotifPrefs = mutation({
@@ -815,5 +891,27 @@ export const listStoreLinksEnriched = query({
       });
     }
     return enriched;
+  },
+});
+
+// One-shot backfill: trim whitespace on customer string fields. Idempotent.
+export const backfillTrimCustomerStrings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const KEYS = ["phone", "name", "initials", "language", "dateOfBirth", "gender", "heightUnit", "email", "city", "loyaltyTier"] as const;
+    const rows = await ctx.db.query("customers").collect();
+    let touched = 0;
+    for (const row of rows) {
+      const updates: Record<string, unknown> = {};
+      for (const key of KEYS) {
+        const val = (row as Record<string, unknown>)[key];
+        if (typeof val === "string" && val !== val.trim()) updates[key] = val.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(row._id, updates);
+        touched++;
+      }
+    }
+    return { scanned: rows.length, touched };
   },
 });

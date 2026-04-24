@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import { setToken, setStoredUser, formatPhone, fullPhone, isValidPhone } from "@/lib/phoneAuth";
 import {
   Gender,
@@ -22,8 +23,10 @@ import {
   validatePhoto,
 } from "@/lib/profileHelpers";
 import { Id } from "@/convex/_generated/dataModel";
+import { Camera, Pencil, Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 
 type Step = "phone" | "otp" | "profile";
+const STEPS: Step[] = ["phone", "otp", "profile"];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -40,7 +43,6 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Profile
   const [fullName, setFullName] = useState("");
   const [dob, setDob] = useState("");
   const [gender, setGender] = useState<Gender | "">("");
@@ -55,14 +57,11 @@ export default function RegisterPage() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Pre-fill phone if passed via ?phone= (from /c/login no-account CTA)
   useEffect(() => {
     const qp = searchParams.get("phone");
     if (qp) {
       const normalized = formatPhone(qp);
-      if (isValidPhone(normalized)) {
-        setPhone(normalized);
-      }
+      if (isValidPhone(normalized)) setPhone(normalized);
     }
   }, [searchParams]);
 
@@ -81,26 +80,29 @@ export default function RegisterPage() {
     setTimeout(() => otpRefs.current[0]?.focus(), 80);
   }
 
-  const submitOtp = useCallback(async (digits: string[]) => {
-    const otp = digits.join("");
-    if (otp.length !== 6) return;
-    setLoading(true);
-    setError("");
-    try {
-      const r = await verifyOtp({ phone: fullPhone(phone), otp });
-      if (r.success) {
-        setStep("profile");
-      } else {
-        setError(r.error || "Invalid OTP");
-        setOtpDigits(["", "", "", "", "", ""]);
-        setTimeout(() => otpRefs.current[0]?.focus(), 80);
+  const submitOtp = useCallback(
+    async (digits: string[]) => {
+      const otp = digits.join("");
+      if (otp.length !== 6) return;
+      setLoading(true);
+      setError("");
+      try {
+        const r = await verifyOtp({ phone: fullPhone(phone), otp });
+        if (r.success) {
+          setStep("profile");
+        } else {
+          setError(r.error || "Invalid OTP");
+          setOtpDigits(["", "", "", "", "", ""]);
+          setTimeout(() => otpRefs.current[0]?.focus(), 80);
+        }
+      } catch {
+        setError("Something went wrong. Try again.");
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      setError("Something went wrong. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [phone, verifyOtp]);
+    },
+    [phone, verifyOtp]
+  );
 
   function handleOtpInput(index: number, value: string) {
     const digit = value.replace(/\D/g, "").slice(-1);
@@ -114,6 +116,7 @@ export default function RegisterPage() {
       if (allFilled) submitOtp(next);
     }
   }
+
   function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
     if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
       const next = [...otpDigits];
@@ -122,6 +125,7 @@ export default function RegisterPage() {
       otpRefs.current[index - 1]?.focus();
     }
   }
+
   function handleOtpPaste(e: React.ClipboardEvent) {
     e.preventDefault();
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
@@ -156,10 +160,10 @@ export default function RegisterPage() {
     const localUrl = URL.createObjectURL(file);
     setPhotoPreview(localUrl);
     try {
-      const id = await upload(file);
+      const id = await upload(file, GUARDS.customerPhoto);
       setPhotoFileId(id);
-    } catch {
-      setError("Photo upload failed. Try again.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Photo upload failed. Try again.");
       setPhotoPreview("");
     } finally {
       setPhotoUploading(false);
@@ -172,7 +176,6 @@ export default function RegisterPage() {
     setError("");
     setSaving(true);
     try {
-      // Create the customer + open session (allowCreate:true marks this as register intent)
       const login = await loginWithOtp({
         phone: fullPhone(phone),
         otp: otpDigits.join(""),
@@ -185,7 +188,6 @@ export default function RegisterPage() {
         setSaving(false);
         return;
       }
-      // Save the rest of the profile
       await completeProfile({
         customerId: login.customerId as Id<"customers">,
         name: fullName.trim(),
@@ -197,7 +199,6 @@ export default function RegisterPage() {
         email: email.trim() || undefined,
         photoFileId: photoFileId ?? undefined,
       });
-      // Persist auth to localStorage
       localStorage.removeItem("wearify_auth_token");
       localStorage.removeItem("wearify_auth_user");
       setToken(login.token);
@@ -207,7 +208,7 @@ export default function RegisterPage() {
         role: "customer",
         customerId: login.customerId as string,
       });
-      window.location.href = "/c";
+      router.replace("/c");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not create account");
     } finally {
@@ -215,35 +216,44 @@ export default function RegisterPage() {
     }
   }
 
-  return (
-    <div style={{ minHeight: "100svh", background: "#FDF8F0", padding: "28px 20px 48px" }}>
-      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <link
-        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600;1,700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap"
-        rel="stylesheet"
-      />
+  const stepIndex = STEPS.indexOf(step);
 
+  return (
+    <div
+      style={{
+        minHeight: "100svh",
+        background: "var(--cx-ivory)",
+        padding: "28px 18px 48px",
+        fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+        color: "var(--cx-text)",
+      }}
+    >
       <div style={{ maxWidth: 440, margin: "0 auto" }}>
         {/* Progress dots */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, justifyContent: "center" }}>
-          {(["phone", "otp", "profile"] as Step[]).map((s, i) => {
-            const done = (["phone", "otp", "profile"] as Step[]).indexOf(step) >= i;
-            return (
-              <div key={s} style={{
-                width: 32, height: 4, borderRadius: 2,
-                background: done ? "#C9941A" : "#E8D5E0",
-                transition: "background 0.3s",
-              }} />
-            );
-          })}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 20, justifyContent: "center" }}>
+          {STEPS.map((_, i) => (
+            <div
+              key={i}
+              style={{
+                width: i === stepIndex ? 28 : 16,
+                height: 4,
+                borderRadius: 2,
+                background: i <= stepIndex ? "var(--cx-gold)" : "var(--cx-border)",
+                transition: "all .3s var(--cx-ease)",
+              }}
+            />
+          ))}
         </div>
 
         {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <h1 className="cx-serif" style={{ fontSize: 28, fontWeight: 700, fontStyle: "italic", color: "#2D1B4E", margin: 0 }}>
+        <div style={{ textAlign: "center", marginBottom: 22 }}>
+          <h1
+            className="cx-serif"
+            style={{ fontSize: 28, fontWeight: 700, fontStyle: "italic", color: "var(--cx-plum)", margin: 0, lineHeight: 1.2 }}
+          >
             Create your Wearify account
           </h1>
-          <p style={{ fontSize: 13, color: "#8B7EA0", marginTop: 6 }}>
+          <p style={{ fontSize: 13, color: "var(--cx-text-muted)", marginTop: 8, lineHeight: 1.5 }}>
             {step === "phone" && "We'll send you a one-time code to verify your number."}
             {step === "otp" && `Enter the 6-digit code sent to +91 ${phone}`}
             {step === "profile" && "Tell us a bit about you so we can personalise your looks."}
@@ -251,80 +261,97 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <div style={{
-            padding: "10px 14px", borderRadius: 10,
-            background: "#FFEBEE", color: "#B71C1C",
-            fontSize: 13, fontWeight: 600, marginBottom: 16,
-          }}>
+          <div
+            className="cx-shake"
+            style={{
+              padding: "10px 14px",
+              borderRadius: "var(--cx-r-md)",
+              background: "var(--cx-error-bg)",
+              color: "var(--cx-error)",
+              fontSize: 13,
+              fontWeight: 600,
+              marginBottom: 16,
+            }}
+          >
             {error}
           </div>
         )}
 
         {/* STEP 1: PHONE */}
         {step === "phone" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Field label="Mobile Number">
-              <div style={{ display: "flex", alignItems: "center", borderRadius: 10, border: "1.5px solid #E8D5E0", background: "white", overflow: "hidden" }}>
-                <span className="cx-mono" style={{ padding: "12px 14px", fontSize: 14, color: "#8B7EA0", background: "#FBF0F4", borderRight: "1px solid #E8D5E0" }}>+91</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="cx-field">
+              <label className="cx-label">Mobile Number</label>
+              <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+                <div
+                  style={{
+                    background: "var(--cx-plum-ghost)",
+                    color: "var(--cx-plum)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    padding: "0 14px",
+                    borderRadius: "var(--cx-r-md)",
+                    border: "1.5px solid var(--cx-border)",
+                    display: "flex",
+                    alignItems: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  +91
+                </div>
                 <input
-                  type="tel" inputMode="numeric" autoFocus
+                  type="tel"
+                  inputMode="numeric"
+                  autoFocus
                   value={phone}
                   onChange={(e) => { setPhone(formatPhone(e.target.value)); setError(""); }}
                   placeholder="9876543210"
-                  className="cx-mono"
-                  style={{ flex: 1, padding: "12px 14px", border: "none", fontSize: 16, color: "#1A0A1E", outline: "none", fontFamily: "inherit" }}
+                  className="cx-input cx-mono"
+                  style={{ letterSpacing: ".06em" }}
                 />
               </div>
-            </Field>
-            <button onClick={handlePhoneNext} disabled={!phoneValid}
-              style={primaryBtn(!phoneValid)}>
-              Send OTP
+            </div>
+            <button onClick={handlePhoneNext} disabled={!phoneValid} className="cx-btn cx-btn-primary cx-btn-block cx-btn-lg">
+              Send OTP <ArrowRight size={16} />
             </button>
-            <p style={{ fontSize: 12, textAlign: "center", color: "#8B7EA0" }}>
+            <p style={{ fontSize: 12, textAlign: "center", color: "var(--cx-text-muted)" }}>
               Already have an account?{" "}
-              <button onClick={() => router.push("/c/login")} style={linkBtn}>
-                Log in
-              </button>
+              <button onClick={() => router.push("/c/login")} className="cx-link-btn">Log in</button>
             </p>
           </div>
         )}
 
         {/* STEP 2: OTP */}
         {step === "otp" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
               {otpDigits.map((d, i) => (
                 <input
                   key={i}
                   ref={(el) => { otpRefs.current[i] = el; }}
-                  type="tel" inputMode="numeric" maxLength={1}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={1}
                   value={d}
                   onChange={(e) => handleOtpInput(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                  onPaste={handleOtpPaste}
-                  className="cx-mono"
-                  style={{
-                    width: 44, height: 52, borderRadius: 10,
-                    border: `1.5px solid ${d ? "#C9941A" : "#E8D5E0"}`,
-                    background: "white", textAlign: "center",
-                    fontSize: 22, fontWeight: 700, color: "#1A0A1E",
-                    outline: "none", fontFamily: "inherit",
-                  }}
+                  onPaste={i === 0 ? handleOtpPaste : undefined}
+                  className={`cx-otp ${d ? "filled" : ""}`}
                 />
               ))}
             </div>
-            <p style={{ fontSize: 11, textAlign: "center", color: "#8B7EA0" }}>
-              Demo OTP: <strong style={{ color: "#C9941A" }}>123456</strong>
-            </p>
-            <button onClick={() => submitOtp(otpDigits)} disabled={otpDigits.join("").length !== 6 || loading}
-              style={primaryBtn(otpDigits.join("").length !== 6 || loading)}>
-              {loading ? "Verifying…" : "Verify"}
+            <button
+              onClick={() => submitOtp(otpDigits)}
+              disabled={otpDigits.join("").length !== 6 || loading}
+              className="cx-btn cx-btn-primary cx-btn-block cx-btn-lg"
+            >
+              {loading ? <><Loader2 size={16} className="cx-spin" /> Verifying…</> : "Verify"}
             </button>
             <button
               onClick={() => { setStep("phone"); setOtpDigits(["", "", "", "", "", ""]); setError(""); }}
-              style={linkBtn}
+              className="cx-btn cx-btn-ghost cx-btn-block"
             >
-              Change mobile number
+              <ArrowLeft size={14} /> Change mobile number
             </button>
           </div>
         )}
@@ -332,105 +359,192 @@ export default function RegisterPage() {
         {/* STEP 3: PROFILE */}
         {step === "profile" && (
           <>
-            {/* Photo */}
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-              <label htmlFor="photo-input"
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+              <label
+                htmlFor="photo-input"
                 style={{
-                  position: "relative", width: 112, height: 112, borderRadius: "50%",
-                  background: (photoPreview) ? "transparent" : "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", overflow: "hidden",
-                  border: "3px solid #DFC07A", boxShadow: "0 6px 24px rgba(45,27,78,.14)",
-                }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                  position: "relative",
+                  width: 112,
+                  height: 112,
+                  borderRadius: "50%",
+                  background: photoPreview ? "transparent" : "var(--cx-grad-plum)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  overflow: "hidden",
+                  border: "3px solid var(--cx-border-gold)",
+                  boxShadow: "var(--cx-shadow-md)",
+                }}
+              >
                 {photoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={photoPreview} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
-                  <span className="cx-serif" style={{ fontSize: 40, fontWeight: 700, color: "#C9941A", fontStyle: "italic" }}>
+                  <span className="cx-serif" style={{ fontSize: 40, fontWeight: 700, color: "var(--cx-gold-l)", fontStyle: "italic" }}>
                     {initials}
                   </span>
                 )}
                 {photoUploading && (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 11, fontWeight: 600 }}>
-                    Uploading…
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "rgba(0,0,0,.45)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#fff",
+                      gap: 6,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Loader2 size={14} className="cx-spin" /> Uploading…
                   </div>
                 )}
-                <div style={{
-                  position: "absolute", bottom: 0, right: 0,
-                  width: 32, height: 32, borderRadius: "50%",
-                  background: "#C9941A", border: "2px solid #FDF8F0",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "white", fontSize: 14,
-                }}>{photoPreview ? "✎" : "+"}</div>
-                <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp"
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    right: 0,
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    background: "var(--cx-gold)",
+                    border: "2px solid var(--cx-ivory)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                  }}
+                >
+                  {photoPreview ? <Pencil size={14} /> : <Camera size={14} />}
+                </div>
+                <input
+                  id="photo-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoPick(f); }}
-                  style={{ display: "none" }} />
+                  style={{ display: "none" }}
+                />
               </label>
             </div>
-            <p style={{ textAlign: "center", fontSize: 11, color: "#8B7EA0", marginTop: -12, marginBottom: 20 }}>
+            <p style={{ textAlign: "center", fontSize: 11, color: "var(--cx-text-muted)", marginBottom: 22 }}>
               Photo optional — we&apos;ll show your initials otherwise
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <Field label="Full Name *">
-                <input style={inputStyle} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Ananya Mehta" />
+                <input className="cx-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Ananya Mehta" />
               </Field>
 
               <Field label="Date of Birth *">
-                <input type="date" style={inputStyle} value={dob} max={maxDob} onChange={(e) => setDob(e.target.value)} />
+                <input type="date" className="cx-input" value={dob} max={maxDob} onChange={(e) => setDob(e.target.value)} />
                 {dob && ageFromDob(dob) !== null && ageFromDob(dob)! >= MIN_AGE_YEARS && (
-                  <div style={{ fontSize: 11, color: "#8B7EA0", marginTop: 4 }}>Age: {ageFromDob(dob)}</div>
+                  <div className="cx-field-help">Age: {ageFromDob(dob)}</div>
                 )}
               </Field>
 
               <Field label="Gender *">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  {([["female","Female"],["male","Male"],["other","Other"],["prefer_not_to_say","Prefer not to say"]] as const).map(([v, l]) => (
-                    <button key={v} type="button" onClick={() => setGender(v)}
+                  {(
+                    [
+                      ["female", "Female"],
+                      ["male", "Male"],
+                      ["other", "Other"],
+                      ["prefer_not_to_say", "Prefer not to say"],
+                    ] as const
+                  ).map(([v, l]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setGender(v)}
                       style={{
-                        padding: "10px 12px", borderRadius: 10,
-                        border: gender === v ? "1.5px solid #C9941A" : "1.5px solid #E8D5E0",
-                        background: gender === v ? "#FDF5E4" : "white",
-                        color: gender === v ? "#8B6914" : "#1A0A1E",
-                        fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                      }}>{l}</button>
+                        padding: "10px 12px",
+                        borderRadius: "var(--cx-r-md)",
+                        border: gender === v ? "1.5px solid var(--cx-gold)" : "1.5px solid var(--cx-border)",
+                        background: gender === v ? "var(--cx-gold-ghost)" : "var(--cx-white)",
+                        color: gender === v ? "var(--cx-gold-d)" : "var(--cx-text)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        transition: "all .15s ease",
+                      }}
+                    >
+                      {l}
+                    </button>
                   ))}
                 </div>
               </Field>
 
-              <Field label="Height *" right={
-                <div style={{ display: "flex", background: "#F4EFF9", borderRadius: 100, padding: 2 }}>
-                  {(["cm","ftin"] as const).map((u) => (
-                    <button key={u} type="button" onClick={() => setHeightUnit(u)}
-                      style={{
-                        padding: "4px 12px", borderRadius: 100, border: "none", fontSize: 11, fontWeight: 700,
-                        cursor: "pointer", fontFamily: "inherit",
-                        background: heightUnit === u ? "#2D1B4E" : "transparent",
-                        color: heightUnit === u ? "white" : "#2D1B4E",
-                      }}>{u === "cm" ? "cm" : "ft / in"}</button>
-                  ))}
-                </div>
-              }>
+              <Field
+                label="Height *"
+                right={
+                  <div style={{ display: "flex", background: "var(--cx-plum-ghost)", borderRadius: "var(--cx-r-pill)", padding: 2 }}>
+                    {(["cm", "ftin"] as const).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setHeightUnit(u)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "var(--cx-r-pill)",
+                          border: "none",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          background: heightUnit === u ? "var(--cx-grad-plum)" : "transparent",
+                          color: heightUnit === u ? "var(--cx-on-dark)" : "var(--cx-plum)",
+                          transition: "all .15s ease",
+                        }}
+                      >
+                        {u === "cm" ? "cm" : "ft / in"}
+                      </button>
+                    ))}
+                  </div>
+                }
+              >
                 {heightUnit === "cm" ? (
-                  <input type="number" min={MIN_HEIGHT_CM} max={MAX_HEIGHT_CM} value={heightCm}
-                    onChange={(e) => setHeightCm(Number(e.target.value))} style={inputStyle} />
+                  <input
+                    type="number"
+                    min={MIN_HEIGHT_CM}
+                    max={MAX_HEIGHT_CM}
+                    value={heightCm}
+                    onChange={(e) => setHeightCm(Number(e.target.value))}
+                    className="cx-input"
+                  />
                 ) : (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #E8D5E0", borderRadius: 10, background: "white", overflow: "hidden" }}>
-                      <input type="number" min={3} max={7} value={ftVal}
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type="number"
+                        min={3}
+                        max={7}
+                        value={ftVal}
                         onChange={(e) => setHeightFromFtIn(Number(e.target.value), inVal)}
-                        style={{ ...inputStyle, border: "none", flex: 1 }} />
-                      <span style={{ paddingRight: 12, fontSize: 12, color: "#8B7EA0" }}>ft</span>
+                        className="cx-input"
+                        style={{ paddingRight: 30 }}
+                      />
+                      <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--cx-text-muted)" }}>ft</span>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #E8D5E0", borderRadius: 10, background: "white", overflow: "hidden" }}>
-                      <input type="number" min={0} max={11} value={inVal}
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type="number"
+                        min={0}
+                        max={11}
+                        value={inVal}
                         onChange={(e) => setHeightFromFtIn(ftVal, Number(e.target.value))}
-                        style={{ ...inputStyle, border: "none", flex: 1 }} />
-                      <span style={{ paddingRight: 12, fontSize: 12, color: "#8B7EA0" }}>in</span>
+                        className="cx-input"
+                        style={{ paddingRight: 30 }}
+                      />
+                      <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--cx-text-muted)" }}>in</span>
                     </div>
                   </div>
                 )}
-                <div style={{ fontSize: 11, color: "#8B7EA0", marginTop: 4 }}>
+                <div className="cx-field-help">
                   {heightUnit === "cm"
                     ? `${cmToFtIn(heightCm).ft} ft ${cmToFtIn(heightCm).inch} in`
                     : `${heightCm} cm`}
@@ -438,59 +552,39 @@ export default function RegisterPage() {
               </Field>
 
               <Field label="City *">
-                <input style={inputStyle} value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Mumbai" />
+                <input className="cx-input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Mumbai" />
               </Field>
 
               <Field label="Email (optional)">
-                <input type="email" style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+                <input type="email" className="cx-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               </Field>
             </div>
 
-            <button onClick={handleFinish} disabled={saving || photoUploading}
-              style={{ ...primaryBtn(saving || photoUploading), marginTop: 24 }}>
-              {saving ? "Creating account…" : "Finish & Enter Wearify"}
+            <button
+              onClick={handleFinish}
+              disabled={saving || photoUploading}
+              className="cx-btn cx-btn-primary cx-btn-block cx-btn-lg"
+              style={{ marginTop: 22 }}
+            >
+              {saving ? <><Loader2 size={16} className="cx-spin" /> Creating account…</> : <>Finish & Enter Wearify <ArrowRight size={16} /></>}
             </button>
 
-            <p style={{ textAlign: "center", fontSize: 11, color: "#8B7EA0", marginTop: 16 }}>
+            <p style={{ textAlign: "center", fontSize: 11, color: "var(--cx-text-muted)", marginTop: 14, lineHeight: 1.5 }}>
               By finishing, you agree to our DPDP consent terms. You can edit any of these later.
             </p>
           </>
         )}
       </div>
+
     </div>
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "11px 14px", borderRadius: 10,
-  border: "1.5px solid #E8D5E0", background: "white",
-  fontSize: 14, color: "#1A0A1E", outline: "none",
-  fontFamily: "inherit", boxSizing: "border-box",
-};
-
-const linkBtn: React.CSSProperties = {
-  background: "none", border: "none", cursor: "pointer",
-  color: "#2D1B4E", fontWeight: 700, textDecoration: "underline",
-  fontFamily: "inherit", fontSize: 13,
-};
-
-function primaryBtn(disabled: boolean): React.CSSProperties {
-  return {
-    width: "100%", padding: "14px 20px", borderRadius: 10, border: "none",
-    background: "linear-gradient(135deg, #2D1B4E 0%, #4A2D6E 100%)",
-    color: "white", fontSize: 15, fontWeight: 700,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.5 : 1,
-    boxShadow: "0 4px 20px rgba(201,148,26,.28)",
-    fontFamily: "inherit",
-  };
-}
-
 function Field({ label, right, children }: { label: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="cx-field">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <label style={{ fontSize: 13, fontWeight: 600, color: "#1A0A1E" }}>{label}</label>
+        <label className="cx-label" style={{ marginBottom: 0 }}>{label}</label>
         {right}
       </div>
       {children}

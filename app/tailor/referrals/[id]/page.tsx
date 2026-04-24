@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { Badge, Card, Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { PageLoading } from "@/components/ui/wearify-ui";
 
 export default function ReferralDetailPage() {
   const router = useRouter();
@@ -20,47 +20,31 @@ export default function ReferralDetailPage() {
     try {
       const userData = JSON.parse(localStorage.getItem("wearify_auth_user") || "{}");
       if (userData.tailorId) setTailorId(userData.tailorId);
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }, []);
 
   const referral = useQuery(
     api.tailorOps.getReferralById,
     referralId ? { id: referralId as Id<"tailorReferrals"> } : "skip"
   );
-
   const profile = useQuery(
     api.tailorOps.getByTailorId,
     tailorId ? { tailorId } : "skip"
   );
-
   const updateStatus = useMutation(api.tailorOps.updateReferralStatus);
   const createOrder = useMutation(api.tailorOps.createOrder);
 
-  if (referral === undefined || profile === undefined) {
-    return <PageLoading />;
-  }
+  if (referral === undefined || profile === undefined) return <PageLoading />;
 
   if (!referral) {
     return (
-      <div className="text-center py-12">
-        <p className="text-sm text-wf-subtext">Referral not found.</p>
-        <Btn className="mt-4" onClick={() => router.push("/tailor/referrals")}>Back to Referrals</Btn>
+      <div className="t-empty">
+        <h3>Referral not found</h3>
+        <button className="t-btn t-btn-ghost" onClick={() => router.push("/tailor/referrals")}>
+          Back to Leads
+        </button>
       </div>
     );
-  }
-
-  function statusToBadge(status: string) {
-    switch (status) {
-      case "new": return "open";
-      case "contacted": return "progress";
-      case "quoted": return "pending";
-      case "confirmed": return "active";
-      case "declined": return "terminated";
-      case "completed": return "verified";
-      default: return "planned";
-    }
   }
 
   function maskedPhone(phone: string) {
@@ -77,9 +61,7 @@ export default function ReferralDetailPage() {
         status: "quoted",
       });
       setShowQuoteModal(false);
-    } catch {
-      // ignore error
-    } finally {
+    } catch { /* ignore */ } finally {
       setLoading(false);
     }
   }
@@ -108,9 +90,7 @@ export default function ReferralDetailPage() {
         note: referral.note || undefined,
       });
       router.push("/tailor/orders");
-    } catch {
-      // ignore error
-    } finally {
+    } catch { /* ignore */ } finally {
       setLoading(false);
     }
   }
@@ -123,11 +103,19 @@ export default function ReferralDetailPage() {
         status: "declined",
       });
       router.push("/tailor/referrals");
-    } catch {
-      // ignore error
-    } finally {
+    } catch { /* ignore */ } finally {
       setLoading(false);
     }
+  }
+
+  async function handleMarkContacted() {
+    if (referral?.status !== "new") return;
+    try {
+      await updateStatus({
+        id: referralId as Id<"tailorReferrals">,
+        status: "contacted",
+      });
+    } catch { /* ignore */ }
   }
 
   function handleWhatsApp() {
@@ -137,149 +125,248 @@ export default function ReferralDetailPage() {
       `Hi ${referral.customerName}, I'm ${profile?.name || "your tailor"} from Wearify. I received your referral for ${referral.saree || "stitching work"}. Let's discuss the details!`
     );
     window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+    handleMarkContacted();
   }
 
+  const pillClass =
+    referral.status === "new" ? "t-pill-new"
+    : referral.status === "contacted" ? "t-pill-contacted"
+    : referral.status === "quoted" ? "t-pill-quoted"
+    : referral.status === "confirmed" ? "t-pill-confirmed"
+    : referral.status === "declined" ? "t-pill-declined"
+    : "t-pill-confirmed";
+
+  const canConvert = referral.status === "new" || referral.status === "contacted" || referral.status === "quoted";
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+    <div className="t-screen">
+      <div className="t-topbar">
         <button
+          type="button"
+          className="t-back"
           onClick={() => router.push("/tailor/referrals")}
-          className="p-1 rounded-lg hover:bg-wf-card transition-colors bg-transparent border-none cursor-pointer"
+          aria-label="Back"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-wf-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="text-lg font-bold text-wf-text">Referral Detail</h1>
-        <Badge status={statusToBadge(referral.status)} className="ml-auto">
-          {referral.status}
-        </Badge>
+        <h1>Lead</h1>
+        <div className="t-right">
+          <span className={`t-pill ${pillClass}`}>{referral.status}</span>
+        </div>
       </div>
 
-      {/* Customer Info */}
-      <Card title="Customer Info">
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-wf-subtext">Name</span>
-            <span className="font-medium text-wf-text">{referral.customerName}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-wf-subtext">Phone</span>
-            <span className="font-mono text-wf-text">{maskedPhone(referral.customerPhone)}</span>
-          </div>
-          {referral.storeName && (
-            <div className="flex justify-between">
-              <span className="text-wf-subtext">Store</span>
-              <span className="font-medium text-wf-text">{referral.storeName}</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-wf-subtext">Date</span>
-            <span className="text-wf-text">{referral.date}</span>
-          </div>
+      {/* Customer hero */}
+      <div style={{ padding: "0 20px 16px" }}>
+        <div className="t-serif" style={{ fontSize: 30, fontWeight: 500, letterSpacing: "-0.01em", lineHeight: 1.1 }}>
+          {referral.customerName}
         </div>
-      </Card>
-
-      {/* Details */}
-      <Card title="Details">
-        <div className="space-y-2 text-sm">
-          {referral.saree && (
-            <div className="flex justify-between">
-              <span className="text-wf-subtext">Saree</span>
-              <span className="font-medium text-wf-text">{referral.saree}</span>
-            </div>
-          )}
-          {referral.fabric && (
-            <div className="flex justify-between">
-              <span className="text-wf-subtext">Fabric</span>
-              <span className="text-wf-text">{referral.fabric}</span>
-            </div>
-          )}
-          {referral.occasion && (
-            <div className="flex justify-between">
-              <span className="text-wf-subtext">Occasion</span>
-              <span className="text-wf-text">{referral.occasion}</span>
-            </div>
-          )}
-          {referral.budget && (
-            <div className="flex justify-between">
-              <span className="text-wf-subtext">Budget</span>
-              <span className="font-medium text-wf-text">{referral.budget}</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-wf-subtext">Measurements Shared</span>
-            <Badge status={referral.measurementsShared ? "verified" : "pending"}>
-              {referral.measurementsShared ? "Yes" : "No"}
-            </Badge>
-          </div>
+        <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 4 }}>
+          {referral.saree ?? "General enquiry"}
+          {referral.fabric ? ` · ${referral.fabric}` : ""}
         </div>
-      </Card>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+          {referral.occasion && <span className="t-chip">{referral.occasion}</span>}
+          {referral.budget && <span className="t-chip t-mono">{referral.budget}</span>}
+          {referral.measurementsShared && (
+            <span className="t-chip" style={{ background: "var(--ok-tint)", color: "var(--ok)" }}>
+              Measurements on file
+            </span>
+          )}
+        </div>
+      </div>
 
-      {/* Note from store */}
+      {/* Customer info card */}
+      <div style={{ margin: "0 20px 12px" }}>
+        <div className="t-card t-card-inset">
+          <InfoRow label="Phone" value={maskedPhone(referral.customerPhone)} mono />
+          {referral.storeName && <InfoRow label="Source" value={referral.storeName} />}
+          <InfoRow label="Received" value={referral.date} last />
+        </div>
+      </div>
+
+      {/* Store note */}
       {referral.note && (
-        <Card title="Note from Store">
-          <p className="text-sm text-wf-subtext">{referral.note}</p>
-        </Card>
+        <div style={{ margin: "0 20px 12px" }}>
+          <div className="t-card t-card-inset" style={{ background: "var(--ivory-2)" }}>
+            <div className="t-caps" style={{ color: "var(--ink-3)", marginBottom: 6 }}>
+              Note from store
+            </div>
+            <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.5 }}>{referral.note}</div>
+          </div>
+        </div>
       )}
 
-      {/* Actions */}
-      <div className="space-y-3">
-        <Btn primary className="w-full" onClick={handleWhatsApp}>
-          Contact on WhatsApp
-        </Btn>
-
-        {(referral.status === "new" || referral.status === "contacted") && (
-          <Btn className="w-full" onClick={() => setShowQuoteModal(true)}>
-            Send Quote
-          </Btn>
-        )}
-
-        {(referral.status === "new" || referral.status === "contacted" || referral.status === "quoted") && (
-          <div className="flex gap-3">
-            <Btn primary className="flex-1" onClick={handleAccept} disabled={loading}>
-              Accept
-            </Btn>
-            <Btn danger className="flex-1" onClick={handleDecline} disabled={loading}>
-              Decline
-            </Btn>
+      {/* Convert-to-order hero — dominant CTA per design brief */}
+      {canConvert && (
+        <div
+          style={{
+            margin: "8px 20px 16px",
+            background: "linear-gradient(160deg, #1A1512 0%, #2E2620 100%)",
+            color: "var(--ivory)",
+            borderRadius: "var(--radius-lg)",
+            padding: "20px 20px 18px",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              right: -24, top: -24,
+              width: 140, height: 140, borderRadius: 99,
+              background: "radial-gradient(circle at 30% 30%, rgba(176,123,26,0.4), transparent 70%)",
+            }}
+          />
+          <div className="t-hero-eyebrow">Ready to commit?</div>
+          <h2 className="t-hero-title">
+            Convert to <em>order</em>
+          </h2>
+          <div className="t-hero-sub">
+            We&apos;ll pull measurements from the customer&apos;s profile and start the stitching timer.
           </div>
+          <div style={{ display: "flex", gap: 10, position: "relative", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="t-hero-cta"
+              onClick={handleAccept}
+              disabled={loading}
+              style={{ opacity: loading ? 0.6 : 1 }}
+            >
+              {loading ? "…" : "Convert to order"}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+              </svg>
+            </button>
+            {referral.status !== "quoted" && (
+              <button
+                type="button"
+                onClick={() => setShowQuoteModal(true)}
+                style={{
+                  background: "transparent",
+                  color: "var(--ivory)",
+                  border: "1px solid rgba(250,246,239,0.2)",
+                  padding: "11px 16px",
+                  borderRadius: 99,
+                  fontWeight: 500,
+                  fontSize: 14,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Send quote
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Secondary actions */}
+      <div style={{ padding: "0 20px", display: "flex", gap: 10 }}>
+        <button type="button" className="t-btn t-btn-ghost" style={{ flex: 1 }} onClick={handleWhatsApp}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          </svg>
+          WhatsApp
+        </button>
+        {canConvert && (
+          <button
+            type="button"
+            className="t-btn t-btn-ghost"
+            style={{ flex: 1, color: "var(--urgent)", borderColor: "var(--urgent-tint)" }}
+            onClick={handleDecline}
+            disabled={loading}
+          >
+            Decline
+          </button>
         )}
       </div>
 
-      {/* Quote Modal */}
+      <div style={{ height: 28 }} />
+
+      {/* Quote bottom-sheet */}
       {showQuoteModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center">
-          <div className="bg-white w-full max-w-md rounded-t-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-wf-text">Send Quote</h3>
-              <button
-                onClick={() => setShowQuoteModal(false)}
-                className="p-1 bg-transparent border-none cursor-pointer text-wf-muted"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-wf-text mb-1.5">Price (Rs.)</label>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(26, 21, 18, 0.4)",
+            zIndex: 50,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+          onClick={() => setShowQuoteModal(false)}
+        >
+          <div
+            style={{
+              background: "var(--ivory)",
+              width: "100%",
+              maxWidth: 480,
+              borderRadius: "26px 26px 0 0",
+              padding: "16px 20px 34px",
+              animation: "t-sheet-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              width: 44, height: 4, borderRadius: 99,
+              background: "var(--line-2)", margin: "0 auto 18px",
+            }} />
+            <h3 className="t-serif" style={{ fontSize: 22, fontWeight: 500, margin: "0 0 6px" }}>
+              Send quote
+            </h3>
+            <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "0 0 16px" }}>
+              Give the customer a starting price. They&apos;ll see it via WhatsApp and you can always adjust later.
+            </p>
+            <div className="t-field" style={{ marginBottom: 14 }}>
+              <label>Quoted price</label>
               <input
+                className="t-input t-mono"
                 type="number"
                 value={quotePrice}
                 onChange={(e) => setQuotePrice(e.target.value)}
-                placeholder="Enter quoted price"
-                className="w-full px-4 py-2.5 text-sm border border-wf-border rounded-lg outline-none bg-white text-wf-text"
+                placeholder="₹0"
               />
             </div>
-            <Btn primary className="w-full" onClick={handleSendQuote} disabled={loading}>
-              {loading ? "Sending..." : "Send Quote"}
-            </Btn>
+            <button
+              type="button"
+              className="t-btn t-btn-primary t-btn-full t-btn-lg"
+              onClick={handleSendQuote}
+              disabled={loading || !quotePrice || Number(quotePrice) <= 0}
+            >
+              {loading ? "Sending…" : "Send quote"}
+            </button>
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes t-sheet-in { from { transform: translateY(100%); } }
+      `}</style>
+    </div>
+  );
+}
+
+function InfoRow({ label, value, mono, last }: { label: string; value: string; mono?: boolean; last?: boolean }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "10px 0",
+        borderBottom: last ? "none" : "1px solid var(--line)",
+      }}
+    >
+      <span style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.04em" }}>{label}</span>
+      <span
+        className={mono ? "t-mono" : ""}
+        style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}
+      >
+        {value}
+      </span>
     </div>
   );
 }

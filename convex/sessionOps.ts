@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { requireKioskDeviceForStore } from "./kioskAuth";
 
 // ============================================================
 // STORE-LINK HELPERS
@@ -70,8 +71,18 @@ export const createSession = mutation({
     tabletLinked: v.optional(v.boolean()),
     occasion: v.optional(v.string()),
     budget: v.optional(v.string()),
+    // Optional: kiosk callers send their paired deviceToken and it is
+    // verified against storeId. Absent = legacy/tablet path (tablet has no
+    // device identity yet — flagged for a future auth pass).
+    deviceToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    let mirrorId = args.mirrorId;
+    if (args.deviceToken) {
+      const device = await requireKioskDeviceForStore(ctx, args.deviceToken, args.storeId);
+      // Trust the device's own id over anything the client supplied.
+      mirrorId = device.deviceId;
+    }
     const sessionId = "SS-" + Date.now().toString();
     await ctx.db.insert("sessions", {
       sessionId,
@@ -81,7 +92,7 @@ export const createSession = mutation({
       staffName: args.staffName,
       customerId: args.customerId,
       customerPhone: args.customerPhone,
-      mirrorId: args.mirrorId,
+      mirrorId,
       tabletLinked: args.tabletLinked,
       status: "active",
       startTime: Date.now(),
@@ -144,13 +155,19 @@ export const listSessionsByStore = query({
 });
 
 export const endSession = mutation({
-  args: { sessionId: v.string() },
+  args: {
+    sessionId: v.string(),
+    deviceToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
       .unique();
     if (!session) throw new Error("Session not found");
+    if (args.deviceToken) {
+      await requireKioskDeviceForStore(ctx, args.deviceToken, session.storeId);
+    }
 
     // Idempotency: if this session was already completed, return the prior
     // totals instead of double-writing a visit record.
@@ -311,6 +328,21 @@ export const createLook = mutation({
     grad: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    // Idempotency: one look per (customer, session, saree). Re-adds in the
+    // same session don't create duplicate entries in /c/looks.
+    if (args.customerId && args.sessionId) {
+      const existing = await ctx.db
+        .query("looks")
+        .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("customerId"), args.customerId),
+            q.eq(q.field("sareeId"), args.sareeId),
+          ),
+        )
+        .first();
+      if (existing) return existing._id;
+    }
     const id = await ctx.db.insert("looks", {
       sessionId: args.sessionId,
       storeId: args.storeId,
@@ -454,8 +486,16 @@ export const getCustomerPreviousShortlist = query({
 });
 
 export const removeFromShortlist = mutation({
-  args: { shortlistId: v.id("shortlist") },
+  args: {
+    shortlistId: v.id("shortlist"),
+    sessionId: v.string(),
+  },
   handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.shortlistId);
+    if (!row) return;
+    if (row.sessionId !== args.sessionId) {
+      throw new Error("Shortlist item does not belong to this session");
+    }
     await ctx.db.delete(args.shortlistId);
   },
 });
@@ -473,10 +513,16 @@ export const getShortlist = query({
 });
 
 export const markSentToMirror = mutation({
-  args: { shortlistId: v.id("shortlist") },
+  args: {
+    shortlistId: v.id("shortlist"),
+    sessionId: v.string(),
+  },
   handler: async (ctx, args) => {
     const item = await ctx.db.get(args.shortlistId);
     if (!item) throw new Error("Shortlist item not found");
+    if (item.sessionId !== args.sessionId) {
+      throw new Error("Shortlist item does not belong to this session");
+    }
     await ctx.db.patch(args.shortlistId, { sentToMirror: true });
   },
 });
@@ -497,6 +543,19 @@ export const addToWardrobe = mutation({
     price: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Idempotent: if the same customer already has this saree in their
+    // wardrobe, return the existing row id instead of inserting a duplicate.
+    // Prevents the duplicate-React-key crash on hydration, and keeps the
+    // kiosk UI consistent across sessions for the same customer.
+    if (args.customerId) {
+      const prior = await ctx.db
+        .query("wardrobe")
+        .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
+        .take(200);
+      const dup = prior.find((w) => w.sareeId === args.sareeId);
+      if (dup) return dup._id;
+    }
+
     // Max 10 items per session
     const existing = await ctx.db
       .query("wardrobe")
@@ -528,9 +587,46 @@ export const addToWardrobe = mutation({
 });
 
 export const removeFromWardrobe = mutation({
-  args: { wardrobeId: v.id("wardrobe") },
+  args: {
+    wardrobeId: v.id("wardrobe"),
+    customerId: v.optional(v.id("customers")),
+  },
   handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.wardrobeId);
+    if (!row) return;
+    // If caller passes customerId, require it matches. Guest rows (no
+    // customerId on either side) pass through.
+    if (args.customerId && row.customerId && row.customerId !== args.customerId) {
+      throw new Error("Wardrobe item does not belong to this customer");
+    }
     await ctx.db.delete(args.wardrobeId);
+  },
+});
+
+// One-shot cleanup for wardrobe rows that duplicated before addToWardrobe
+// became idempotent. For every (customerId, sareeId) pair keep the OLDEST
+// row and delete the rest. Run once: `npx convex run sessionOps:dedupeWardrobe '{}'`.
+export const dedupeWardrobe = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("wardrobe").take(5000);
+    const seen = new Map<string, Id<"wardrobe">>(); // key = `${customerId}:${sareeId}`
+    let kept = 0;
+    let deleted = 0;
+    // Walk in ascending _creationTime so the first row we see is the keeper.
+    all.sort((a, b) => a._creationTime - b._creationTime);
+    for (const row of all) {
+      if (!row.customerId) { kept++; continue; } // guest rows: no dedup key
+      const key = `${row.customerId}:${row.sareeId}`;
+      if (seen.has(key)) {
+        await ctx.db.delete(row._id);
+        deleted++;
+      } else {
+        seen.set(key, row._id);
+        kept++;
+      }
+    }
+    return { kept, deleted, total: all.length };
   },
 });
 
@@ -542,28 +638,38 @@ export const listWardrobeByCustomer = query({
       .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
       .order("desc")
       .take(200);
-    // Enrich with saree cover image + store metadata for the wishlist tab UI
-    return await Promise.all(
-      items.map(async (w) => {
-        const saree = await ctx.db.get(w.sareeId);
-        const store = saree
-          ? await ctx.db
-              .query("stores")
-              .withIndex("by_storeId", (q) => q.eq("storeId", saree.storeId))
-              .unique()
-          : null;
-        return {
-          ...w,
-          storeId: saree?.storeId,
-          storeName: store?.name,
-          storeCity: store?.city,
-          sareeImageId: saree?.imageIds?.[0],
-          sareeGrad: saree?.grad,
-          sareeEmoji: saree?.emoji,
-          sareeFabric: saree?.fabric,
-        };
-      })
+    // Enrich with saree cover image + store metadata for the wishlist tab UI.
+    // Fetch all sarees in parallel, then look up each unique store at most once
+    // (a customer typically has few distinct stores in their wardrobe).
+    const sarees = await Promise.all(items.map((w) => ctx.db.get(w.sareeId)));
+    const uniqueStoreIds = Array.from(
+      new Set(sarees.map((s) => s?.storeId).filter((id): id is string => !!id)),
     );
+    const storeRows = await Promise.all(
+      uniqueStoreIds.map((sid) =>
+        ctx.db
+          .query("stores")
+          .withIndex("by_storeId", (q) => q.eq("storeId", sid))
+          .unique(),
+      ),
+    );
+    const storeById = new Map(
+      uniqueStoreIds.map((sid, i) => [sid, storeRows[i]]),
+    );
+    return items.map((w, i) => {
+      const saree = sarees[i];
+      const store = saree?.storeId ? storeById.get(saree.storeId) : null;
+      return {
+        ...w,
+        storeId: saree?.storeId,
+        storeName: store?.name,
+        storeCity: store?.city,
+        sareeImageId: saree?.imageIds?.[0],
+        sareeGrad: saree?.grad,
+        sareeEmoji: saree?.emoji,
+        sareeFabric: saree?.fabric,
+      };
+    });
   },
 });
 
@@ -580,13 +686,174 @@ export const getWardrobe = query({
 });
 
 // ============================================================
+// KIOSK TRIAL CART — per (customer, store) persistent trial room
+// ============================================================
+
+export const addTrialCartItem = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("kioskTrialCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (existing) return existing._id;
+    return await ctx.db.insert("kioskTrialCart", {
+      customerId: args.customerId,
+      storeId: args.storeId,
+      sareeId: args.sareeId,
+      addedAt: Date.now(),
+    });
+  },
+});
+
+export const removeTrialCartItem = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("kioskTrialCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (row) await ctx.db.delete(row._id);
+  },
+});
+
+export const clearTrialCart = mutation({
+  args: { customerId: v.id("customers"), storeId: v.string() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("kioskTrialCart")
+      .withIndex("by_customer_store", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
+      )
+      .collect();
+    for (const r of rows) await ctx.db.delete(r._id);
+  },
+});
+
+export const listTrialCart = query({
+  args: { customerId: v.id("customers"), storeId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("kioskTrialCart")
+      .withIndex("by_customer_store", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
+      )
+      .order("desc")
+      .collect();
+  },
+});
+
+// ============================================================
+// KIOSK CART — per (customer, store) persistent checkout cart
+// ============================================================
+
+export const addCartItem = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+    qty: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (existing) return existing._id;
+    return await ctx.db.insert("kioskCart", {
+      customerId: args.customerId,
+      storeId: args.storeId,
+      sareeId: args.sareeId,
+      qty: Math.max(1, args.qty ?? 1),
+      addedAt: Date.now(),
+    });
+  },
+});
+
+export const updateCartQty = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+    qty: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (!row) return;
+    await ctx.db.patch(row._id, { qty: Math.max(1, args.qty) });
+  },
+});
+
+export const removeCartItem = mutation({
+  args: {
+    customerId: v.id("customers"),
+    storeId: v.string(),
+    sareeId: v.id("sarees"),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store_saree", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
+      )
+      .unique();
+    if (row) await ctx.db.delete(row._id);
+  },
+});
+
+export const clearCart = mutation({
+  args: { customerId: v.id("customers"), storeId: v.string() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
+      )
+      .collect();
+    for (const r of rows) await ctx.db.delete(r._id);
+  },
+});
+
+export const listCart = query({
+  args: { customerId: v.id("customers"), storeId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("kioskCart")
+      .withIndex("by_customer_store", (q) =>
+        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
+      )
+      .order("desc")
+      .collect();
+  },
+});
+
+// ============================================================
 // ORDERS
 // ============================================================
 
 function generateOrderId(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let result = "";
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
@@ -607,8 +874,12 @@ export const createOrder = mutation({
       })
     ),
     paymentMethod: v.optional(v.string()),
+    deviceToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.deviceToken) {
+      await requireKioskDeviceForStore(ctx, args.deviceToken, args.storeId);
+    }
     const orderId = generateOrderId();
 
     // Calculate subtotal and GST

@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import { useCustomer } from "../../layout";
 import { Id } from "@/convex/_generated/dataModel";
+import { Pencil } from "lucide-react";
 
 type Gender = "female" | "male" | "other" | "prefer_not_to_say";
 type HeightUnit = "cm" | "ftin";
@@ -139,11 +141,11 @@ export default function EditProfilePage() {
     const localUrl = URL.createObjectURL(file);
     setPhotoPreview(localUrl);
     try {
-      const id = await upload(file);
+      const id = await upload(file, GUARDS.customerPhoto);
       setPhotoFileId(id);
       setDirty(true);
-    } catch {
-      setError("Photo upload failed.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Photo upload failed.");
       setPhotoPreview("");
     } finally {
       setPhotoUploading(false);
@@ -194,7 +196,7 @@ export default function EditProfilePage() {
   }
 
   return (
-    <div style={{ padding: "20px 18px 40px", background: "#FDF8F0", minHeight: "100%" }}>
+    <div style={{ padding: "20px 18px 40px", background: "#FBF7F1", minHeight: "100%" }}>
       {/* Header with back */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
         <button
@@ -202,11 +204,11 @@ export default function EditProfilePage() {
           style={{ padding: 6, border: "none", background: "transparent", cursor: "pointer" }}
           aria-label="Back"
         >
-          <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#2D1B4E" strokeWidth="1.8">
+          <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#8B2E2B" strokeWidth="1.8">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="cx-serif" style={{ fontSize: 24, fontWeight: 700, fontStyle: "italic", color: "#2D1B4E", margin: 0 }}>
+        <h1 className="cx-serif" style={{ fontSize: 24, fontWeight: 700, fontStyle: "italic", color: "#8B2E2B", margin: 0 }}>
           Edit Profile
         </h1>
       </div>
@@ -226,7 +228,7 @@ export default function EditProfilePage() {
           {displayPhoto ? (
             <img src={displayPhoto} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
-            <span className="cx-serif" style={{ fontSize: 36, fontWeight: 700, color: "#C9941A", fontStyle: "italic" }}>
+            <span className="cx-serif" style={{ fontSize: 36, fontWeight: 700, color: "#B8860B", fontStyle: "italic" }}>
               {initials}
             </span>
           )}
@@ -238,11 +240,11 @@ export default function EditProfilePage() {
           <div style={{
             position: "absolute", bottom: 0, right: 0,
             width: 28, height: 28, borderRadius: "50%",
-            background: "#C9941A", border: "2px solid #FDF8F0",
+            background: "var(--cx-gold)", border: "2px solid var(--cx-bg)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "white", fontSize: 12,
+            color: "#fff",
           }}>
-            ✎
+            <Pencil size={12} />
           </div>
           <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoPick(f); }}
@@ -274,7 +276,7 @@ export default function EditProfilePage() {
               <button key={v} type="button" onClick={() => mark(setGender)(v)}
                 style={{
                   padding: "10px 12px", borderRadius: 10,
-                  border: gender === v ? "1.5px solid #C9941A" : "1.5px solid var(--cx-border)",
+                  border: gender === v ? "1.5px solid #B8860B" : "1.5px solid var(--cx-border)",
                   background: gender === v ? "var(--cx-gold-ghost)" : "white",
                   color: gender === v ? "var(--cx-gold-d)" : "var(--cx-text)",
                   fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
@@ -290,8 +292,8 @@ export default function EditProfilePage() {
                 style={{
                   padding: "4px 12px", borderRadius: 100, border: "none", fontSize: 11, fontWeight: 700,
                   cursor: "pointer", fontFamily: "inherit",
-                  background: heightUnit === u ? "#2D1B4E" : "transparent",
-                  color: heightUnit === u ? "white" : "#2D1B4E",
+                  background: heightUnit === u ? "#8B2E2B" : "transparent",
+                  color: heightUnit === u ? "white" : "#8B2E2B",
                 }}>{u === "cm" ? "cm" : "ft / in"}</button>
             ))}
           </div>
@@ -345,7 +347,7 @@ export default function EditProfilePage() {
       {toast && (
         <div style={{
           position: "fixed", bottom: 96, left: "50%", transform: "translateX(-50%)",
-          padding: "10px 18px", borderRadius: 100, background: "#2D1B4E", color: "white",
+          padding: "10px 18px", borderRadius: 100, background: "#8B2E2B", color: "white",
           fontSize: 13, fontWeight: 600, boxShadow: "var(--cx-shadow-md)", zIndex: 50,
         }}>{toast}</div>
       )}

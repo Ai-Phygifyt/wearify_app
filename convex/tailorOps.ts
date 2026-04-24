@@ -1,5 +1,7 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { assertFile, GUARDS } from "./fileValidation";
+import { requireAdmin } from "./adminAuth";
 
 // ============================
 // TAILORS
@@ -28,6 +30,7 @@ export const getByPhone = query({
 export const listAll = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     return await ctx.db.query("tailors").order("asc").take(100);
   },
 });
@@ -37,7 +40,7 @@ export const listByCity = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("tailors")
-      .withIndex("by_city", (q) => q.eq("city", args.city))
+      .withIndex("by_city", (q) => q.eq("city", args.city.trim()))
       .take(100);
   },
 });
@@ -64,11 +67,11 @@ export const updateProfile = mutation({
       .unique();
     if (!tailor) throw new Error("Tailor not found");
     const { tailorId: _, ...fields } = args;
+    const TRIM_KEYS = new Set(["name", "phone", "city", "area", "experience", "bio", "badge", "language", "subscription"]);
     const updates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+      if (value === undefined) continue;
+      updates[key] = typeof value === "string" && TRIM_KEYS.has(key) ? value.trim() : value;
     }
     await ctx.db.patch(tailor._id, updates);
   },
@@ -146,10 +149,18 @@ export const registerTailor = mutation({
     passwordHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const name = args.name.trim();
+    const phone = args.phone.trim();
+    const city = args.city.trim();
+    const area = args.area?.trim();
+    const experience = args.experience?.trim();
+    const bio = args.bio?.trim();
+    const language = args.language?.trim();
+
     // Duplicate check — prevent creating a second tailor with the same phone
     const existing = await ctx.db
       .query("tailors")
-      .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
       .first();
     if (existing) {
       throw new Error("A tailor with this phone number already exists");
@@ -159,14 +170,14 @@ export const registerTailor = mutation({
     const tailorId = `TL-${randomDigits}`;
     return await ctx.db.insert("tailors", {
       tailorId,
-      name: args.name,
-      phone: args.phone,
-      city: args.city,
-      area: args.area,
+      name,
+      phone,
+      city,
+      area,
       specialties: args.specialties,
-      experience: args.experience,
-      bio: args.bio,
-      language: args.language,
+      experience,
+      bio,
+      language,
       passwordHash: args.passwordHash,
       status: "pending",
       rating: 0,
@@ -189,27 +200,91 @@ export const registerTailor = mutation({
   },
 });
 
+// Admin-facing: approve / reject individual KYC docs. The rejectionReason,
+// when set, is displayed back to the tailor so they know what to fix.
+// Passing explicit `null` to `kycRejectionReason` clears it (on approval).
 export const updateVerification = mutation({
   args: {
     tailorId: v.string(),
     aadhaarVerified: v.optional(v.boolean()),
     panVerified: v.optional(v.boolean()),
     addressVerified: v.optional(v.boolean()),
+    kycRejectionReason: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const tailor = await ctx.db
       .query("tailors")
       .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))
       .unique();
     if (!tailor) throw new Error("Tailor not found");
-    const { tailorId: _, ...fields } = args;
     const updates: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
+    if (args.aadhaarVerified !== undefined) updates.aadhaarVerified = args.aadhaarVerified;
+    if (args.panVerified !== undefined) updates.panVerified = args.panVerified;
+    if (args.addressVerified !== undefined) updates.addressVerified = args.addressVerified;
+    if (args.kycRejectionReason !== undefined) {
+      updates.kycRejectionReason = args.kycRejectionReason ?? undefined;
+    }
+    // Recompute status from the post-update flag set so rejections demote
+    // a previously-verified tailor (one bad doc shouldn't leave them
+    // appearing "verified" in discovery).
+    const fullyVerifiedAfter =
+      (args.aadhaarVerified ?? tailor.aadhaarVerified) &&
+      (args.panVerified ?? tailor.panVerified) &&
+      (args.addressVerified ?? tailor.addressVerified);
+    if (fullyVerifiedAfter) {
+      updates.status = "verified";
+    } else if (tailor.status === "verified") {
+      updates.status = "pending";
     }
     await ctx.db.patch(tailor._id, updates);
+  },
+});
+
+// Tailor-facing: submit or replace a single KYC document. Saving a fresh
+// file resets that doc's verified flag (admin must re-review) and clears
+// any global rejection reason so the tailor sees a clean "pending review"
+// state after resubmitting.
+export const submitKycDocument = mutation({
+  args: {
+    tailorId: v.string(),
+    docType: v.union(v.literal("aadhaar"), v.literal("pan"), v.literal("address")),
+    fileId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    await assertFile(ctx, args.fileId, GUARDS.kycDocument);
+    const tailor = await ctx.db
+      .query("tailors")
+      .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))
+      .unique();
+    if (!tailor) throw new Error("Tailor not found");
+    const updates: Record<string, unknown> = { kycRejectionReason: undefined };
+    if (args.docType === "aadhaar") {
+      updates.aadhaarFileId = args.fileId;
+      updates.aadhaarVerified = false;
+    } else if (args.docType === "pan") {
+      updates.panFileId = args.fileId;
+      updates.panVerified = false;
+    } else {
+      updates.addressProofFileId = args.fileId;
+      updates.addressVerified = false;
+    }
+    await ctx.db.patch(tailor._id, updates);
+  },
+});
+
+// Admin-facing: list tailors that have at least one submitted KYC document
+// but aren't fully verified yet. Used by the admin approval queue.
+export const listKycQueue = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const all = await ctx.db.query("tailors").take(500);
+    return all.filter((t) => {
+      const hasDocs = !!(t.aadhaarFileId || t.panFileId || t.addressProofFileId);
+      const fullyVerified = !!(t.aadhaarVerified && t.panVerified && t.addressVerified);
+      return hasDocs && !fullyVerified;
+    });
   },
 });
 
@@ -251,6 +326,7 @@ export const addPortfolioItem = mutation({
     imageFileId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    if (args.imageFileId) await assertFile(ctx, args.imageFileId, GUARDS.portfolioPhoto);
     return await ctx.db.insert("tailorPortfolio", {
       tailorId: args.tailorId,
       tag: args.tag,
@@ -306,6 +382,24 @@ export const createReferral = mutation({
       .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))
       .unique();
     if (!tailor) throw new Error("Tailor not found");
+
+    // Dedup window: if the same customer taps Connect on the same tailor
+    // within 60 seconds (double-tap, jittery touch, flaky network retry),
+    // return the existing referral instead of creating a duplicate lead.
+    // Only consults "new" status — if the tailor already contacted /
+    // quoted / declined, a fresh lead is the right signal.
+    const DEDUP_WINDOW_MS = 60_000;
+    const recent = await ctx.db
+      .query("tailorReferrals")
+      .withIndex("by_tailorId_and_status", (q) =>
+        q.eq("tailorId", args.tailorId).eq("status", "new"),
+      )
+      .filter((q) => q.eq(q.field("customerPhone"), args.customerPhone))
+      .order("desc")
+      .first();
+    if (recent && Date.now() - recent._creationTime < DEDUP_WINDOW_MS) {
+      return recent._id;
+    }
 
     const referralId = await ctx.db.insert("tailorReferrals", {
       tailorId: args.tailorId,
@@ -429,6 +523,39 @@ export const createOrder = mutation({
     }
     const orderId = `TO-${random}`;
 
+    // When the caller doesn't supply measurements explicitly, pull them from
+    // the linked customer row. Lets "convert referral → order" skip a
+    // re-entry step, since the customer's body-scan/profile measurements
+    // already live on `customers`.
+    let measurements = {
+      bust: args.bust,
+      waist: args.waist,
+      shoulder: args.shoulder,
+      armLength: args.armLength,
+      backLength: args.backLength,
+      neckDepthFront: args.neckDepthFront,
+      neckDepthBack: args.neckDepthBack,
+      sleeve: args.sleeve,
+      neck: args.neck,
+    };
+    const hasAnyMeasurement = Object.values(measurements).some((v) => v !== undefined);
+    if (!hasAnyMeasurement && args.customerId) {
+      const customer = await ctx.db.get(args.customerId);
+      if (customer) {
+        measurements = {
+          bust: customer.bust,
+          waist: customer.waist,
+          shoulder: customer.shoulder,
+          armLength: customer.armLength,
+          backLength: customer.backLength,
+          neckDepthFront: customer.neckDepthFront,
+          neckDepthBack: customer.neckDepthBack,
+          sleeve: customer.sleeve,
+          neck: customer.neck,
+        };
+      }
+    }
+
     return await ctx.db.insert("tailorOrders", {
       orderId,
       tailorId: args.tailorId,
@@ -448,15 +575,7 @@ export const createOrder = mutation({
       orderDate: args.orderDate,
       note: args.note,
       tailorWhatsapp: args.tailorWhatsapp,
-      bust: args.bust,
-      waist: args.waist,
-      shoulder: args.shoulder,
-      armLength: args.armLength,
-      backLength: args.backLength,
-      neckDepthFront: args.neckDepthFront,
-      neckDepthBack: args.neckDepthBack,
-      sleeve: args.sleeve,
-      neck: args.neck,
+      ...measurements,
     });
   },
 });
@@ -522,6 +641,60 @@ export const advanceOrderStatus = mutation({
   },
 });
 
+// Soft-cancel an order. The row stays for audit; status moves to
+// "cancelled" so it stops showing up in active-order flows and renders
+// with a muted pill. Only allowed before stitching begins, and only by
+// the tailor who owns the order.
+export const cancelOrder = mutation({
+  args: {
+    id: v.id("tailorOrders"),
+    tailorId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.id);
+    if (!order) throw new Error("Order not found");
+    if (order.tailorId !== args.tailorId) {
+      throw new Error("You can only cancel your own orders");
+    }
+    if (order.status !== "confirmed" && order.status !== "measurements") {
+      throw new Error("This order can no longer be cancelled — stitching has started");
+    }
+    await ctx.db.patch(args.id, { status: "cancelled" });
+  },
+});
+
+// Recompute tailor rating + reviewCount from the canonical tailorOrders
+// rows. Always correct — fixes rounding drift from the old incremental
+// update and stays right if a rating is ever edited, deleted, or the
+// order is cancelled post-rating. Call from any path that writes/clears
+// tailorOrders.rating.
+async function recomputeTailorRating(
+  ctx: { db: import("./_generated/server").MutationCtx["db"] },
+  tailorId: string
+) {
+  const tailor = await ctx.db
+    .query("tailors")
+    .withIndex("by_tailorId", (q) => q.eq("tailorId", tailorId))
+    .unique();
+  if (!tailor) return;
+
+  const orders = await ctx.db
+    .query("tailorOrders")
+    .withIndex("by_tailorId", (q) => q.eq("tailorId", tailorId))
+    .collect();
+
+  let sum = 0;
+  let count = 0;
+  for (const o of orders) {
+    if (typeof o.rating === "number" && o.rating > 0) {
+      sum += o.rating;
+      count += 1;
+    }
+  }
+  const avg = count === 0 ? 0 : Math.round((sum / count) * 10) / 10;
+  await ctx.db.patch(tailor._id, { rating: avg, reviewCount: count });
+}
+
 export const rateOrder = mutation({
   args: {
     id: v.id("tailorOrders"),
@@ -529,6 +702,9 @@ export const rateOrder = mutation({
     ratingComment: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.rating < 1 || args.rating > 5) {
+      throw new Error("Rating must be between 1 and 5");
+    }
     const order = await ctx.db.get(args.id);
     if (!order) throw new Error("Order not found");
 
@@ -537,26 +713,78 @@ export const rateOrder = mutation({
       ratingComment: args.ratingComment,
     });
 
-    // Update tailor's average rating
-    const tailor = await ctx.db
-      .query("tailors")
-      .withIndex("by_tailorId", (q) => q.eq("tailorId", order.tailorId))
-      .unique();
-    if (tailor) {
-      const currentCount = tailor.reviewCount ?? 0;
-      const currentRating = tailor.rating;
-      const newCount = currentCount + 1;
-      const newRating =
-        Math.round(
-          ((currentRating * currentCount + args.rating) / newCount) * 10
-        ) / 10;
-      await ctx.db.patch(tailor._id, {
-        rating: newRating,
-        reviewCount: newCount,
-      });
-    }
+    await recomputeTailorRating(ctx, order.tailorId);
   },
 });
+
+// One-shot backfill: re-derive every tailor's rating + reviewCount from
+// the orders table. Run once after deploying the recompute helper to
+// correct any drift left over from the old incremental math.
+export const backfillTailorRatings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const tailors = await ctx.db.query("tailors").collect();
+    let touched = 0;
+    for (const t of tailors) {
+      const prevRating = t.rating;
+      const prevCount = t.reviewCount ?? 0;
+      await recomputeTailorRating(ctx, t.tailorId);
+      const after = await ctx.db.get(t._id);
+      if (!after) continue;
+      if (after.rating !== prevRating || (after.reviewCount ?? 0) !== prevCount) {
+        touched += 1;
+      }
+    }
+    return { scanned: tailors.length, touched };
+  },
+});
+
+// Public reviews list for a tailor — one row per delivered order that
+// has a rating. Masks customer identity to first name + initial. Used
+// by the tailor's own /tailor/profile/ratings page and (later) the
+// customer-facing kiosk "Connect tailor" card.
+export const listReviewsForTailor = query({
+  args: { tailorId: v.string() },
+  handler: async (ctx, args) => {
+    const orders = await ctx.db
+      .query("tailorOrders")
+      .withIndex("by_tailorId", (q) => q.eq("tailorId", args.tailorId))
+      .order("desc")
+      .collect();
+
+    const rated = orders.filter(
+      (o) => typeof o.rating === "number" && o.rating > 0
+    );
+
+    // rating distribution (1..5 buckets) for the summary card
+    const distribution = [0, 0, 0, 0, 0];
+    for (const o of rated) {
+      const r = Math.max(1, Math.min(5, Math.round(o.rating!)));
+      distribution[r - 1] += 1;
+    }
+
+    return {
+      reviews: rated.map((o) => ({
+        _id: o._id,
+        rating: o.rating!,
+        comment: o.ratingComment ?? null,
+        service: o.service,
+        orderDate: o.orderDate,
+        customerMasked: maskCustomerName(o.customerName),
+      })),
+      distribution, // index 0 = 1★, index 4 = 5★
+    };
+  },
+});
+
+function maskCustomerName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "Customer";
+  const parts = trimmed.split(/\s+/);
+  const first = parts[0];
+  const lastInitial = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return lastInitial ? `${first} ${lastInitial.toUpperCase()}.` : first;
+}
 
 // ============================
 // COMMISSION
@@ -647,5 +875,30 @@ export const getEarnings = query({
     }
 
     return { totalEarned, totalPending, totalPaid };
+  },
+});
+
+// One-shot backfill: trim leading/trailing whitespace on string fields that
+// feed indexes or UI filters. Idempotent — rows already clean get no write.
+export const backfillTrimTailorStrings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const TRIM_KEYS = ["name", "phone", "city", "area", "experience", "bio", "badge", "language", "subscription"] as const;
+    const rows = await ctx.db.query("tailors").collect();
+    let touched = 0;
+    for (const row of rows) {
+      const updates: Record<string, unknown> = {};
+      for (const key of TRIM_KEYS) {
+        const val = (row as Record<string, unknown>)[key];
+        if (typeof val === "string" && val !== val.trim()) {
+          updates[key] = val.trim();
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(row._id, updates);
+        touched++;
+      }
+    }
+    return { scanned: rows.length, touched };
   },
 });

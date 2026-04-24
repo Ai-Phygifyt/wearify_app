@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { getToken, clearToken, getStoredUser, AuthUser } from "@/lib/phoneAuth";
 import { useRouter, usePathname } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
+import { Home, Sparkles, Heart, Shirt, User } from "lucide-react";
 import "./customer-theme.css";
 
 type CustomerCtx = {
@@ -26,66 +27,12 @@ export function useCustomer() {
   return useContext(CustomerContext);
 }
 
-// ── Duotone SVG Nav Icons ──────────────────────────────────────────
-function NavHome({ active }: { active: boolean }) {
-  const c = active ? "#2D1B4E" : "#8B7EA0";
-  const a = active ? "#C9941A" : "#B8A8C8";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-      <path d="M3 10.5L12 3l9 7.5V21a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V10.5Z" stroke={c} strokeWidth="1.6" strokeLinejoin="round"/>
-      <rect x="9" y="14" width="6" height="8" rx="1" fill={a} opacity=".25" stroke={a} strokeWidth="1.4"/>
-    </svg>
-  );
-}
-function NavLooks({ active }: { active: boolean }) {
-  const c = active ? "#8B4A52" : "#8B7EA0";
-  const a = active ? "#C2848A" : "#B8A8C8";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z" stroke={c} strokeWidth="1.6" fill={active ? a : "none"} opacity={active ? 1 : .9}/>
-    </svg>
-  );
-}
-function NavNew({ active }: { active: boolean }) {
-  const c = active ? "#2D1B4E" : "#8B7EA0";
-  const a = active ? "#C9941A" : "#B8A8C8";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-      <path d="M12 2l2.09 6.26L20 9.27l-4.91 4.73L16.18 21 12 18.27 7.82 21l1.09-7L4 9.27l5.91-1.01L12 2Z" stroke={c} strokeWidth="1.6" strokeLinejoin="round"/>
-      <path d="M12 2l2.09 6.26L20 9.27l-4.91 4.73L16.18 21 12 18.27 7.82 21l1.09-7L4 9.27l5.91-1.01L12 2Z" fill={a} opacity=".18"/>
-    </svg>
-  );
-}
-function NavWishlist({ active }: { active: boolean }) {
-  const c = active ? "#2D1B4E" : "#8B7EA0";
-  const a = active ? "#C9941A" : "#B8A8C8";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="3" width="8" height="8" rx="2" stroke={c} strokeWidth="1.6"/>
-      <rect x="13" y="3" width="8" height="8" rx="2" stroke={c} strokeWidth="1.6"/>
-      <rect x="3" y="13" width="8" height="8" rx="2" fill={a} opacity=".22" stroke={a} strokeWidth="1.5"/>
-      <rect x="13" y="13" width="8" height="8" rx="2" stroke={c} strokeWidth="1.6"/>
-    </svg>
-  );
-}
-function NavMe({ active }: { active: boolean }) {
-  const c = active ? "#2D1B4E" : "#8B7EA0";
-  const a = active ? "#C9941A" : "#B8A8C8";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="7" r="4" stroke={c} strokeWidth="1.6"/>
-      <path d="M4 21c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke={c} strokeWidth="1.6" strokeLinecap="round"/>
-      <circle cx="12" cy="7" r="2" fill={a} opacity=".22"/>
-    </svg>
-  );
-}
-
 const NAV_ITEMS = [
-  { key: "home", label: "Home", href: "/c", Icon: NavHome },
-  { key: "looks", label: "My Looks", href: "/c/looks", Icon: NavLooks },
-  { key: "new", label: "New", href: "/c/new", Icon: NavNew },
-  { key: "wishlist", label: "Wishlist", href: "/c/wishlist", Icon: NavWishlist },
-  { key: "me", label: "Me", href: "/c/me", Icon: NavMe },
+  { key: "home", label: "Home", href: "/c", Icon: Home },
+  { key: "looks", label: "Looks", href: "/c/looks", Icon: Heart },
+  { key: "new", label: "New", href: "/c/new", Icon: Sparkles },
+  { key: "wardrobe", label: "Wardrobe", href: "/c/wardrobe", Icon: Shirt },
+  { key: "me", label: "Me", href: "/c/me", Icon: User },
 ];
 
 function BottomNav() {
@@ -94,19 +41,17 @@ function BottomNav() {
 
   return (
     <nav className="cx-bottomnav">
-      {NAV_ITEMS.map((item) => {
-        const active =
-          item.href === "/c"
-            ? pathname === "/c"
-            : pathname.startsWith(item.href);
+      {NAV_ITEMS.map(({ key, label, href, Icon }) => {
+        const active = href === "/c" ? pathname === "/c" : pathname.startsWith(href);
         return (
           <button
-            key={item.key}
-            onClick={() => router.push(item.href)}
+            key={key}
+            onClick={() => router.push(href)}
             className={`cx-navitem ${active ? "active" : ""}`}
+            aria-label={label}
           >
-            <item.Icon active={active} />
-            <span>{item.label}</span>
+            <Icon size={22} strokeWidth={active ? 2.2 : 1.7} />
+            <span>{label}</span>
             <div className="cx-nav-indicator" />
           </button>
         );
@@ -120,40 +65,72 @@ const SPLASH_MS = 1200;
 
 function Splash() {
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 1000,
-      background: "linear-gradient(155deg, #0D0418 0%, #1A0A2E 25%, #2D1B4E 55%, #6B1D52 80%, #C9941A 100%)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      flexDirection: "column", gap: 14,
-      animation: "cx-fadeIn 0.25s ease-out",
-    }}>
-      <div style={{
-        width: 88, height: 88, borderRadius: 24,
-        background: "rgba(255,255,255,0.08)",
-        border: "1.5px solid rgba(201,148,26,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        backdropFilter: "blur(8px)",
-        animation: "cx-scaleIn 0.5s ease-out",
-      }}>
-        <span className="cx-serif" style={{ fontSize: 52, fontWeight: 700, fontStyle: "italic", color: "#C9941A" }}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        background: "var(--cx-grad-hero)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column",
+        gap: 14,
+        animation: "cx-fadeIn 0.25s ease-out",
+      }}
+    >
+      <div
+        style={{
+          width: 92,
+          height: 92,
+          borderRadius: 26,
+          background: "rgba(255,255,255,0.08)",
+          border: "1.5px solid rgba(184,134,11,0.65)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backdropFilter: "blur(8px)",
+          animation: "cx-scaleIn 0.5s ease-out",
+        }}
+      >
+        <span
+          className="cx-serif"
+          style={{ fontSize: 52, fontWeight: 700, fontStyle: "italic", color: "var(--cx-gold-l)" }}
+        >
           W
         </span>
       </div>
-      <div className="cx-serif" style={{ fontSize: 30, fontWeight: 700, fontStyle: "italic", color: "#FDF8F0", letterSpacing: "0.02em" }}>
+      <div
+        className="cx-serif"
+        style={{
+          fontSize: 32,
+          fontWeight: 700,
+          fontStyle: "italic",
+          color: "#FBF7F1",
+          letterSpacing: "0.02em",
+        }}
+      >
         Wearify
       </div>
-      <div style={{ fontSize: 12, color: "rgba(253,248,240,0.65)", letterSpacing: "0.3em", textTransform: "uppercase" }}>
+      <div
+        style={{
+          fontSize: 11,
+          color: "rgba(253,248,240,0.55)",
+          letterSpacing: "0.28em",
+          textTransform: "uppercase",
+          fontWeight: 600,
+        }}
+      >
         Try on the moment
       </div>
     </div>
   );
 }
 
-export default function CustomerLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+const FONT_LINK =
+  "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500;600&display=swap";
+
+export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [token, setTokenState] = useState<string | null>(null);
@@ -166,22 +143,22 @@ export default function CustomerLayout({
     customer: null,
   });
 
-  // Splash on initial mount — ~1.2s then fade out
   useEffect(() => {
     const t = setTimeout(() => setSplashing(false), SPLASH_MS);
     return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
+    // Always sync React's token state to what's actually in localStorage.
+    // The old code only called setTokenState on the "has token" branch,
+    // so once a token was set, React kept it forever even after clearToken
+    // wiped localStorage — leading to useQuery subscribing with an invalid
+    // token and session handler redirecting on /c/login→/c navigation.
     const t = getToken();
-    if (!t) {
-      if (!PUBLIC_ROUTES.has(pathname)) {
-        router.replace("/c/login");
-      }
-      setReady(true);
-      return;
-    }
     setTokenState(t);
+    if (!t && !PUBLIC_ROUTES.has(pathname)) {
+      router.replace("/c/login");
+    }
     setReady(true);
   }, [router, pathname]);
 
@@ -198,6 +175,11 @@ export default function CustomerLayout({
   useEffect(() => {
     if (!ready) return;
     if (PUBLIC_ROUTES.has(pathname)) return;
+    // Stale-state bailout: if React's token state doesn't match localStorage,
+    // the token-reader effect is about to re-sync and re-fire us. Don't
+    // redirect on a session === null read from the previous (stale) token —
+    // that's the "goes back to phone login on first try" bug.
+    if (token !== getToken()) return;
     if (session === undefined) return;
     if (session === null) {
       clearToken();
@@ -216,22 +198,15 @@ export default function CustomerLayout({
       phone: session.phone,
       customer: customerData as Record<string, unknown> | null,
     });
-  }, [session, ready, router, pathname, customerData]);
+  }, [session, ready, router, pathname, customerData, token]);
 
-  // Splash is rendered above everything until it times out
-  if (splashing) {
-    return <Splash />;
-  }
+  if (splashing) return <Splash />;
 
-  // Login and register pages render without the bottom nav shell
   if (PUBLIC_ROUTES.has(pathname)) {
     return (
       <>
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500;600&display=swap"
-          rel="stylesheet"
-        />
+        <link href={FONT_LINK} rel="stylesheet" />
         {children}
       </>
     );
@@ -239,9 +214,9 @@ export default function CustomerLayout({
 
   if (!ready || session === undefined) {
     return (
-      <div className="cx-shell" style={{ minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="cx-typing">
-          <span /><span /><span />
+      <div className="cx-page-root">
+        <div className="cx-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="cx-typing"><span /><span /><span /></div>
         </div>
       </div>
     );
@@ -252,15 +227,12 @@ export default function CustomerLayout({
   return (
     <CustomerContext.Provider value={customerCtx}>
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <link
-        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500;600&display=swap"
-        rel="stylesheet"
-      />
-      <div className="cx-shell">
-        <div className="cx-screen" style={{ paddingBottom: 72 }}>
-          {children}
+      <link href={FONT_LINK} rel="stylesheet" />
+      <div className="cx-page-root">
+        <div className="cx-shell">
+          <div className="cx-screen">{children}</div>
+          <BottomNav />
         </div>
-        <BottomNav />
       </div>
     </CustomerContext.Provider>
   );

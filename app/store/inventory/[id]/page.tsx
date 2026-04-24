@@ -6,22 +6,35 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
-function SareeImage({ fileId, fallbackEmoji, fallbackGrad }: { fileId?: Id<"_storage">; fallbackEmoji: string; fallbackGrad: string[] }) {
-  const url = useQuery(api.files.getUrl, fileId ? { fileId } : "skip");
-  if (fileId && url) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt="Saree" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-    );
+const SAREE_IMAGE: Record<string, string> = {
+  "Chanderi Floral":           "/inventory/Chanderi-Floral.jpeg",
+  "Chiffon Rose Garden":       "/inventory/Chiffon-Rose-Garden.webp",
+  "Cotton Handloom Daily":     "/inventory/Cotton-Handloom-Daily.webp",
+  "Georgette Sequin Party":    "/inventory/Georgette-Sequin-Party.webp",
+  "Kanjeevaram Temple Border": "/inventory/Kanjeevaram-Temple-Border.webp",
+  "Linen Summer Fresh":        "/inventory/Linen-Summer-Fresh.jpeg",
+  "Organza Pastel Dream":      "/inventory/Organza-Pastel-Dream.jpeg",
+  "Paithani Heritage":         "/inventory/Paithani-Heritage.webp",
+  "Tussar Geometric":          "/inventory/Tussar-Geometric.webp",
+};
+
+function SareeImage({ name, fileId, fallbackGrad }: {
+  name: string; fileId?: Id<"_storage">; fallbackGrad: string[];
+}) {
+  const localSrc = SAREE_IMAGE[name];
+  const url = useQuery(api.files.getUrl, !localSrc && fileId ? { fileId } : "skip");
+
+  if (localSrc) {
+    return <img src={localSrc} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+  }
+  if (url) {
+    return <img src={url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
   }
   return (
     <div style={{
       width: "100%", height: "100%",
-      background: `linear-gradient(135deg, ${fallbackGrad[0]}, ${fallbackGrad[1] || fallbackGrad[0]})`,
-      display: "flex", alignItems: "center", justifyContent: "center",
-    }}>
-      <span style={{ fontSize: 100 }}>{fallbackEmoji}</span>
-    </div>
+      background: `linear-gradient(145deg, ${fallbackGrad[0]}, ${fallbackGrad[1] || fallbackGrad[0]})`,
+    }} />
   );
 }
 
@@ -33,7 +46,7 @@ export default function SareeDetailPage() {
   const router = useRouter();
   const sareeId = params.id as Id<"sarees">;
 
-  const saree = useQuery(api.sarees.getById, { id: sareeId });
+  const saree = useQuery(api.sarees.getById, sareeId ? { id: sareeId } : "skip");
   const updateSaree = useMutation(api.sarees.update);
   const updateStock = useMutation(api.sarees.updateStock);
   const deleteSaree = useMutation(api.sarees.remove);
@@ -46,30 +59,23 @@ export default function SareeDetailPage() {
   const [photoTab, setPhotoTab] = useState(0);
   const [resubmitting, setResubmitting] = useState(false);
 
+  /* ── Loading ── */
   if (saree === undefined) {
     return (
-      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: "linear-gradient(135deg, var(--rt-navy), var(--rt-teal))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            animation: "pulse 2s infinite",
-          }}>
-            <span style={{ color: "var(--rt-gold)", fontSize: 14, fontWeight: 800, fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>W</span>
-          </div>
-          <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>Loading saree...</span>
-        </div>
+      <div className="w-page-loading" style={{ minHeight: "60vh" }}>
+        <div className="w-load-mark"><span className="w-logomark-letter" style={{ fontSize: 17 }}>W</span></div>
+        <div><span className="w-load-text">Loading saree</span><span className="w-load-dots"><span /><span /><span /></span></div>
       </div>
     );
   }
 
+  /* ── Not found ── */
   if (saree === null) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <BackBtn onClick={() => router.back()} />
-        <div className="rt-card" style={{ textAlign: "center", padding: "40px 16px" }}>
-          <p style={{ fontSize: 14, color: "var(--rt-muted)" }}>Saree not found</p>
+        <div className="w-card w-inv-empty">
+          <p className="w-serif" style={{ fontSize: 17, fontStyle: "italic", color: "var(--w-ink-muted)" }}>Saree not found</p>
         </div>
       </div>
     );
@@ -80,20 +86,16 @@ export default function SareeDetailPage() {
 
   async function handleResubmit() {
     setResubmitting(true);
-    try {
-      await updateSaree({ id: sareeId, approvalStatus: "pending" });
-    } catch { /* */ } finally { setResubmitting(false); }
+    try { await updateSaree({ id: sareeId, approvalStatus: "pending" }); }
+    catch { /* */ } finally { setResubmitting(false); }
   }
 
   function startEditing() {
     setEditing(true);
     setEditForm({
-      name: saree!.name,
-      price: saree!.price,
-      fabric: saree!.fabric,
-      description: saree!.description || "",
-      region: saree!.region || "",
-      weave: saree!.weave || "",
+      name: saree!.name, price: saree!.price,
+      fabric: saree!.fabric, description: saree!.description || "",
+      region: saree!.region || "", weave: saree!.weave || "",
       careInstructions: saree!.careInstructions || "",
     });
   }
@@ -128,229 +130,109 @@ export default function SareeDetailPage() {
   }
 
   const discount = saree.mrp && saree.mrp > saree.price
-    ? Math.round(((saree.mrp - saree.price) / saree.mrp) * 100)
-    : 0;
-  const grad = saree.grad || ["#ddd", "#eee"];
+    ? Math.round(((saree.mrp - saree.price) / saree.mrp) * 100) : 0;
+  const grad = saree.grad || ["#0D1F35", "#1A5276"];
   const stockLabel = saree.stock <= 0 ? "Out of Stock" : saree.stock <= 5 ? `${saree.stock} left` : `${saree.stock} in stock`;
-  const stockBadgeClass = saree.stock <= 0 ? "rt-badge rt-badge-alert" : saree.stock <= 5 ? "rt-badge rt-badge-amber" : "rt-badge rt-badge-success";
+  const stockBadgeClass = saree.stock <= 0 ? "w-badge w-badge-danger" : saree.stock <= 5 ? "w-badge w-badge-warn" : "w-badge w-badge-success";
   const tryOnRate = (saree.views ?? 0) > 0 ? Math.round(((saree.tryOns ?? 0) / (saree.views ?? 1)) * 100) : 0;
   const conversionRate = (saree.tryOns ?? 0) > 0 ? Math.round(((saree.conversions ?? 0) / Math.max(saree.tryOns ?? 1, 1)) * 100) : 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <div className="w-detail-root">
+
+      {/* ── Header ── */}
+      <div className="w-detail-header">
         <BackBtn onClick={() => router.back()} />
-        <h1 style={{
-          flex: 1,
-          fontSize: 18,
-          fontWeight: 700,
-          color: "var(--rt-text)",
-          margin: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}>
-          {saree.name}
-        </h1>
+        <h1 className="w-detail-heading">{saree.name}</h1>
         {!editing && !isPending && (
-          <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={startEditing}>
-            Edit
-          </button>
+          <button className="w-btn w-btn-ghost w-btn-sm" onClick={startEditing}>Edit</button>
         )}
       </div>
 
-      {/* Approval Status Banners */}
+      {/* ── Approval banners ── */}
       {isPending && (
-        <div style={{
-          padding: "12px 16px",
-          borderRadius: "var(--rt-radius-lg)",
-          background: "rgba(10, 22, 40, 0.06)",
-          border: "1.5px solid rgba(10, 22, 40, 0.12)",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}>
-          <span style={{ fontSize: 18 }}>{"\u23F3"}</span>
+        <div className="w-approval-banner w-approval-banner--pending">
+          <div className="w-approval-icon">⏳</div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--rt-navy)" }}>
-              Pending Admin Approval
-            </div>
-            <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
-              This saree is awaiting admin review. Editing is not available until approved.
-            </div>
+            <div className="w-approval-title">Pending Admin Approval</div>
+            <div className="w-approval-body">Awaiting admin review. Editing is not available until approved.</div>
           </div>
         </div>
       )}
       {isCorrections && (
-        <div style={{
-          padding: "12px 16px",
-          borderRadius: "var(--rt-radius-lg)",
-          background: "rgba(245, 166, 35, 0.08)",
-          border: "1.5px solid rgba(245, 166, 35, 0.25)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 18 }}>{"\u270F\uFE0F"}</span>
+        <div className="w-approval-banner w-approval-banner--corrections">
+          <div className="w-approval-banner-top">
+            <div className="w-approval-icon">✏️</div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#B8860B" }}>
-                Corrections Requested
-              </div>
-              <div style={{ fontSize: 12, color: "var(--rt-muted)", marginTop: 2 }}>
-                Admin has requested changes. Please edit and resubmit.
-              </div>
+              <div className="w-approval-title" style={{ color: "var(--w-gold)" }}>Corrections Requested</div>
+              <div className="w-approval-body">Admin has requested changes. Please edit and resubmit.</div>
             </div>
           </div>
           {saree.correctionNote && (
-            <div style={{
-              padding: "8px 12px",
-              borderRadius: "var(--rt-radius-sm)",
-              background: "rgba(245, 166, 35, 0.06)",
-              border: "1px solid rgba(245, 166, 35, 0.15)",
-              fontSize: 13,
-              color: "var(--rt-text-mid)",
-              lineHeight: 1.5,
-            }}>
-              <span style={{ fontWeight: 700, color: "#B8860B", fontSize: 11, display: "block", marginBottom: 2 }}>
-                Admin Note:
-              </span>
+            <div className="w-correction-note-box">
+              <span className="w-correction-note-label">Admin note</span>
               {saree.correctionNote}
             </div>
           )}
-          <button
-            className="rt-btn rt-btn-primary rt-btn-sm"
-            onClick={handleResubmit}
-            disabled={resubmitting}
-            style={{ alignSelf: "flex-start" }}
-          >
-            {resubmitting ? "Resubmitting..." : "Resubmit for Approval"}
+          <button className="w-btn w-btn-primary w-btn-sm" style={{ alignSelf: "flex-start" }}
+            onClick={handleResubmit} disabled={resubmitting}>
+            {resubmitting ? "Resubmitting…" : "Resubmit for Approval"}
           </button>
         </div>
       )}
 
-      {/* Hero */}
-      <div style={{
-        width: "100%",
-        height: 220,
-        borderRadius: "var(--rt-radius-lg)",
-        position: "relative",
-        overflow: "hidden",
-      }}>
-        <SareeImage
-          fileId={saree.imageIds?.[photoTab]}
-          fallbackEmoji={saree.emoji || "\uD83D\uDC57"}
-          fallbackGrad={grad}
-        />
-
-        {/* Tag badge top-left */}
+      {/* ── Hero image ── */}
+      <div className="w-detail-hero">
+        <SareeImage name={saree.name} fileId={saree.imageIds?.[photoTab]} fallbackGrad={grad} />
         {saree.tag && (
-          <span style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            padding: "4px 12px",
-            borderRadius: 100,
-            background: "rgba(0,0,0,0.45)",
-            color: "white",
-            fontSize: 11,
-            fontWeight: 700,
-            backdropFilter: "blur(6px)",
-          }}>
-            {saree.tag}
-          </span>
+          <span className="w-detail-hero-tag">{saree.tag}</span>
         )}
-
-        {/* Low Stock badge bottom-right */}
         {saree.stock > 0 && saree.stock <= 5 && (
-          <span style={{
-            position: "absolute",
-            bottom: 12,
-            right: 12,
-            padding: "4px 12px",
-            borderRadius: 100,
-            background: "var(--rt-alert)",
-            color: "white",
-            fontSize: 11,
-            fontWeight: 700,
-          }}>
-            Low Stock
-          </span>
+          <span className="w-detail-hero-lowstock">Low Stock</span>
         )}
       </div>
 
-      {/* Photo Tabs */}
-      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+      {/* ── Photo tabs ── */}
+      <div className="w-photo-tabs">
         {PHOTO_TABS.map((tab, i) => (
-          <button
-            key={tab}
-            onClick={() => setPhotoTab(i)}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 100,
-              fontSize: 12,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-              border: `1.5px solid ${photoTab === i ? "var(--rt-teal)" : "var(--rt-border)"}`,
-              background: photoTab === i ? "rgba(26, 74, 101, 0.08)" : "transparent",
-              color: photoTab === i ? "var(--rt-teal)" : "var(--rt-muted)",
-              transition: "all 0.15s",
-            }}
-          >
+          <button key={tab} className={`w-photo-tab${photoTab === i ? " active" : ""}`}
+            onClick={() => setPhotoTab(i)}>
             {tab}
           </button>
         ))}
       </div>
 
-      {/* Core Info */}
-      <div className="rt-card">
+      {/* ── Core info card ── */}
+      <div className="w-card w-detail-info-card">
         {editing ? (
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Name</label>
-            <input
-              type="text"
-              value={editForm.name as string}
-              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-              className="rt-input"
-            />
+          <div className="w-field" style={{ marginBottom: 12 }}>
+            <label className="w-label">Name</label>
+            <input className="w-input" type="text" value={editForm.name as string}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
           </div>
         ) : (
-          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--rt-text)", marginBottom: 4 }}>
-            {saree.name}
-          </div>
+          <div className="w-detail-name">{saree.name}</div>
         )}
 
-        <div style={{ fontSize: 13, color: "var(--rt-muted)", marginBottom: 12 }}>
-          {saree.fabric} {saree.region ? ` \u00B7 ${saree.region}` : ""} {" \u00B7 "}SKU {saree._id.slice(-6).toUpperCase()}
+        <div className="w-detail-meta">
+          {saree.fabric}{saree.region ? ` · ${saree.region}` : ""} · SKU {saree._id.slice(-6).toUpperCase()}
         </div>
 
         {/* Price */}
         {editing ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-            <span style={{ fontSize: 14, color: "var(--rt-muted)" }}>{"\u20B9"}</span>
-            <input
-              type="number"
+          <div className="w-detail-price-edit">
+            <span className="w-detail-price-prefix">₹</span>
+            <input type="number" className="w-input w-mono" style={{ width: 130 }}
               value={editForm.price}
-              onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
-              className="rt-input rt-mono"
-              style={{ width: 120 }}
-            />
+              onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} />
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-            <span className="rt-mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--rt-success)" }}>
-              {"\u20B9"}{saree.price.toLocaleString("en-IN")}
-            </span>
+          <div className="w-detail-price-row">
+            <span className="w-mono w-detail-price">₹{saree.price.toLocaleString("en-IN")}</span>
             {discount > 0 && saree.mrp && (
               <>
-                <span style={{ fontSize: 14, color: "var(--rt-muted)", textDecoration: "line-through" }}>
-                  {"\u20B9"}{saree.mrp.toLocaleString("en-IN")}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--rt-success)" }}>
-                  {discount}% off
-                </span>
+                <span className="w-detail-mrp">₹{saree.mrp.toLocaleString("en-IN")}</span>
+                <span className="w-badge w-badge-success">{discount}% off</span>
               </>
             )}
           </div>
@@ -358,25 +240,19 @@ export default function SareeDetailPage() {
 
         {/* Description */}
         {editing ? (
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Description</label>
-            <textarea
+          <div className="w-field" style={{ marginTop: 12 }}>
+            <label className="w-label">Description</label>
+            <textarea className="w-input w-textarea" rows={3}
               value={editForm.description as string}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-              rows={3}
-              className="rt-input"
-              style={{ resize: "none", fontFamily: "inherit" }}
-            />
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
           </div>
         ) : saree.description ? (
-          <p style={{ fontSize: 14, color: "var(--rt-text-mid)", lineHeight: 1.6, marginBottom: 12 }}>
-            {saree.description}
-          </p>
+          <p className="w-detail-description">{saree.description}</p>
         ) : null}
 
-        {/* Attribute Chips */}
+        {/* Attribute chips */}
         {!editing && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <div className="w-attr-chips">
             {saree.colorName && <AttrChip label={saree.colorName} />}
             <AttrChip label={saree.occasion} />
             {saree.weave && <AttrChip label={saree.weave} />}
@@ -384,299 +260,195 @@ export default function SareeDetailPage() {
           </div>
         )}
 
-        {/* Status badge */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+        {/* Status badges */}
+        <div className="w-detail-badges">
           <span className={stockBadgeClass}>{stockLabel}</span>
           {saree.approvalStatus && (
-            <span className={`rt-badge ${
-              saree.approvalStatus === "approved" ? "rt-badge-success"
-              : saree.approvalStatus === "rejected" ? "rt-badge-alert"
-              : "rt-badge-gold"
-            }`}>
-              {saree.approvalStatus}
-            </span>
+            <span className={`w-badge ${saree.approvalStatus === "approved" ? "w-badge-success" :
+                saree.approvalStatus === "rejected" ? "w-badge-danger" : "w-badge-gold"
+              }`}>{saree.approvalStatus}</span>
           )}
         </div>
       </div>
 
-      {/* Edit: additional fields */}
+      {/* ── Edit additional fields ── */}
       {editing && (
-        <div className="rt-card">
-          <div className="rt-card-title">Edit Details</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Fabric</label>
-              <select
-                value={editForm.fabric as string}
-                onChange={(e) => setEditForm({ ...editForm, fabric: e.target.value })}
-                className="rt-select"
-              >
+        <div className="w-card w-detail-edit-card">
+          <div className="w-card-title w-serif" style={{ marginBottom: 14 }}>Edit Details</div>
+          <div className="w-modal-form">
+            <div className="w-field">
+              <label className="w-label">Fabric</label>
+              <select className="w-input w-select" value={editForm.fabric as string}
+                onChange={(e) => setEditForm({ ...editForm, fabric: e.target.value })}>
                 {FABRICS.map((f) => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Region</label>
-                <input
-                  type="text"
-                  value={editForm.region as string}
-                  onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
-                  className="rt-input"
-                />
+              <div className="w-field">
+                <label className="w-label">Region</label>
+                <input className="w-input" type="text" value={editForm.region as string}
+                  onChange={(e) => setEditForm({ ...editForm, region: e.target.value })} />
               </div>
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Weave</label>
-                <input
-                  type="text"
-                  value={editForm.weave as string}
-                  onChange={(e) => setEditForm({ ...editForm, weave: e.target.value })}
-                  className="rt-input"
-                />
+              <div className="w-field">
+                <label className="w-label">Weave</label>
+                <input className="w-input" type="text" value={editForm.weave as string}
+                  onChange={(e) => setEditForm({ ...editForm, weave: e.target.value })} />
               </div>
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>Care Instructions</label>
-              <input
-                type="text"
-                value={editForm.careInstructions as string}
-                onChange={(e) => setEditForm({ ...editForm, careInstructions: e.target.value })}
-                className="rt-input"
-              />
+            <div className="w-field">
+              <label className="w-label">Care Instructions</label>
+              <input className="w-input" type="text" value={editForm.careInstructions as string}
+                onChange={(e) => setEditForm({ ...editForm, careInstructions: e.target.value })} />
             </div>
-            <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
-              <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setEditing(false)}>
-                Cancel
-              </button>
-              <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : "Save Changes"}
+            <div className="w-modal-actions">
+              <button className="w-btn w-btn-ghost" style={{ flex: 1 }} onClick={() => setEditing(false)}>Cancel</button>
+              <button className="w-btn w-btn-primary" style={{ flex: 2 }} onClick={handleSave} disabled={saving}>
+                {saving ? <><span className="w-spinner" /> Saving…</> : "Save Changes"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Performance */}
-      <div className="rt-card">
-        <div className="rt-card-title">Performance This Month</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 14 }}>
-          <StatBox emoji={"\uD83D\uDC41"} value={saree.views ?? 0} label="Views" />
-          <StatBox emoji={"\uD83E\uDE9E"} value={saree.tryOns ?? 0} label="Sessions" />
-          <StatBox emoji={"\u2728"} value={saree.tryOns ?? 0} label="Try-Ons" />
-          <StatBox emoji={"\uD83D\uDCB0"} value={saree.conversions ?? 0} label="Sales" />
+      {/* ── Performance ── */}
+      <div className="w-card w-detail-perf-card">
+        <div className="w-card-header" style={{ marginBottom: 14 }}>
+          <span className="w-card-title">Performance this month</span>
+        </div>
+        <div className="w-perf-stats">
+          <StatBox icon="👁" value={saree.views ?? 0} label="Views" />
+          <StatBox icon="🪞" value={saree.tryOns ?? 0} label="Sessions" />
+          <StatBox icon="✨" value={saree.tryOns ?? 0} label="Try-Ons" />
+          <StatBox icon="💰" value={saree.conversions ?? 0} label="Sales" />
         </div>
 
         {(saree.tryOns ?? 0) > 0 && (saree.views ?? 0) > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 10 }}>
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                <span style={{ color: "var(--rt-text-mid)" }}>Try-On Rate</span>
-                <span className="rt-mono" style={{ fontWeight: 700, color: "var(--rt-text)" }}>{tryOnRate}%</span>
+          <div className="w-perf-bars">
+            <div className="w-perf-bar-row">
+              <div className="w-perf-bar-labels">
+                <span>Try-On Rate</span>
+                <span className="w-mono">{tryOnRate}%</span>
               </div>
-              <div className="rt-progress">
-                <div
-                  className="rt-progress-fill"
-                  style={{ width: `${Math.min(tryOnRate, 100)}%`, background: "linear-gradient(90deg, var(--rt-teal), var(--rt-teal-light))" }}
-                />
+              <div className="w-progress">
+                <div className="w-progress-fill w-hbar-fill-teal"
+                  style={{ width: `${Math.min(tryOnRate, 100)}%` }} />
               </div>
             </div>
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                <span style={{ color: "var(--rt-text-mid)" }}>Conversion Rate</span>
-                <span className="rt-mono" style={{ fontWeight: 700, color: "var(--rt-text)" }}>{conversionRate}%</span>
+            <div className="w-perf-bar-row">
+              <div className="w-perf-bar-labels">
+                <span>Conversion Rate</span>
+                <span className="w-mono">{conversionRate}%</span>
               </div>
-              <div className="rt-progress">
-                <div
-                  className="rt-progress-fill"
-                  style={{ width: `${Math.min(conversionRate, 100)}%`, background: "linear-gradient(90deg, var(--rt-gold), var(--rt-gold-light))" }}
-                />
+              <div className="w-progress">
+                <div className="w-progress-fill w-hbar-fill-gold"
+                  style={{ width: `${Math.min(conversionRate, 100)}%` }} />
               </div>
             </div>
           </div>
         )}
 
-        {/* Days old */}
-        <div style={{
-          fontSize: 12,
-          color: "var(--rt-muted)",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          paddingTop: 4,
-          borderTop: "1px solid var(--rt-border)",
-          marginTop: 6,
-        }}>
-          <span>{"\uD83D\uDCC5"}</span>
-          <span>{saree.daysOld ?? 0} days in catalogue</span>
+        <div className="w-perf-days">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          {saree.daysOld ?? 0} days in catalogue
         </div>
       </div>
 
-      {/* AI Tags */}
+      {/* ── AI Tags ── */}
       {saree.aiTags && saree.aiTags.length > 0 && (
-        <div className="rt-card">
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 16 }}>{"\uD83E\uDD16"}</span>
-            <span className="rt-card-title" style={{ marginBottom: 0 }}>AI Tags</span>
+        <div className="w-card w-detail-aitags-card">
+          <div className="w-card-header" style={{ marginBottom: 12 }}>
+            <span className="w-card-title">AI Tags</span>
+            <span style={{ fontSize: 16 }}>🤖</span>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <div className="w-aitags-wrap">
             {saree.aiTags.map((t) => (
-              <span
-                key={t}
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: 100,
-                  background: "rgba(26, 74, 101, 0.1)",
-                  color: "var(--rt-teal)",
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-              >
-                {t}
-              </span>
+              <span key={t} className="w-aitag">{t}</span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Stock Update */}
+      {/* ── Stock update ── */}
       {!isPending && (
-        <div className="rt-card">
-          <div className="rt-card-title">Update Stock</div>
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rt-muted)", marginBottom: 4 }}>
-                New stock quantity
-              </label>
-              <input
-                type="number"
-                value={stockInput}
-                onChange={(e) => setStockInput(e.target.value)}
-                placeholder={String(saree.stock)}
-                className="rt-input rt-mono"
-              />
+        <div className="w-card w-detail-stock-card">
+          <div className="w-card-title w-serif" style={{ marginBottom: 14 }}>Update Stock</div>
+          <div className="w-stock-row">
+            <div className="w-field" style={{ flex: 1 }}>
+              <label className="w-label">New quantity</label>
+              <input type="number" className="w-input w-mono"
+                value={stockInput} placeholder={String(saree.stock)}
+                onChange={(e) => setStockInput(e.target.value)} />
             </div>
-            <button
-              className="rt-btn rt-btn-primary rt-btn-sm"
-              onClick={handleStockUpdate}
-              style={{ marginBottom: 1 }}
-            >
+            <button className="w-btn w-btn-primary" style={{ alignSelf: "flex-end" }}
+              onClick={handleStockUpdate}>
               Update
             </button>
           </div>
         </div>
       )}
 
-      {/* Action Buttons */}
+      {/* ── Actions ── */}
       {!isPending && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <button
-            className="rt-btn rt-btn-primary"
-            onClick={startEditing}
-          >
+        <div className="w-detail-actions">
+          <button className="w-btn w-btn-primary" style={{ flex: 1 }} onClick={startEditing}>
             Edit Details
           </button>
-          <button
-            className="rt-btn rt-btn-ghost"
-            onClick={() => {
-              const msg = encodeURIComponent(
-                `Check out ${saree.name} (${saree.fabric}) at \u20B9${saree.price.toLocaleString("en-IN")} on Wearify!`
-              );
-              window.open(`https://wa.me/?text=${msg}`, "_blank");
-            }}
-          >
-            Share on WhatsApp
+          <button className="w-btn w-btn-ghost" style={{ flex: 1 }} onClick={() => {
+            const msg = encodeURIComponent(`Check out ${saree.name} (${saree.fabric}) at ₹${saree.price.toLocaleString("en-IN")} on Wearify!`);
+            window.open(`https://wa.me/?text=${msg}`, "_blank");
+          }}>
+            Share
           </button>
         </div>
       )}
 
-      {/* Delete */}
+      {/* ── Delete button ── */}
       {!isPending && (
-        <button
-          className="rt-btn rt-btn-danger"
-          style={{ width: "100%" }}
-          onClick={() => setShowDelete(true)}
-        >
+        <button className="w-btn w-btn-danger-outline" style={{ width: "100%" }}
+          onClick={() => setShowDelete(true)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+          </svg>
           Delete Saree
         </button>
       )}
 
-      {/* Delete Modal */}
+      {/* ── Delete modal ── */}
       {showDelete && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            zIndex: 50,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onClick={() => setShowDelete(false)}
-        >
-          <div
-            style={{
-              background: "var(--rt-white)",
-              borderRadius: "var(--rt-radius-lg)",
-              padding: 24,
-              maxWidth: 380,
-              width: "100%",
-              boxShadow: "0 20px 60px rgba(10, 22, 40, 0.2)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--rt-text)", marginBottom: 8 }}>
-              Delete Saree?
-            </h3>
-            <p style={{ fontSize: 14, color: "var(--rt-text-mid)", marginBottom: 20, lineHeight: 1.5 }}>
-              This will permanently remove &ldquo;{saree.name}&rdquo; from your catalogue.
+        <div className="w-modal-backdrop" onClick={() => setShowDelete(false)}>
+          <div className="w-modal w-delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="w-delete-icon-wrap">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--w-danger)" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+              </svg>
+            </div>
+            <h3 className="w-serif w-delete-title">Delete this saree?</h3>
+            <p className="w-delete-body">
+              This will permanently remove &ldquo;{saree.name}&rdquo; from your catalogue. This cannot be undone.
             </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                className="rt-btn rt-btn-ghost"
-                style={{ flex: 1 }}
-                onClick={() => setShowDelete(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="rt-btn rt-btn-danger"
-                style={{ flex: 1 }}
-                onClick={handleDelete}
-              >
-                Delete
-              </button>
+            <div className="w-modal-actions" style={{ marginTop: 20 }}>
+              <button className="w-btn w-btn-ghost" style={{ flex: 1 }} onClick={() => setShowDelete(false)}>Cancel</button>
+              <button className="w-btn w-btn-danger" style={{ flex: 1 }} onClick={handleDelete}>Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bottom spacing */}
       <div style={{ height: 16 }} />
     </div>
   );
 }
 
-/* ---- Helper Components ---- */
-
+/* ── Helpers ── */
 function BackBtn({ onClick }: { onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: "50%",
-        border: "1.5px solid var(--rt-border)",
-        background: "var(--rt-white)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        flexShrink: 0,
-      }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--rt-text)" strokeWidth="2">
+    <button className="w-back-btn" onClick={onClick} aria-label="Go back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
         <polyline points="15 18 9 12 15 6" />
       </svg>
     </button>
@@ -684,27 +456,15 @@ function BackBtn({ onClick }: { onClick: () => void }) {
 }
 
 function AttrChip({ label }: { label: string }) {
-  return (
-    <span style={{
-      padding: "4px 14px",
-      borderRadius: 100,
-      border: "1.5px solid var(--rt-border)",
-      background: "var(--rt-white)",
-      fontSize: 12,
-      fontWeight: 600,
-      color: "var(--rt-text-mid)",
-    }}>
-      {label}
-    </span>
-  );
+  return <span className="w-attr-chip">{label}</span>;
 }
 
-function StatBox({ emoji, value, label }: { emoji: string; value: number; label: string }) {
+function StatBox({ icon, value, label }: { icon: string; value: number; label: string }) {
   return (
-    <div style={{ textAlign: "center" }}>
-      <span style={{ fontSize: 16 }}>{emoji}</span>
-      <div className="rt-mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--rt-text)" }}>{value}</div>
-      <div style={{ fontSize: 10, color: "var(--rt-muted)" }}>{label}</div>
+    <div className="w-perf-statbox">
+      <span className="w-perf-statbox-icon">{icon}</span>
+      <div className="w-mono w-perf-statbox-val">{value}</div>
+      <div className="w-perf-statbox-label">{label}</div>
     </div>
   );
 }

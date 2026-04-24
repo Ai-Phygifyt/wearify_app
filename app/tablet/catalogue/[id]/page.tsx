@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge, Btn, PageLoading } from "@/components/ui/wearify-ui";
+import { SareeThumb } from "@/components/SareeThumb";
 import { Id } from "@/convex/_generated/dataModel";
 
 export default function SareeDetailPage() {
@@ -75,7 +76,7 @@ export default function SareeDetailPage() {
       // Mark as sent to mirror
       const item = shortlistItems?.find((i) => i.sareeId === sareeId);
       if (item) {
-        await markSentToMirror({ shortlistId: item._id });
+        await markSentToMirror({ shortlistId: item._id, sessionId });
       }
       setSentToMirror(true);
     } catch { /* ignore */ }
@@ -88,8 +89,6 @@ export default function SareeDetailPage() {
       </div>
     );
   }
-
-  const grad = saree.grad || ["#E8E0D4", "#D4A843"];
 
   return (
     <div className="h-full overflow-auto">
@@ -112,17 +111,17 @@ export default function SareeDetailPage() {
       </div>
 
       <div className="flex gap-6 p-6">
-        {/* Left: Image/gradient placeholder */}
+        {/* Left: Image (or gradient placeholder if none) */}
         <div className="w-1/3 flex-shrink-0">
-          <div
-            className="w-full aspect-[3/4] rounded-xl relative overflow-hidden"
-            style={{
-              background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})`,
-            }}
-          >
-            {saree.emoji && (
-              <span className="absolute top-4 left-4 text-5xl">{saree.emoji}</span>
-            )}
+          <div className="w-full aspect-[3/4] rounded-xl relative overflow-hidden">
+            <SareeThumb
+              name={saree.name}
+              fileId={saree.imageIds?.[0]}
+              grad={saree.grad}
+              emoji={saree.emoji}
+              emojiSize={80}
+              gradientAngle={135}
+            />
             {saree.tag && (
               <div className="absolute top-4 right-4">
                 <Badge status={saree.tag === "Premium" ? "active" : "pending"}>

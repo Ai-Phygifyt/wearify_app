@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { generateSalt, hashWithSalt } from "./authCrypto";
 
 export const seedAll = internalMutation({
   args: {},
@@ -24,13 +25,17 @@ export const seedAll = internalMutation({
     }
 
     // ===================== USER ACCOUNTS (for store owners) =====================
-    // Real SHA-256 hash of "Store@123" + "wearify-salt-2024"
-    const storeOwnerHash = "49138034eb9cb992dfaedb8dcb377e77801ffd1109736a20be469d96cc3a04f1";
+    // Each row gets its own PBKDF2 salt/hash — no static-salt hashes at rest.
+    const makePwd = async (password: string) => {
+      const passwordSalt = generateSalt();
+      const passwordHash = await hashWithSalt(password, passwordSalt);
+      return { passwordHash, passwordSalt };
+    };
     for (const store of stores) {
       if (store.ownerPhone) {
         await ctx.db.insert("users", {
           phone: store.ownerPhone,
-          passwordHash: storeOwnerHash,
+          ...(await makePwd("Store@123")),
           name: store.ownerName || "Store Owner",
           role: "store_owner",
           storeId: store.storeId,
@@ -51,7 +56,10 @@ export const seedAll = internalMutation({
     ];
 
     for (const s of staffList) {
-      await ctx.db.insert("staff", s);
+      const { pin, ...rest } = s;
+      const pinSalt = generateSalt();
+      const pinHash = await hashWithSalt(pin, pinSalt);
+      await ctx.db.insert("staff", { ...rest, pinHash, pinSalt });
     }
 
     // ===================== SAREES (catalog for ST-001 MAUVE Sarees) =====================
@@ -87,16 +95,15 @@ export const seedAll = internalMutation({
       { phone: "+919900000005", name: "Prerna Joshi", initials: "PJ", totalVisits: 15, totalLooks: 48, totalStores: 2, storeCredit: 2000, loyaltyPoints: 16000, loyaltyTier: "VIP", preferredOccasions: ["Wedding", "Party", "Gift"], preferredFabrics: ["Silk", "Linen", "Organza"], preferredColors: ["Purple", "Gold", "Rose"], budgetRange: "₹50K-1L", consentHistory: true, consentMessages: true, consentAiPersonal: true, consentPhotos: true, consentGrantedDate: "2024-12-01", language: "hi" },
     ];
 
-    // Real SHA-256 hash of "Customer@123" + "wearify-salt-2024"
-    const customerHash = "2f810dbeff5c43831cda2292f4af49f77b044f0ad05f90ef12f5ee9598e7b312";
     const customerIds: string[] = [];
     for (const c of customers) {
-      const id = await ctx.db.insert("customers", { ...c, passwordHash: customerHash });
+      const pwd = await makePwd("Customer@123");
+      const id = await ctx.db.insert("customers", { ...c, ...pwd });
       customerIds.push(id);
       // Create user record
       await ctx.db.insert("users", {
         phone: c.phone,
-        passwordHash: customerHash,
+        ...pwd,
         name: c.name,
         role: "customer",
       });
@@ -134,18 +141,17 @@ export const seedAll = internalMutation({
     // ===================== TAILORS =====================
     const tailors = [
       { tailorId: "TL-001", name: "Manoj Darji", phone: "+919800100001", city: "Mumbai", area: "Dadar", specialties: ["silk_blouse", "designer_emb", "bridal"], experience: "15 years", bio: "Master blouse tailor specializing in bridal and designer work", badge: "pro", status: "verified", rating: 4.8, reviewCount: 124, revenue: 285000, referrals: 45, leadsThisMonth: 8, earnedThisMonth: 32000, commissionOwed: 4500, available: true, subscription: "pro", serviceRadius: 10, services: [{ id: "s1", name: "Silk Blouse Stitching", priceMin: 800, priceMax: 2500, days: 5, active: true }, { id: "s2", name: "Designer Embroidery", priceMin: 1500, priceMax: 5000, days: 10, active: true }, { id: "s3", name: "Bridal Blouse", priceMin: 3000, priceMax: 8000, days: 14, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: false }, hoursOpen: "09:00", hoursClose: "19:00", joinDate: "2024-06-15", aadhaarVerified: true, panVerified: true, addressVerified: true },
-      { tailorId: "TL-002", name: "Savita Pawar", phone: "+919800100002", city: "Mumbai", area: "Andheri", specialties: ["cotton_casual", "fall_pico", "alteration"], experience: "8 years", bio: "Quick and reliable alterations and casual wear", badge: "verified", status: "verified", rating: 4.5, reviewCount: 86, revenue: 145000, referrals: 28, leadsThisMonth: 5, earnedThisMonth: 18000, commissionOwed: 2000, available: true, subscription: "free", serviceRadius: 5, services: [{ id: "s1", name: "Fall & Pico", priceMin: 200, priceMax: 500, days: 2, active: true }, { id: "s2", name: "Blouse Alteration", priceMin: 300, priceMax: 800, days: 3, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: false, Sun: false }, hoursOpen: "10:00", hoursClose: "18:00", joinDate: "2025-01-20", aadhaarVerified: true, panVerified: true, addressVerified: false },
+      { tailorId: "TL-002", name: "Savita Pawar", phone: "+919800100002", city: "Mumbai", area: "Andheri", specialties: ["cotton_casual", "fall_pico", "alteration"], experience: "8 years", bio: "Quick and reliable alterations and casual wear", badge: "verified", status: "verified", rating: 4.5, reviewCount: 86, revenue: 145000, referrals: 28, leadsThisMonth: 5, earnedThisMonth: 18000, commissionOwed: 2000, available: true, subscription: "free", serviceRadius: 5, services: [{ id: "s1", name: "Fall & Pico", priceMin: 200, priceMax: 500, days: 2, active: true }, { id: "s2", name: "Blouse Alteration", priceMin: 300, priceMax: 800, days: 3, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: false, Sun: false }, hoursOpen: "10:00", hoursClose: "18:00", joinDate: "2025-01-20", aadhaarVerified: true, panVerified: true, addressVerified: true },
       { tailorId: "TL-003", name: "Rakesh Kumar", phone: "+919800100003", city: "Delhi", area: "Lajpat Nagar", specialties: ["silk_blouse", "heavy_work", "bridal"], experience: "20 years", bio: "Expert in heavy bridal blouse work", badge: "pro", status: "verified", rating: 4.9, reviewCount: 210, revenue: 420000, referrals: 65, leadsThisMonth: 12, earnedThisMonth: 48000, available: true, subscription: "pro", serviceRadius: 15, services: [{ id: "s1", name: "Heavy Work Blouse", priceMin: 2000, priceMax: 10000, days: 12, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: true }, hoursOpen: "08:00", hoursClose: "20:00", joinDate: "2024-03-01", aadhaarVerified: true, panVerified: true, addressVerified: true },
-      { tailorId: "TL-004", name: "Geeta Bai", phone: "+919800100004", city: "Chennai", area: "T Nagar", specialties: ["silk_blouse", "petticoat", "fall_pico"], experience: "12 years", bio: "Traditional South Indian blouse specialist", badge: "verified", status: "verified", rating: 4.6, reviewCount: 95, revenue: 195000, referrals: 32, leadsThisMonth: 6, earnedThisMonth: 22000, available: true, subscription: "free", serviceRadius: 8, services: [{ id: "s1", name: "Silk Blouse", priceMin: 600, priceMax: 2000, days: 4, active: true }, { id: "s2", name: "Petticoat", priceMin: 400, priceMax: 800, days: 3, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: false }, hoursOpen: "09:00", hoursClose: "18:00", joinDate: "2024-08-10", aadhaarVerified: true, panVerified: false, addressVerified: true },
+      { tailorId: "TL-004", name: "Geeta Bai", phone: "+919800100004", city: "Chennai", area: "T Nagar", specialties: ["silk_blouse", "petticoat", "fall_pico"], experience: "12 years", bio: "Traditional South Indian blouse specialist", badge: "verified", status: "verified", rating: 4.6, reviewCount: 95, revenue: 195000, referrals: 32, leadsThisMonth: 6, earnedThisMonth: 22000, available: true, subscription: "free", serviceRadius: 8, services: [{ id: "s1", name: "Silk Blouse", priceMin: 600, priceMax: 2000, days: 4, active: true }, { id: "s2", name: "Petticoat", priceMin: 400, priceMax: 800, days: 3, active: true }], workingDays: { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: false }, hoursOpen: "09:00", hoursClose: "18:00", joinDate: "2024-08-10", aadhaarVerified: true, panVerified: true, addressVerified: true },
     ];
 
-    // Real SHA-256 hash of "Tailor@123" + "wearify-salt-2024"
-    const tailorHash = "def85e4b3f98b1fbe9a4eefc94ff9dffcdbf42216eef358262538d6522689812";
     for (const t of tailors) {
-      await ctx.db.insert("tailors", { ...t, passwordHash: tailorHash });
+      const pwd = await makePwd("Tailor@123");
+      await ctx.db.insert("tailors", { ...t, ...pwd });
       await ctx.db.insert("users", {
         phone: t.phone,
-        passwordHash: tailorHash,
+        ...pwd,
         name: t.name,
         role: "tailor",
         tailorId: t.tailorId,
@@ -479,7 +485,7 @@ export const seedRelational = internalMutation({
 
     // ===================== WARDROBE (kiosk mirror session saves) =====================
     // Each wardrobe entry represents a look the customer saved from the smart mirror
-    // during a try-on session. /c/wishlist -> Wardrobe tab reads this.
+    // during a try-on session. /c/wardrobe reads this.
     if (c1 && st001Sarees.length >= 3) {
       await ctx.db.insert("wardrobe", { sessionId: "SS-10001", customerId: c1._id, sareeId: st001Sarees[0]._id, sareeName: st001Sarees[0].name, drapeStyle: "Nivi", accessories: ["Gold necklace", "Maang tikka"], neckline: "Round", price: st001Sarees[0].price, addedAt: now - 9 * DAY });
       await ctx.db.insert("wardrobe", { sessionId: "SS-10002", customerId: c1._id, sareeId: st001Sarees[2]._id, sareeName: st001Sarees[2].name, drapeStyle: "Gujarati", accessories: ["Jhumkas"], neckline: "V-neck", price: st001Sarees[2].price, addedAt: now - 21 * DAY });

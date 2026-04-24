@@ -1,12 +1,50 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 
 const CODE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
+// Rate-limit validateCode to cap brute-force enumeration of the 6-digit
+// code space. 20 failed attempts per store per 5-minute window — normal
+// typo-and-retry stays unaffected; an attacker hitting the API directly
+// burns their budget in ~1s and then has to wait.
+const ATTEMPT_WINDOW_MS = 5 * 60 * 1000;
+const MAX_FAILED_ATTEMPTS = 20;
+
+// Atomic failure-record helper. Either inserts the first row for a store,
+// extends the existing window's count, or resets the window if it lapsed.
+async function recordFailedAttempt(
+  ctx: MutationCtx,
+  storeId: string,
+  now: number,
+) {
+  const existing = await ctx.db
+    .query("trialCodeAttempts")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .unique();
+  if (!existing) {
+    await ctx.db.insert("trialCodeAttempts", {
+      storeId,
+      windowStart: now,
+      count: 1,
+    });
+    return;
+  }
+  if (now - existing.windowStart >= ATTEMPT_WINDOW_MS) {
+    await ctx.db.patch(existing._id, { windowStart: now, count: 1 });
+    return;
+  }
+  await ctx.db.patch(existing._id, { count: existing.count + 1 });
+}
+
+// 6-digit trial-room code sourced from Web Crypto, not Math.random().
+// Code space is still 1M — real brute-force protection needs rate limiting
+// on validateCode (tracked alongside the rest of the auth-pass work).
 function generateNumericCode(): string {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
   let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += Math.floor(Math.random() * 10).toString();
+  for (let i = 0; i < bytes.length; i++) {
+    code += (bytes[i] % 10).toString();
   }
   return code;
 }
@@ -49,11 +87,11 @@ export const generateCode = mutation({
     while (attempts < 10) {
       const conflict = await ctx.db
         .query("trialRoom")
-        .withIndex("by_code", (q) => q.eq("code", code))
+        .withIndex("by_code_and_storeId", (q) =>
+          q.eq("code", code).eq("storeId", args.storeId),
+        )
         .take(5);
-      const activeConflict = conflict.find(
-        (tr) => tr.status === "active" && tr.storeId === args.storeId
-      );
+      const activeConflict = conflict.find((tr) => tr.status === "active");
       if (!activeConflict) break;
       code = generateNumericCode();
       attempts++;
@@ -78,27 +116,47 @@ export const generateCode = mutation({
   },
 });
 
-// Validate a code entered on the kiosk
-export const validateCode = query({
+// Validate a code entered on the kiosk. Mutation (not query) so we can
+// record failed-attempt counters for rate limiting — queries can't write.
+// UX-wise the kiosk calls this once when the user presses Continue.
+export const validateCode = mutation({
   args: {
     code: v.string(),
     storeId: v.string(),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Rate-limit gate — reject before any lookup when a store's window is full.
+    const attempts = await ctx.db
+      .query("trialCodeAttempts")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .unique();
+    const inWindow =
+      attempts && now - attempts.windowStart < ATTEMPT_WINDOW_MS;
+    if (inWindow && attempts.count >= MAX_FAILED_ATTEMPTS) {
+      return {
+        valid: false,
+        error: "Too many attempts. Please try again in a few minutes.",
+      } as const;
+    }
+
     const entries = await ctx.db
       .query("trialRoom")
-      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .withIndex("by_code_and_storeId", (q) =>
+        q.eq("code", args.code).eq("storeId", args.storeId),
+      )
       .take(10);
 
-    const entry = entries.find(
-      (tr) => tr.storeId === args.storeId && tr.status === "active"
-    );
+    const entry = entries.find((tr) => tr.status === "active");
 
     if (!entry) {
+      await recordFailedAttempt(ctx, args.storeId, now);
       return { valid: false, error: "Invalid code" } as const;
     }
 
-    if (entry.expiresAt < Date.now()) {
+    if (entry.expiresAt < now) {
+      await recordFailedAttempt(ctx, args.storeId, now);
       return { valid: false, error: "Code expired" } as const;
     }
 
@@ -109,10 +167,21 @@ export const validateCode = query({
       .take(100);
     const mirrorItems = shortlistItems.filter((item) => item.sentToMirror);
 
-    // Get customer data if linked
+    // Narrow customer projection — the kiosk only reads _id/name/phone/lastBodyScan/language.
+    // Don't return full row (password hash, email, body measurements, preferences, etc.)
+    // so a guessed code can't exfiltrate PII.
     let customer = null;
     if (entry.customerId) {
-      customer = await ctx.db.get(entry.customerId);
+      const row = await ctx.db.get(entry.customerId);
+      if (row) {
+        customer = {
+          _id: row._id,
+          name: row.name,
+          phone: row.phone,
+          lastBodyScan: row.lastBodyScan,
+          language: row.language,
+        };
+      }
     }
 
     // Get session data
@@ -129,7 +198,6 @@ export const validateCode = query({
         sessionId: entry.sessionId,
         storeId: entry.storeId,
         customerId: entry.customerId,
-        customerPhone: entry.customerPhone,
         expiresAt: entry.expiresAt,
       },
       mirrorItems,
@@ -145,12 +213,12 @@ export const markCodeUsed = mutation({
   handler: async (ctx, args) => {
     const entries = await ctx.db
       .query("trialRoom")
-      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .withIndex("by_code_and_storeId", (q) =>
+        q.eq("code", args.code).eq("storeId", args.storeId),
+      )
       .take(10);
 
-    const entry = entries.find(
-      (tr) => tr.storeId === args.storeId && tr.status === "active"
-    );
+    const entry = entries.find((tr) => tr.status === "active");
     if (!entry) throw new Error("Trial room code not found or already used");
 
     await ctx.db.patch(entry._id, { status: "used" });
