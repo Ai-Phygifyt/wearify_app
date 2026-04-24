@@ -45,7 +45,14 @@ export async function POST(request: NextRequest) {
     const msg91Response = await fetch(`${MSG91_API_URL}?authkey=${authKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ template_id: templateId, mobile: fullPhone }),
+      // otp_length: 6 overrides whatever the MSG91 template is registered
+      // with (some templates default to 4 digits). Our UI is hardcoded to 6
+      // boxes with auto-submit on full, so these must agree.
+      body: JSON.stringify({
+        template_id: templateId,
+        mobile: fullPhone,
+        otp_length: 6,
+      }),
     });
     const data = (await msg91Response.json()) as {
       type?: string;
