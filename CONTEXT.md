@@ -209,6 +209,35 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Production deployment — Netlify frontend + prod Convex + the dual-runtime env var split
+
+- **URLs:**
+  - Live app: <https://wearifyy.netlify.app> (Netlify, auto-deploys from `pre-production` branch).
+  - Prod Convex: **`prod:quirky-narwhal-971`** → `https://quirky-narwhal-971.eu-west-1.convex.cloud` (functions) / `.convex.site` (Better Auth HTTP routes).
+  - Dev Convex (still active): `dev:formal-snake-780` — keep using this for local work; don't cross-wire.
+- **Build command** in [netlify.toml](netlify.toml): `npx convex deploy --cmd 'npm run build'`. That's Convex's recommended pattern — deploys `convex/*` to prod first, then runs `next build` with `NEXT_PUBLIC_CONVEX_URL` auto-injected from the deploy key. So the prod URL is never pinned in the repo.
+- **The dual-runtime env var gotcha (read this before debugging prod auth):**
+  - Better Auth in this app runs **inside Convex**, not inside Next.js. See [convex/betterAuth/auth.ts:24-25](convex/betterAuth/auth.ts#L24-L25) — it reads `process.env.SITE_URL` and `process.env.BETTER_AUTH_SECRET` from the Convex runtime. The Next.js API route at [app/api/auth/[...all]/route.ts](app/api/auth/[...all]/route.ts) is just a proxy that forwards to the Convex HTTP endpoint via `convexBetterAuthNextJs`.
+  - Consequence: env vars split across two runtimes.
+    - **Netlify env** (Next.js build + runtime): `CONVEX_DEPLOY_KEY`, `NEXT_PUBLIC_CONVEX_SITE_URL`, `NEXT_PUBLIC_SITE_URL`, `SITE_URL`, `BETTER_AUTH_SECRET` (for any Next.js-side Better Auth fallback), `NODE_VERSION`.
+    - **Convex prod env** (Convex dashboard → Production → Settings → Environment Variables, or `npx convex env set --prod`): `SITE_URL`, `BETTER_AUTH_SECRET`. **These must be set here too or every auth call returns HTTP 500.** Discovered the hard way; burned two iterations.
+  - Keep `BETTER_AUTH_SECRET` in sync across both runtimes so that a Next.js-side token can be validated by the Convex-side instance.
+- **`SITE_URL` must NOT have a trailing slash.** Better Auth appends paths like `/callback/google` and `https://x.netlify.app//callback/google` won't match registered callbacks. Noted because Netlify sometimes auto-formats with a slash when you paste.
+- **`/api/auth/*` requires an `Origin` header.** Better Auth's CSRF check rejects requests with `MISSING_OR_NULL_ORIGIN` (HTTP 403). For server-to-server or curl calls, set `Origin: https://wearifyy.netlify.app` manually.
+- **Admin bootstrapping on prod.** Admin login is sign-in only — no signup form (intentional; admin accounts are provisioned out-of-band). `admin@wearify.com` is hardcoded in the `ADMIN_EMAILS` allow-list ([convex/adminAuth.ts](convex/adminAuth.ts)) and in the client-side check at [app/admin/login/page.tsx:7](app/admin/login/page.tsx#L7). To create the prod admin account:
+
+  ```bash
+  curl -X POST https://wearifyy.netlify.app/api/auth/sign-up/email \
+    -H 'Content-Type: application/json' \
+    -H 'Origin: https://wearifyy.netlify.app' \
+    -d '{"email":"admin@wearify.com","password":"<strong>","name":"Admin"}'
+  ```
+
+  Any other email will get a Better Auth user created but fail the admin allow-list — so arbitrary signups are harmless.
+- **Secrets reference memo** at `.env.prod` (gitignored via `.env*`). Stores the Convex deploy key, Better Auth secret, and prod URLs for copy-paste into dashboards. Never commit; rotate the deploy key if it ever appears in a shared log.
+- **Prod data state:** seed not yet run on prod. `npx convex run --prod seed:seedAll '{}'` + `...seed:seedRelational '{}'` to populate the 5 demo stores, staff PINs, customers, and tailors.
+- **Not yet automated (flagged):** password-reset flow for admin (today's recovery is "delete the `users` row in Convex dashboard + sign up again"), Netlify deploy previews per PR, environment-specific analytics, Sentry/log aggregation.
+
 ### Kiosk device pairing — real auth for the `/kiosk` surface, admin-controlled
 
 - **Why:** `/kiosk/setup` used to ask for a `storeId` (e.g. `ST-001`) and a hardcoded `tabletCode = 123456` that was never read server-side. `storeId` is not a secret — it's in URLs, seed docs, and CONTEXT.md. Anyone who knew it could impersonate a kiosk and write sessions/orders/body-scans for that store. The `tabletCode` was dead config. This pass replaces that with a short-lived pairing code → long-lived device token flow, admin-observable and admin-revocable.
