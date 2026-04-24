@@ -209,6 +209,51 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Kiosk device pairing — real auth for the `/kiosk` surface, admin-controlled
+
+- **Why:** `/kiosk/setup` used to ask for a `storeId` (e.g. `ST-001`) and a hardcoded `tabletCode = 123456` that was never read server-side. `storeId` is not a secret — it's in URLs, seed docs, and CONTEXT.md. Anyone who knew it could impersonate a kiosk and write sessions/orders/body-scans for that store. The `tabletCode` was dead config. This pass replaces that with a short-lived pairing code → long-lived device token flow, admin-observable and admin-revocable.
+- **Schema** ([convex/schema.ts](convex/schema.ts)):
+  - `devices` gained `deviceToken` (hex 32-byte), `pairedAt`, `pairedByEmail`, `pairedByKind: "admin" | "store_owner"`, `revokedAt`, `revokedByEmail`, `deviceLabel`, `lastSeenAt`, plus a `by_deviceToken` index. Revoked rows are kept (status flipped, token cleared) so audit survives.
+  - New `kioskPairings` table: 6-digit codes, 2-min TTL, single-use. Indexed by `code` and by `storeId`.
+  - New `kioskPairingAttempts` table: per-store rolling-window rate limit (30 failures per 10 min) — same pattern as `staffPinAttempts` / `trialCodeAttempts`.
+- **Backend guards** ([convex/kioskAuth.ts](convex/kioskAuth.ts)):
+  - `requireKioskDevice(ctx, token)` — looks up by `by_deviceToken`, rejects missing/unknown/revoked, refreshes `lastSeenAt` on mutation calls.
+  - `requireKioskDeviceForStore(ctx, token, storeId)` — additionally verifies the device is paired to the expected store. The device's own `storeId` is authoritative; the client-supplied one is only a sanity check.
+- **Pairing mutations** ([convex/kioskPairing.ts](convex/kioskPairing.ts)):
+  - `createPairingCode({ storeId, sessionToken? })` — authorizes as admin (Better Auth) OR as the `userSessions`-authenticated store owner of that store. Generates a 6-digit crypto-random code with uniqueness check against outstanding codes. Returns `{ code, expiresAt, storeName }`.
+  - `consumePairingCode({ code, deviceLabel? })` — unauthenticated (the code IS the credential, like trial-room codes). Rate-limited per store. On success, inserts a `devices` row and returns `{ deviceId, deviceToken, storeId, storeName }` to the kiosk — the ONLY time `deviceToken` is ever returned to a client.
+  - `revokeDevice({ deviceId, sessionToken? })` — same admin-or-owner auth. Sets `revokedAt`, clears `deviceToken` so cached copies die immediately without waiting for the revoked-check.
+  - `listDevicesForStore`, `listActivePairingCodesForStore`, `listAllPairedDevices` — projection helper `pickDevicePublicFields` strips `deviceToken` from every read; never leak it to clients.
+- **Guarded mutations** — four writes now accept an optional `deviceToken`:
+  - [convex/sessionOps.ts](convex/sessionOps.ts): `createSession`, `createOrder`, `endSession`
+  - [convex/customers.ts](convex/customers.ts): `recordBodyScan`
+  - **Dual-mode rationale:** `deviceToken` is `v.optional(v.string())`, not required. If present, enforced via `requireKioskDeviceForStore`. If absent, the mutation runs without device check. This is deliberate — the tablet also calls `createSession`/`endSession` and has no device identity yet (staff PIN login doesn't mint a `userSessions` token). Tightening this to required is the next pass once the tablet gets real auth. **The kiosk always sends the token now**, so this captures the rogue-internet-client threat.
+- **Secondary mutations left ungated** (flagged): `sessionOps.{addToWardrobe, createLook, updateSession, addTrialCartItem, removeTrialCartItem, addCartItem, updateCartQty, removeCartItem, clearCart}`, `trialRoom.{validateCode, markCodeUsed}`, `tailorOps.createReferral`, `phoneAuth.verifyOtp`, `customers.ensureByPhone`. These are session-scoped (require a sessionId that was created via the guarded `createSession`) — so they're protected transitively. Threading `deviceToken` into each is mechanical and deferred.
+- **Frontend — kiosk:**
+  - [app/kiosk/setup/page.tsx](app/kiosk/setup/page.tsx) fully rewritten: 6-digit code input (+ optional device label) → `consumePairingCode` → stores `{ storeId, storeName, deviceId, deviceToken, deviceLabel, pairedAt }` in `localStorage.wearify_kiosk_store`. The old `storeId`/`tabletCode` pair-field is gone.
+  - [app/kiosk/layout.tsx](app/kiosk/layout.tsx) + [app/kiosk/page.tsx](app/kiosk/page.tsx): hydrate `deviceToken` on mount. Legacy configs missing `deviceToken` are wiped and the technician is bounced to `/kiosk/setup` — no legacy-compat mode, simplest migration. Token is passed on every `createSessionMut` / `createOrder` / `endSessionMut` / `recordBodyScan` call.
+- **Frontend — store self-serve:** new [app/store/settings/kiosks/page.tsx](app/store/settings/kiosks/page.tsx). Linked from `/store/settings` via a new "Kiosk Mirrors" row (added to `SettingsRow` list in [app/store/settings/page.tsx](app/store/settings/page.tsx)). Generate-code block with a live `useCountdown` countdown, paired-devices list with per-row Revoke, and a revoked-devices dim list for audit clarity. Reads `storeId` and `sessionToken` from `localStorage.wearify_auth_user` + `wearify_auth_token` — same pattern `/store/settings/billing` already uses.
+- **Frontend — admin:** [app/admin/devices/page.tsx](app/admin/devices/page.tsx) gained a **Pairing** tab (new `PairingTab` component in the same file). KPIs (paired / revoked / stores), issue-code picker (store dropdown → generates code with 2-minute countdown), and all paired devices grouped by store with per-row Revoke. Existing Fleet tab is untouched (seeded telemetry devices — no `pairedAt` — are filtered out of the Pairing view via `listAllPairedDevices`).
+- **Threat model this closes:**
+  - Rogue kiosk claiming to be a store → blocked (no valid `deviceToken`).
+  - Stolen pairing code replay → blocked (single-use, consumed atomically).
+  - Stolen pairing code hoarded → expires in 2 minutes.
+  - Brute-force 1M code space → rate-limited to 30 fails per 10-min window per store.
+  - Revoked device still functioning → blocked (`requireKioskDevice` checks `revokedAt`, and `deviceToken` is cleared on revoke so even cached copies die).
+  - Client lying about `storeId` → backend uses the device's own `storeId`; `requireKioskDeviceForStore` cross-checks.
+- **Authorization matrix** (who can do what via the pairing mutations):
+  - `createPairingCode` / `revokeDevice` / `listDevicesForStore` / `listActivePairingCodesForStore` — admin for any store, store_owner for own store only.
+  - `listAllPairedDevices` — admin only.
+  - `consumePairingCode` — unauthenticated (code is the credential).
+- **Not in this pass (flagged):**
+  - Tablet-side pairing UI (tablet still has no server-side session identity — staff PIN login returns staff info but doesn't insert into `userSessions`; would need that first).
+  - Threading `deviceToken` into the other ~10 kiosk-facing mutations (see "Secondary mutations left ungated" above). Not a hole in the model because they're session-scoped; just belt-and-suspenders for a future tightening.
+  - Auto-revoke on staff role change / password reset.
+  - Admin "bulk revoke all devices for a store" one-click.
+  - Seed-time pairing (demo `devices` rows from `seed.ts` don't have a `pairedAt` and so won't appear in the new admin Pairing tab; fine — they're not real kiosks, and the Fleet tab still shows them).
+- **Migration:** dual-read happens client-side — any legacy localStorage config without `deviceToken` is wiped on next load and the kiosk lands on setup. No backfill needed server-side. Existing seeded `devices` rows remain valid in the Fleet tab (they never had a `deviceToken` in the first place; they're mock telemetry).
+- **Verification:** `npm run type-check` clean. Lint clean for all new code; only pre-existing `_foo` unused-var warnings in `customers.ts` / `sessionOps.ts` remain (predate this work). Smoke-testing the end-to-end flow (admin issue → kiosk consume → kiosk mutation → admin revoke → kiosk 401) is deferred to the next live session.
+
 ### Customer feedback loop — wired to last visit, surfaced on store customer detail
 
 - **Problem:** `/c/me/feedback` wrote feedback rows with `storeId: "general"` — not a real store id, so `listFeedbackByStore` (which is exact-match on `storeId`) never picked them up. The page's own tile copy promised "Share feedback on your last store visit" but nothing in the flow identified the last visit. Feedback was write-only dead data.

@@ -801,10 +801,47 @@ export default defineSchema({
     serialNumber: v.optional(v.string()),
     iotDeviceId: v.optional(v.string()),
     firmwareVersion: v.optional(v.string()),
+    // Pairing identity — populated only for kiosks minted via the pairing flow.
+    // deviceToken is the long-lived bearer secret the kiosk sends with every
+    // mutation; revoked tokens are kept (status="revoked") for audit.
+    deviceToken: v.optional(v.string()),
+    pairedAt: v.optional(v.number()),
+    pairedByEmail: v.optional(v.string()),
+    pairedByKind: v.optional(v.string()), // "admin" | "store_owner"
+    revokedAt: v.optional(v.number()),
+    revokedByEmail: v.optional(v.string()),
+    deviceLabel: v.optional(v.string()),
+    lastSeenAt: v.optional(v.number()),
   })
     .index("by_deviceId", ["deviceId"])
     .index("by_storeId", ["storeId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_deviceToken", ["deviceToken"]),
+
+  // Short-lived, single-use codes that authorize a fresh kiosk to mint a
+  // device token. Issued by admin (any store) or a logged-in store owner
+  // (own store only). 2-minute TTL. Row consumed on successful pair.
+  kioskPairings: defineTable({
+    code: v.string(),
+    storeId: v.string(),
+    storeName: v.string(),
+    createdByEmail: v.string(),
+    createdByKind: v.string(), // "admin" | "store_owner"
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    consumedDeviceId: v.optional(v.string()),
+  })
+    .index("by_code", ["code"])
+    .index("by_storeId", ["storeId"]),
+
+  // Rate-limit pairing-code consumption per storeId. Same pattern as
+  // trialCodeAttempts / staffPinAttempts — rolling window, purged lazily.
+  kioskPairingAttempts: defineTable({
+    storeId: v.string(),
+    failures: v.number(),
+    windowStart: v.number(),
+  }).index("by_storeId", ["storeId"]),
 
   // ============================
   // AI AGENTS

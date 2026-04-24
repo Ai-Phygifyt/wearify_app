@@ -19,6 +19,8 @@ import type * as devices from "../devices.js";
 import type * as fileValidation from "../fileValidation.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
+import type * as kioskAuth from "../kioskAuth.js";
+import type * as kioskPairing from "../kioskPairing.js";
 import type * as legal from "../legal.js";
 import type * as models from "../models.js";
 import type * as network from "../network.js";
@@ -53,6 +55,8 @@ declare const fullApi: ApiFromModules<{
   fileValidation: typeof fileValidation;
   files: typeof files;
   http: typeof http;
+  kioskAuth: typeof kioskAuth;
+  kioskPairing: typeof kioskPairing;
   legal: typeof legal;
   models: typeof models;
   network: typeof network;

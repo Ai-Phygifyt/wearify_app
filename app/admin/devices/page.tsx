@@ -2,8 +2,209 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { KPI, Card, Tabs, Badge, Row, Btn, Metric, PageLoading } from "@/components/ui/wearify-ui";
-import { useState } from "react";
+import { KPI, Card, Tabs, Badge, Row, Metric, PageLoading } from "@/components/ui/wearify-ui";
+import { useEffect, useMemo, useState } from "react";
+
+// ----------------------------------------------------------------------
+// Pairing helpers
+// ----------------------------------------------------------------------
+
+function formatWhen(ts?: number) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+}
+
+function useCountdown(expiresAt: number | undefined) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!expiresAt) return;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [expiresAt]);
+  if (!expiresAt) return null;
+  const msLeft = expiresAt - now;
+  if (msLeft <= 0) return { expired: true, label: "expired" };
+  const s = Math.ceil(msLeft / 1000);
+  return { expired: false, label: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` };
+}
+
+// ----------------------------------------------------------------------
+// Pairing tab
+// ----------------------------------------------------------------------
+
+function PairingTab() {
+  const stores = useQuery(api.stores.list);
+  const paired = useQuery(api.kioskPairing.listAllPairedDevices);
+
+  const [selectedStore, setSelectedStore] = useState<string>("");
+  const [issuedCode, setIssuedCode] = useState<{ code: string; storeName: string; expiresAt: number } | null>(null);
+  const [issuing, setIssuing] = useState(false);
+  const [error, setError] = useState("");
+
+  const createCode = useMutation(api.kioskPairing.createPairingCode);
+  const revokeDevice = useMutation(api.kioskPairing.revokeDevice);
+
+  const countdown = useCountdown(issuedCode?.expiresAt);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, typeof paired>();
+    if (!paired) return map;
+    for (const d of paired) {
+      const list = map.get(d.storeId) ?? [];
+      list.push(d);
+      map.set(d.storeId, list);
+    }
+    return map;
+  }, [paired]);
+
+  if (!stores || !paired) return <PageLoading />;
+
+  const activeCount = paired.filter((d) => !d.revokedAt).length;
+  const revokedCount = paired.filter((d) => d.revokedAt).length;
+
+  const handleIssue = async () => {
+    if (!selectedStore) {
+      setError("Pick a store first");
+      return;
+    }
+    setError("");
+    setIssuing(true);
+    try {
+      const res = await createCode({ storeId: selectedStore });
+      setIssuedCode({
+        code: res.code,
+        storeName: res.storeName,
+        expiresAt: res.expiresAt,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message.replace(/^Error: /, "") : "Failed");
+    } finally {
+      setIssuing(false);
+    }
+  };
+
+  const handleRevoke = async (deviceId: string, label?: string) => {
+    if (!confirm(`Revoke "${label || deviceId}"? The kiosk will stop working until re-paired.`)) return;
+    try {
+      await revokeDevice({ deviceId });
+    } catch (e) {
+      setError(e instanceof Error ? e.message.replace(/^Error: /, "") : "Failed");
+    }
+  };
+
+  return (
+    <div>
+      {/* KPIs */}
+      <div className="flex gap-2 mb-3">
+        <KPI label="Paired Kiosks" value={activeCount} />
+        <KPI label="Revoked" value={revokedCount} />
+        <KPI label="Stores" value={stores.length} />
+      </div>
+
+      {/* Issue code */}
+      <Card title="Issue Pairing Code">
+        {error && (
+          <div className="p-2 mb-2 rounded bg-wf-red/5 border border-wf-red/20 text-[10px] text-wf-red">
+            {error}
+          </div>
+        )}
+        <div className="flex gap-2 items-center">
+          <select
+            value={selectedStore}
+            onChange={(e) => { setSelectedStore(e.target.value); setIssuedCode(null); }}
+            className="flex-1 px-3 py-2 rounded bg-wf-panel border border-wf-border text-[11px] text-wf-text focus:outline-none focus:border-wf-primary"
+          >
+            <option value="">Select store...</option>
+            {stores.map((s) => (
+              <option key={s._id} value={s.storeId}>
+                {s.name} · {s.storeId} · {s.city}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleIssue}
+            disabled={issuing || !selectedStore}
+            className="px-4 py-2 rounded bg-wf-primary text-white text-[11px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {issuing ? "Issuing..." : "Issue code"}
+          </button>
+        </div>
+
+        {issuedCode && !countdown?.expired && (
+          <div className="mt-3 p-4 rounded border border-wf-primary/25 bg-wf-primary/5">
+            <div className="text-[9px] uppercase tracking-wider text-wf-muted font-bold mb-1">
+              Code for {issuedCode.storeName}
+            </div>
+            <div className="font-mono text-3xl font-semibold tracking-[0.3em] text-wf-text">
+              {issuedCode.code}
+            </div>
+            <div className="mt-2 text-[10px] text-wf-subtext">
+              Expires in <span className="font-mono font-semibold text-wf-primary">{countdown?.label}</span> — share this with the technician setting up the kiosk. One-time use.
+            </div>
+          </div>
+        )}
+        {issuedCode && countdown?.expired && (
+          <div className="mt-3 p-3 rounded border border-wf-amber/30 bg-wf-amber/5 text-[10px] text-wf-subtext">
+            Code expired. Issue a fresh one if still needed.
+          </div>
+        )}
+      </Card>
+
+      {/* Fleet by store */}
+      <Card title={`Paired Devices (${activeCount} active${revokedCount > 0 ? `, ${revokedCount} revoked` : ""})`}>
+        {paired.length === 0 ? (
+          <div className="text-center py-8 text-wf-muted text-[11px]">
+            No kiosks have been paired yet. Issue a code above, then type it on the mirror at /kiosk/setup.
+          </div>
+        ) : (
+          <>
+            {[...grouped.entries()].map(([storeId, list]) => (
+              <div key={storeId} className="mb-3 last:mb-0">
+                <div className="text-[9px] uppercase tracking-wider text-wf-muted font-bold mb-1 px-1">
+                  {list![0].storeName} · {storeId}
+                </div>
+                {list!.map((d) => (
+                  <div
+                    key={d._id}
+                    className="flex items-center gap-2 py-2 px-2 border-b border-wf-border last:border-0"
+                    style={{ opacity: d.revokedAt ? 0.55 : 1 }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-semibold">
+                        {d.deviceLabel || "Kiosk"}
+                        {d.revokedAt && <span className="ml-2 text-wf-red font-normal">· revoked</span>}
+                      </div>
+                      <div className="text-[9px] font-mono text-wf-subtext">
+                        {d.deviceId} · paired by {d.pairedByKind === "admin" ? "admin" : "store"} {formatWhen(d.pairedAt)} · last seen {formatWhen(d.lastSeenAt)}
+                      </div>
+                    </div>
+                    {!d.revokedAt && (
+                      <button
+                        onClick={() => handleRevoke(d.deviceId, d.deviceLabel)}
+                        className="px-3 py-1.5 rounded bg-wf-red/10 border border-wf-red/25 text-wf-red text-[10px] font-semibold cursor-pointer hover:bg-wf-red/15"
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// Main page
+// ----------------------------------------------------------------------
 
 export default function DevicesPage() {
   const devices = useQuery(api.devices.list);
@@ -36,7 +237,7 @@ export default function DevicesPage() {
       </div>
 
       <Tabs
-        items={["Fleet", "IoT Shadow", "Provisioning", "Shipping", "Offline Queue"]}
+        items={["Fleet", "Pairing", "IoT Shadow", "Provisioning", "Shipping", "Offline Queue"]}
         active={tab}
         onChange={setTab}
       />
@@ -134,7 +335,9 @@ export default function DevicesPage() {
         </div>
       )}
 
-      {tab !== "Fleet" && (
+      {tab === "Pairing" && <PairingTab />}
+
+      {tab !== "Fleet" && tab !== "Pairing" && (
         <Card>
           <div className="text-center py-8 text-wf-muted text-[11px]">
             <span className="text-lg mb-2 block">🚧</span>

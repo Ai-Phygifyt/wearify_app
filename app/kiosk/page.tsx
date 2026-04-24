@@ -105,6 +105,10 @@ export default function KioskPage() {
   // Store config
   const [storeId, setStoreId] = useState("");
   const [storeName, setStoreName] = useState("");
+  // Device token — minted by /kiosk/setup via kioskPairing.consumePairingCode.
+  // Passed to every guarded mutation; if the server rejects it (revoked),
+  // we wipe localStorage and bounce back to /kiosk/setup.
+  const [deviceToken, setDeviceToken] = useState("");
 
   // Screen routing
   const [screen, setScreen] = useState<Screen>("idle");
@@ -172,8 +176,16 @@ export default function KioskPage() {
     if (stored) {
       try {
         const cfg = JSON.parse(stored);
+        // Legacy configs without deviceToken are treated as unpaired —
+        // bounce to setup so the technician pairs via the real flow.
+        if (!cfg.deviceToken) {
+          localStorage.removeItem("wearify_kiosk_store");
+          router.push("/kiosk/setup");
+          return;
+        }
         setStoreId(cfg.storeId);
         setStoreName(cfg.storeName);
+        setDeviceToken(cfg.deviceToken);
       } catch { /* ignore */ }
     } else {
       router.push("/kiosk/setup");
@@ -486,6 +498,7 @@ export default function KioskPage() {
                 storeName,
                 customerId: customer._id,
                 customerPhone: `+91${phone}`,
+                deviceToken,
               });
               setSessionId(newSessionId);
               persistKioskSession({
@@ -521,6 +534,7 @@ export default function KioskPage() {
                 storeName,
                 customerId: cId,
                 customerPhone: `+91${phone}`,
+                deviceToken,
               });
               setSessionId(newSessionId);
               persistKioskSession({
@@ -635,7 +649,7 @@ export default function KioskPage() {
             stream={cameraStream}
             onCapture={() => {
               if (customerId) {
-                recordBodyScan({ customerId }).catch(() => {});
+                recordBodyScan({ customerId, deviceToken }).catch(() => {});
               }
               setHasBodyScan(true);
               scanEligibleRef.current = true;
@@ -861,6 +875,7 @@ export default function KioskPage() {
                       price: c.price,
                       quantity: c.qty,
                     })),
+                    deviceToken,
                   });
                   const cartIds = cartItems.map((c) => c._id);
                   setWardrobeItems((prev) => prev.filter((w) => !cartIds.includes(w._id)));
@@ -900,7 +915,7 @@ export default function KioskPage() {
                     sareesTriedOn: wardrobeItems.length,
                     sareesBrowsed: trialItems.length + wardrobeItems.length,
                   });
-                  await endSessionMut({ sessionId });
+                  await endSessionMut({ sessionId, deviceToken });
                 } catch { /* ignore */ }
               }
               handleWipe();

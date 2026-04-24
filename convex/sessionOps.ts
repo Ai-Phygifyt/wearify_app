@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { requireKioskDeviceForStore } from "./kioskAuth";
 
 // ============================================================
 // STORE-LINK HELPERS
@@ -70,8 +71,18 @@ export const createSession = mutation({
     tabletLinked: v.optional(v.boolean()),
     occasion: v.optional(v.string()),
     budget: v.optional(v.string()),
+    // Optional: kiosk callers send their paired deviceToken and it is
+    // verified against storeId. Absent = legacy/tablet path (tablet has no
+    // device identity yet — flagged for a future auth pass).
+    deviceToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    let mirrorId = args.mirrorId;
+    if (args.deviceToken) {
+      const device = await requireKioskDeviceForStore(ctx, args.deviceToken, args.storeId);
+      // Trust the device's own id over anything the client supplied.
+      mirrorId = device.deviceId;
+    }
     const sessionId = "SS-" + Date.now().toString();
     await ctx.db.insert("sessions", {
       sessionId,
@@ -81,7 +92,7 @@ export const createSession = mutation({
       staffName: args.staffName,
       customerId: args.customerId,
       customerPhone: args.customerPhone,
-      mirrorId: args.mirrorId,
+      mirrorId,
       tabletLinked: args.tabletLinked,
       status: "active",
       startTime: Date.now(),
@@ -144,13 +155,19 @@ export const listSessionsByStore = query({
 });
 
 export const endSession = mutation({
-  args: { sessionId: v.string() },
+  args: {
+    sessionId: v.string(),
+    deviceToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
       .unique();
     if (!session) throw new Error("Session not found");
+    if (args.deviceToken) {
+      await requireKioskDeviceForStore(ctx, args.deviceToken, session.storeId);
+    }
 
     // Idempotency: if this session was already completed, return the prior
     // totals instead of double-writing a visit record.
@@ -857,8 +874,12 @@ export const createOrder = mutation({
       })
     ),
     paymentMethod: v.optional(v.string()),
+    deviceToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.deviceToken) {
+      await requireKioskDeviceForStore(ctx, args.deviceToken, args.storeId);
+    }
     const orderId = generateOrderId();
 
     // Calculate subtotal and GST

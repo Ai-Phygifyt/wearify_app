@@ -2,6 +2,7 @@ import { query, mutation, internalMutation, MutationCtx } from "./_generated/ser
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { assertFile, GUARDS } from "./fileValidation";
+import { requireKioskDevice } from "./kioskAuth";
 
 // ============================
 // Loyalty tier helper
@@ -347,8 +348,12 @@ export const recordBodyScan = mutation({
   args: {
     customerId: v.id("customers"),
     bodyScanFileId: v.optional(v.id("_storage")),
+    deviceToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.deviceToken) {
+      await requireKioskDevice(ctx, args.deviceToken);
+    }
     if (args.bodyScanFileId) await assertFile(ctx, args.bodyScanFileId, GUARDS.bodyScan);
     const updates: Record<string, unknown> = { lastBodyScan: Date.now() };
     if (args.bodyScanFileId) updates.bodyScanFileId = args.bodyScanFileId;
