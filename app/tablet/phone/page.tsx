@@ -155,7 +155,6 @@ export default function TabletPhoneLookupPage() {
                 autoFocus
               />
               {error && <p className="text-sm text-wf-red mt-2">{error}</p>}
-              <p className="text-xs text-wf-muted mt-2">Demo OTP: 123456</p>
               <div className="mt-6 flex gap-3">
                 <Btn onClick={() => { setStep("phone"); setOtp(""); setError(""); }}>
                   Back

@@ -233,13 +233,6 @@ export default function StoreLoginPage() {
               >
                 Send OTP
               </button>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div className="w-divider" style={{ flex: 1, margin: 0 }} />
-                <span className="w-mono" style={{ fontSize: 12, color: "var(--w-ink-ghost)", whiteSpace: "nowrap" }}>
-                  Demo OTP: <strong style={{ color: "var(--w-gold)" }}>123456</strong>
-                </span>
-                <div className="w-divider" style={{ flex: 1, margin: 0 }} />
-              </div>
             </div>
           )}
 

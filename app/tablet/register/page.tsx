@@ -247,7 +247,6 @@ export default function TabletRegisterPage() {
                 ))}
               </div>
               {error && <p className="text-sm text-wf-red mt-2 text-center">{error}</p>}
-              <p className="text-xs text-wf-muted mt-2 text-center">Demo OTP: 123456</p>
               <div className="mt-6 flex gap-3">
                 <Btn onClick={() => { setStep("phone"); setOtpDigits(["", "", "", "", "", ""]); setError(""); }}>Back</Btn>
                 <Btn primary onClick={() => submitOtp(otpDigits)} disabled={loading || otpDigits.join("").length !== 6} className="flex-1">

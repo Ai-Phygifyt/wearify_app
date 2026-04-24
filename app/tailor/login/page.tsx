@@ -370,9 +370,6 @@ export default function TailorLoginPage() {
               >
                 Send OTP
               </button>
-              <p style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "center", margin: 0 }}>
-                Dev OTP: <span className="t-mono" style={{ color: "var(--ink-3)" }}>123456</span>
-              </p>
             </div>
           )}
 

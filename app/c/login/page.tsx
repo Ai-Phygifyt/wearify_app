@@ -11,7 +11,7 @@ import {
   isValidPhone,
 } from "@/lib/phoneAuth";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Lightbulb, Flower } from "lucide-react";
+import { ArrowLeft, ArrowRight, Flower } from "lucide-react";
 
 type Step = "phone" | "otp";
 
@@ -421,25 +421,6 @@ export default function CustomerLoginPage() {
                   Verify OTP
                 </button>
               )}
-
-              <div
-                style={{
-                  background: "linear-gradient(135deg, var(--cx-gold-ghost) 0%, #FDF5DB 100%)",
-                  border: "1px solid rgba(184, 134, 11, .25)",
-                  borderRadius: "var(--cx-r-pill)",
-                  padding: "8px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  marginBottom: 14,
-                }}
-              >
-                <Lightbulb size={14} color="var(--cx-gold-d)" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--cx-gold-d)" }}>
-                  Demo OTP: <span className="cx-mono" style={{ letterSpacing: 2 }}>123456</span>
-                </span>
-              </div>
 
               <div style={{ textAlign: "center" }}>
                 <button

@@ -340,9 +340,6 @@ export default function RegisterPage() {
                 />
               ))}
             </div>
-            <p style={{ fontSize: 11, textAlign: "center", color: "var(--cx-text-muted)" }}>
-              Demo OTP: <strong style={{ color: "var(--cx-gold-d)" }}>123456</strong>
-            </p>
             <button
               onClick={() => submitOtp(otpDigits)}
               disabled={otpDigits.join("").length !== 6 || loading}
