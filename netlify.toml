@@ -1,0 +1,34 @@
+# Netlify deploy config for the Wearify Next.js frontend.
+#
+# The build command deploys the Convex backend first, then runs next build.
+# `npx convex deploy --cmd` is Convex's official pattern — it pushes
+# convex/* to the prod deployment named by CONVEX_DEPLOY_KEY and injects
+# NEXT_PUBLIC_CONVEX_URL into the child build process automatically, so we
+# never hardcode the prod URL in the repo.
+#
+# Required Netlify environment variables (set in Site settings → Env):
+#   CONVEX_DEPLOY_KEY         — from Convex dashboard → Project Settings →
+#                               Deploy Keys → Production. This is what
+#                               picks the prod Convex deployment.
+#   BETTER_AUTH_SECRET        — 32-byte random string; generate a NEW one
+#                               for prod, don't reuse the local one.
+#   NEXT_PUBLIC_SITE_URL      — the live Netlify URL (e.g.
+#                               https://wearify.netlify.app). Set after
+#                               the first deploy finishes.
+#   SITE_URL                  — same as NEXT_PUBLIC_SITE_URL.
+#   NEXT_PUBLIC_CONVEX_SITE_URL — derived from CONVEX_DEPLOY_KEY's URL by
+#                               swapping .convex.cloud → .convex.site.
+#                               Used by Better Auth HTTP routes.
+
+[build]
+  command = "npx convex deploy --cmd 'npm run build'"
+  publish = ".next"
+
+[build.environment]
+  # Next 16 runs fine on Node 20.
+  NODE_VERSION = "20"
+
+# Next.js runtime plugin — auto-installed by Netlify when it detects
+# Next, but pinning it makes the build reproducible across environments.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
