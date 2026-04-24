@@ -24,6 +24,7 @@ import type * as kioskPairing from "../kioskPairing.js";
 import type * as legal from "../legal.js";
 import type * as models from "../models.js";
 import type * as network from "../network.js";
+import type * as otp from "../otp.js";
 import type * as phoneAuth from "../phoneAuth.js";
 import type * as releases from "../releases.js";
 import type * as resilience from "../resilience.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   legal: typeof legal;
   models: typeof models;
   network: typeof network;
+  otp: typeof otp;
   phoneAuth: typeof phoneAuth;
   releases: typeof releases;
   resilience: typeof resilience;

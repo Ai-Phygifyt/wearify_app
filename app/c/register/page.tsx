@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { useUploadFile } from "@/lib/useUpload";
 import { GUARDS } from "@/lib/uploadGuards";
 import { setToken, setStoredUser, formatPhone, fullPhone, isValidPhone } from "@/lib/phoneAuth";
+import { sendOtp, verifyOtpCode } from "@/lib/otp";
 import {
   Gender,
   HeightUnit,
@@ -31,7 +32,6 @@ const STEPS: Step[] = ["phone", "otp", "profile"];
 export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const verifyOtp = useMutation(api.phoneAuth.verifyOtp);
   const loginWithOtp = useMutation(api.phoneAuth.loginWithOtp);
   const completeProfile = useMutation(api.customers.completeProfile);
   const { upload } = useUploadFile();
@@ -69,12 +69,19 @@ export default function RegisterPage() {
   const initials = useMemo(() => initialsOf(fullName || "U"), [fullName]);
   const maxDob = useMemo(() => maxDobToday(), []);
 
-  function handlePhoneNext() {
+  async function handlePhoneNext() {
     if (!phoneValid) {
       setError("Enter a valid 10-digit mobile number starting with 6–9");
       return;
     }
     setError("");
+    setLoading(true);
+    const send = await sendOtp(fullPhone(phone));
+    setLoading(false);
+    if (!send.success) {
+      setError(send.error);
+      return;
+    }
     setStep("otp");
     setOtpDigits(["", "", "", "", "", ""]);
     setTimeout(() => otpRefs.current[0]?.focus(), 80);
@@ -87,11 +94,13 @@ export default function RegisterPage() {
       setLoading(true);
       setError("");
       try {
-        const r = await verifyOtp({ phone: fullPhone(phone), otp });
-        if (r.success) {
+        // /api/otp/verify is the source of truth; verifyOtp (Convex) is
+        // kept around for callers that want a post-verify server check.
+        const v = await verifyOtpCode(fullPhone(phone), otp);
+        if (v.success) {
           setStep("profile");
         } else {
-          setError(r.error || "Invalid OTP");
+          setError(v.error);
           setOtpDigits(["", "", "", "", "", ""]);
           setTimeout(() => otpRefs.current[0]?.focus(), 80);
         }
@@ -101,7 +110,7 @@ export default function RegisterPage() {
         setLoading(false);
       }
     },
-    [phone, verifyOtp]
+    [phone]
   );
 
   function handleOtpInput(index: number, value: string) {

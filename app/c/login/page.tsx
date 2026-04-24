@@ -10,6 +10,7 @@ import {
   fullPhone,
   isValidPhone,
 } from "@/lib/phoneAuth";
+import { sendOtp, resendOtp, verifyOtpCode } from "@/lib/otp";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Flower } from "lucide-react";
 
@@ -60,14 +61,21 @@ export default function CustomerLoginPage() {
     setError("");
   }
 
-  function handleSendOtp() {
+  async function handleSendOtp() {
     if (!phoneValid) {
       setError("Enter a valid 10-digit mobile number starting with 6-9");
       return;
     }
+    setLoading(true);
+    setError("");
+    const result = await sendOtp(fullPhone(phoneDigits));
+    setLoading(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
     setStep("otp");
     setOtpDigits(["", "", "", "", "", ""]);
-    setError("");
     setTimeout(() => otpRefs.current[0]?.focus(), 80);
   }
 
@@ -79,6 +87,16 @@ export default function CustomerLoginPage() {
       setError("");
       setNoAccount(false);
       try {
+        // Verify via MSG91 first; only then ask Convex to mint a session.
+        // Keeping them in order means a failed OTP never produces login state.
+        const verify = await verifyOtpCode(fullPhone(phoneDigits), otp);
+        if (!verify.success) {
+          setError(verify.error);
+          setOtpDigits(["", "", "", "", "", ""]);
+          setTimeout(() => otpRefs.current[0]?.focus(), 80);
+          setLoading(false);
+          return;
+        }
         const result = await loginWithOtp({
           phone: fullPhone(phoneDigits),
           otp,
@@ -424,9 +442,11 @@ export default function CustomerLoginPage() {
 
               <div style={{ textAlign: "center" }}>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setOtpDigits(["", "", "", "", "", ""]);
                     setError("");
+                    const r = await resendOtp(fullPhone(phoneDigits));
+                    if (!r.success) setError(r.error);
                     setTimeout(() => otpRefs.current[0]?.focus(), 80);
                   }}
                   style={{

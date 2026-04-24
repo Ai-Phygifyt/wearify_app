@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SareeThumb } from "@/components/SareeThumb";
+import { sendOtp, verifyOtpCode, resendOtp } from "@/lib/otp";
 import {
   ChevronLeft, ChevronRight, ChevronDown,
   Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
@@ -156,7 +157,6 @@ export default function KioskPage() {
   // Mutations
   const markCodeUsed = useMutation(api.trialRoom.markCodeUsed);
   const createSessionMut = useMutation(api.sessionOps.createSession);
-  const verifyOtpMut = useMutation(api.phoneAuth.verifyOtp);
   const addToWardrobeMut = useMutation(api.sessionOps.addToWardrobe);
   const createLook = useMutation(api.sessionOps.createLook);
   const createOrder = useMutation(api.sessionOps.createOrder);
@@ -461,8 +461,13 @@ export default function KioskPage() {
         return (
           <PhoneAuthScreen
             storeName={storeName}
-            onSubmitPhone={(ph) => {
+            onSubmitPhone={async (ph) => {
               setPhone(ph);
+              const r = await sendOtp(`+91${ph}`);
+              if (!r.success) {
+                showToast(r.error, "error");
+                return;
+              }
               navigate("otp");
             }}
             onBack={goBack}
@@ -1293,7 +1298,6 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
-  const verifyOtp = useMutation(api.phoneAuth.verifyOtp);
   const customer = useQuery(
     api.customers.getByPhone,
     phone ? { phone: `+91${phone}` } : "skip"
@@ -1314,16 +1318,11 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
       setError("Loading customer data, try again...");
       return;
     }
-    try {
-      const result = await verifyOtp({ phone: `+91${phone}`, otp });
-      if (result.success) {
-        onVerified(customer);
-      } else {
-        setError("Incorrect OTP");
-        setOtp("");
-      }
-    } catch {
-      setError("Incorrect OTP");
+    const result = await verifyOtpCode(`+91${phone}`, otp);
+    if (result.success) {
+      onVerified(customer);
+    } else {
+      setError(result.error);
       setOtp("");
     }
   };
@@ -1360,7 +1359,11 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
 
         <div style={{ marginTop: 4, marginBottom: 8 }}>
           {canResend ? (
-            <button onClick={() => { setTimer(60); setCanResend(false); setOtp(""); }} style={{
+            <button onClick={async () => {
+              setTimer(60); setCanResend(false); setOtp("");
+              const r = await resendOtp(`+91${phone}`);
+              if (!r.success) setError(r.error);
+            }} style={{
               fontSize: 13, color: "var(--k-maroon)", fontWeight: 600, cursor: "pointer",
               background: "none", border: "none", textDecoration: "underline",
             }}>Resend OTP</button>

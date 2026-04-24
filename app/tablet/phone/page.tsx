@@ -2,15 +2,15 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Btn } from "@/components/ui/wearify-ui";
+import { sendOtp, verifyOtpCode } from "@/lib/otp";
 
 type Step = "phone" | "otp" | "welcome";
 
 export default function TabletPhoneLookupPage() {
   const router = useRouter();
-  const verifyOtp = useMutation(api.phoneAuth.verifyOtp);
 
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
@@ -30,12 +30,15 @@ export default function TabletPhoneLookupPage() {
     customer?._id ? { customerId: customer._id } : "skip"
   );
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (phone.length !== 10 || !/^\d{10}$/.test(phone)) {
       setError("Please enter a valid 10-digit phone number");
       return;
     }
-    setError("");
+    setError(""); setLoading(true);
+    const send = await sendOtp(`+91${phone}`);
+    setLoading(false);
+    if (!send.success) { setError(send.error); return; }
     setStep("otp");
   };
 
@@ -47,7 +50,7 @@ export default function TabletPhoneLookupPage() {
     setLoading(true);
     setError("");
     try {
-      const result = await verifyOtp({ phone: `+91${phone}`, otp });
+      const result = await verifyOtpCode(`+91${phone}`, otp);
       if (result.success) {
         if (!customer) {
           setError("No customer found with this phone. Please register as a new customer.");

@@ -4,6 +4,7 @@ import React, { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { sendOtp, verifyOtpCode } from "@/lib/otp";
 import "../store-theme.css";
 
 type LoginTab = "otp" | "password";
@@ -50,7 +51,10 @@ export default function StoreLoginPage() {
 
   async function handleSendOtp() {
     if (phone.length < 10) { setError("Enter a valid 10-digit phone number"); return; }
-    setError("");
+    setError(""); setLoading(true);
+    const send = await sendOtp("+91" + phone);
+    setLoading(false);
+    if (!send.success) { setError(send.error); return; }
     setOtpStep("otp");
   }
 
@@ -59,6 +63,8 @@ export default function StoreLoginPage() {
     if (otp.length !== 6) { setError("Enter all 6 digits of the OTP"); return; }
     setLoading(true); setError("");
     try {
+      const v = await verifyOtpCode("+91" + phone, otp);
+      if (!v.success) { setError(v.error); setLoading(false); return; }
       const r = await loginWithOtp({ phone: "+91" + phone, otp, role: "store_owner" });
       if (!r.success) { setError(r.error || "Login failed"); setLoading(false); return; }
       if (r.hasPassword) {

@@ -8,6 +8,7 @@ import { Btn } from "@/components/ui/wearify-ui";
 import { Id } from "@/convex/_generated/dataModel";
 import { useUploadFile } from "@/lib/useUpload";
 import { GUARDS } from "@/lib/uploadGuards";
+import { sendOtp, verifyOtpCode } from "@/lib/otp";
 import {
   Gender,
   HeightUnit,
@@ -27,7 +28,6 @@ type Step = "phone" | "otp" | "profile";
 
 export default function TabletRegisterPage() {
   const router = useRouter();
-  const verifyOtp = useMutation(api.phoneAuth.verifyOtp);
   const loginWithOtp = useMutation(api.phoneAuth.loginWithOtp);
   const completeProfile = useMutation(api.customers.completeProfile);
   const { upload } = useUploadFile();
@@ -57,12 +57,15 @@ export default function TabletRegisterPage() {
   const initials = useMemo(() => initialsOf(fullName || "U"), [fullName]);
   const maxDob = useMemo(() => maxDobToday(), []);
 
-  function handleSendOtp() {
+  async function handleSendOtp() {
     if (phone.length !== 10 || !/^\d{10}$/.test(phone)) {
       setError("Please enter a valid 10-digit phone number");
       return;
     }
-    setError("");
+    setError(""); setLoading(true);
+    const send = await sendOtp(`+91${phone}`);
+    setLoading(false);
+    if (!send.success) { setError(send.error); return; }
     setStep("otp");
     setOtpDigits(["", "", "", "", "", ""]);
     setTimeout(() => otpRefs.current[0]?.focus(), 80);
@@ -74,11 +77,11 @@ export default function TabletRegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const r = await verifyOtp({ phone: `+91${phone}`, otp });
-      if (r.success) {
+      const v = await verifyOtpCode(`+91${phone}`, otp);
+      if (v.success) {
         setStep("profile");
       } else {
-        setError(r.error || "Invalid OTP");
+        setError(v.error);
         setOtpDigits(["", "", "", "", "", ""]);
         setTimeout(() => otpRefs.current[0]?.focus(), 80);
       }
@@ -87,7 +90,7 @@ export default function TabletRegisterPage() {
     } finally {
       setLoading(false);
     }
-  }, [phone, verifyOtp]);
+  }, [phone]);
 
   function handleOtpInput(index: number, value: string) {
     const digit = value.replace(/\D/g, "").slice(-1);

@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { sendOtp, verifyOtpCode } from "@/lib/otp";
 
 const SPECIALTY_OPTIONS = [
   { id: "silk_blouse", label: "Silk Blouse" },
@@ -106,7 +107,10 @@ export default function TailorLoginPage() {
       setError("Enter a valid 10-digit phone number");
       return;
     }
-    setError("");
+    setError(""); setLoading(true);
+    const send = await sendOtp("+91" + phone);
+    setLoading(false);
+    if (!send.success) { setError(send.error); return; }
     setOtpDigits(["", "", "", "", "", ""]);
     setOtpStep("otp");
   }
@@ -119,6 +123,8 @@ export default function TailorLoginPage() {
     setLoading(true);
     setError("");
     try {
+      const v = await verifyOtpCode("+91" + phone, otp);
+      if (!v.success) { setError(v.error); setLoading(false); return; }
       const result = await loginWithOtp({
         phone: "+91" + phone,
         otp,

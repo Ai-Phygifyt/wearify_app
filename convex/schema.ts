@@ -843,6 +843,21 @@ export default defineSchema({
     windowStart: v.number(),
   }).index("by_storeId", ["storeId"]),
 
+  // MSG91 OTP session state. The OTP itself lives in MSG91; we only
+  // record that a session was started, how many verify attempts have
+  // been made, and whether MSG91 confirmed the code. phoneAuth's
+  // loginWithOtp reads `verified: true` off this row and consumes it on
+  // use so a verified session can't be replayed. New send for the same
+  // phone invalidates the old row.
+  otpSessions: defineTable({
+    phone: v.string(),
+    requestId: v.string(), // MSG91 response id — audit/logging only
+    verified: v.boolean(),
+    attempts: v.number(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  }).index("by_phone", ["phone"]),
+
   // ============================
   // AI AGENTS
   // ============================

@@ -4,6 +4,7 @@ import { Id } from "./_generated/dataModel";
 import { ensureCustomerByPhone } from "./customers";
 import { findStaffWithPin } from "./stores";
 import { generateSalt, hashWithSalt, constantTimeEquals } from "./authCrypto";
+import { isPhoneVerified, consumeVerifiedSession } from "./otp";
 
 // Rate-limit staff PIN login per storeId. Matches the trialRoom
 // pattern — per-storeId rolling window; prevents unlimited 4-digit
@@ -130,17 +131,22 @@ function generateSixDigits(): string {
   return out;
 }
 
-// Verify OTP (dummy: always 123456)
+// Verify OTP — source of truth is the otpSessions table (written by
+// /api/otp/verify after MSG91 confirms). This mutation is called by
+// surfaces that want a server-side yes/no *between* "verify code"
+// and "login/register"; it does NOT consume the session (that happens
+// at loginWithOtp / register time). The `otp` arg is accepted for
+// backwards compatibility but ignored — MSG91 already validated it.
 export const verifyOtp = mutation({
   args: {
     phone: v.string(),
     otp: v.string(),
   },
-  handler: async (_ctx, args) => {
-    if (args.otp !== "123456") {
-      return { success: false, error: "Invalid OTP" };
+  handler: async (ctx, args) => {
+    if (await isPhoneVerified(ctx, args.phone)) {
+      return { success: true };
     }
-    return { success: true };
+    return { success: false, error: "Invalid OTP" };
   },
 });
 
@@ -377,7 +383,12 @@ export const loginWithOtp = mutation({
     allowCreate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    if (args.otp !== "123456") {
+    // OTP validity is established by /api/otp/verify (which calls MSG91
+    // and flips otpSessions.verified=true). Here we only trust the
+    // Convex-side flag, never the raw otp arg. Consumed on success so
+    // a verified session can't be replayed against another role or to
+    // re-create a session on a different device.
+    if (!(await isPhoneVerified(ctx, args.phone))) {
       return { success: false, error: "Invalid OTP" };
     }
 
@@ -402,6 +413,7 @@ export const loginWithOtp = mutation({
           });
       const token = await createSession(ctx, userId, "store_owner");
       const hasPassword = !!(existingUser?.passwordHash);
+      await consumeVerifiedSession(ctx, phone);
       return { success: true, token, storeId: store.storeId, storeName: store.name, role: "store_owner", hasPassword };
     }
 
@@ -431,6 +443,7 @@ export const loginWithOtp = mutation({
             role: "customer",
           });
       const token = await createSession(ctx, userId, "customer");
+      await consumeVerifiedSession(ctx, phone);
       return {
         success: true,
         token,
@@ -461,6 +474,7 @@ export const loginWithOtp = mutation({
             tailorId: tailor.tailorId,
           });
       const token = await createSession(ctx, userId, "tailor");
+      await consumeVerifiedSession(ctx, phone);
       return { success: true, token, tailorId: tailor.tailorId, role: "tailor" };
     }
 
