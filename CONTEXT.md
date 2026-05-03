@@ -210,6 +210,15 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Saree image backfill script — closes the seed/runTryOn gap
+
+- **Why:** seeded sarees ship with `grad` + `emoji` only — no `imageIds`. `convex/tryOn.ts` Step 7 hard-requires `saree.imageIds[0]` (RunPod needs an actual garment image), so every try-on against a seeded saree throws `INTERNAL: saree has no image`. The local files in `public/inventory/*` exist for the front-end `SareeThumb` fallback chain but were never linked into Convex Storage. Discovered at runtime when the kiosk hit the error post-pairing.
+- **Fix:** new `scripts/backfill-saree-images.mjs` — Node script that reads each `public/inventory/<name>` file, posts to `files.generateUploadUrl`, then patches the matching saree row via `files.setSareeImages`. Idempotent: skips sarees that already have `imageIds`. Uses the same name → filename map as `components/SareeThumb.tsx` (kept in sync manually).
+- **Run:** `pnpm seed:saree-images` (uses `.env.local` for the dev URL; pass `CONVEX_URL=...` to target prod).
+- **Coverage:** the seed has 14 sarees; 9 names have a corresponding `public/inventory/*` file and get backfilled. The other 5 (`Royal Banarasi Silk`, `Banarasi Brocade Gold`, `Tussar Natural`, `Pure Kanchipuram Bridal`, `Soft Silk Temple`) have no local file and remain image-less — they'll throw `INTERNAL: saree has no image` until someone uploads via `/store/inventory/<id>`. The script logs them as `UNMAPPED` so the gap is visible.
+- **No new dependencies.** Tiny inline `.env.local` parser avoids pulling `dotenv` in for one script. Convex's `convex/browser` ESM export + `convex/_generated/api.js` work with bare `node` — no `tsx` / `ts-node` needed. Script is `.mjs` to match.
+- **Why not an internalAction or seed extension?** Convex internal actions can't read local disk and can't reach `localhost:3000` from the cloud, so they can't fetch `/inventory/*` files. A script running on the developer's machine is the only practical path — and it's a one-shot per environment, so additional automation isn't worth it.
+
 ### Kiosk phoneAuth — body-scan deferred to first send-to-trial
 
 - **Why:** customer-facing phoneAuth path used to gate the home screen behind `scanChoice` (returning + scan-eligible) or `consent` → `bodyScan` (everyone else). For first-time phone-login customers especially, this meant 3-4 screens of body-scan flow before they ever saw a saree. Brief was: "logs in directly with phone number → directly open the store; if new, body scan kicks in only when they send something to trial."
