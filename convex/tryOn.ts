@@ -21,6 +21,13 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
+import {
+  pollRunPodJob,
+  extractImageBase64,
+  base64ToBytes,
+  readRunPodConfig,
+  DRYRUN_IMAGE_BASE64,
+} from "./runpod";
 
 // =====================================================================
 // Resolve session, customer, saree in one read. The orchestrator
@@ -334,6 +341,13 @@ function readNum(s: string | undefined, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// Backoff schedule (ms) — mirrors comfyui_next/app/tryon/page.tsx polling.
+const POLL_DELAYS = [1500, 2000, 2500, 3000, 4000];
+
+function nextDelayMs(attempt: number): number {
+  return POLL_DELAYS[Math.min(attempt, POLL_DELAYS.length - 1)];
+}
+
 // =====================================================================
 // Public action: runTryOn
 // Triggered by the kiosk on send-to-trial.
@@ -535,13 +549,146 @@ export const runTryOn = action({
 });
 
 // =====================================================================
-// Stub poller — real implementation in Task 8.
-// Exported so the scheduler reference in runTryOn typechecks.
+// pollJob — internal action, self-rescheduling.
+// Reads platformConfig.tryon.timeoutMs (default 5 min). Honors the
+// DRYRUN- jobId prefix to short-circuit to the canned image without
+// hitting RunPod.
 // =====================================================================
 
 export const pollJob = internalAction({
   args: { lookId: v.id("looks") },
-  handler: async (_ctx, _args) => {
-    // No-op until Task 8 wires it up.
+  handler: async (ctx, args): Promise<void> => {
+    const look: Doc<"looks"> | null = await ctx.runQuery(
+      internal.tryOn._getLookInternal,
+      { lookId: args.lookId },
+    );
+    if (!look) return;
+    if (look.status !== "queued" && look.status !== "processing") return;
+
+    // Mark processing (idempotent — won't overwrite startedAt).
+    await ctx.runMutation(internal.tryOn._markProcessing, {
+      lookId: args.lookId,
+    });
+
+    // Timeout check (uses look._creationTime as the reference).
+    const cfg: Record<string, string | undefined> = await ctx.runQuery(
+      internal.tryOn._readPlatformConfig,
+      { keys: ["tryon.timeoutMs"] },
+    );
+    const timeoutMs = readNum(cfg["tryon.timeoutMs"], 300_000);
+    if (Date.now() - look._creationTime > timeoutMs) {
+      await ctx.runMutation(internal.tryOn._failLook, {
+        lookId: args.lookId,
+        errorCode: "TIMEOUT",
+        errorMessage: "Try-on took too long",
+      });
+      return;
+    }
+
+    // -----------------------------------------------------------------
+    // Dry-run short-circuit — DRYRUN-* jobId means we skip the real
+    // poll and immediately complete with the canned image.
+    // -----------------------------------------------------------------
+    if (look.runpodJobId?.startsWith("DRYRUN-")) {
+      const bytes = base64ToBytes(DRYRUN_IMAGE_BASE64);
+      // Spread into a plain ArrayBuffer so Blob constructor is happy
+      // under strict TypeScript (Uint8Array<ArrayBufferLike> is not a
+      // BlobPart in stricter lib targets).
+      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "image/png" });
+      const fileId = await ctx.storage.store(blob);
+      await ctx.runMutation(internal.tryOn._completeLook, {
+        lookId: args.lookId,
+        imageFileId: fileId,
+      });
+      return;
+    }
+
+    // -----------------------------------------------------------------
+    // Real RunPod poll. Defensive: if we somehow get here without
+    // RunPod env, fail the look.
+    // -----------------------------------------------------------------
+    let runpodCfg;
+    try {
+      runpodCfg = readRunPodConfig();
+    } catch (e) {
+      await ctx.runMutation(internal.tryOn._failLook, {
+        lookId: args.lookId,
+        errorCode: "INTERNAL",
+        errorMessage: (e as Error).message,
+      });
+      return;
+    }
+    if (!look.runpodJobId) {
+      await ctx.runMutation(internal.tryOn._failLook, {
+        lookId: args.lookId,
+        errorCode: "INTERNAL",
+        errorMessage: "looks row missing runpodJobId",
+      });
+      return;
+    }
+
+    let status: Awaited<ReturnType<typeof pollRunPodJob>>;
+    try {
+      status = await pollRunPodJob(runpodCfg, look.runpodJobId);
+    } catch (e) {
+      // Network/HTTP errors — re-schedule one more time, then fail.
+      const attempts = (look.pollAttempts ?? 0) + 1;
+      if (attempts >= 3) {
+        await ctx.runMutation(internal.tryOn._failLook, {
+          lookId: args.lookId,
+          errorCode: "INTERNAL",
+          errorMessage: (e as Error).message,
+        });
+        return;
+      }
+      await ctx.scheduler.runAfter(
+        nextDelayMs(attempts),
+        internal.tryOn.pollJob,
+        { lookId: args.lookId },
+      );
+      return;
+    }
+
+    if (status.status === "COMPLETED") {
+      const b64 = extractImageBase64(status);
+      if (!b64) {
+        await ctx.runMutation(internal.tryOn._failLook, {
+          lookId: args.lookId,
+          errorCode: "RUNPOD_FAILED",
+          errorMessage: "RunPod returned no image",
+        });
+        return;
+      }
+      const bytes = base64ToBytes(b64);
+      // See dry-run note above — cast to ArrayBuffer for BlobPart compat.
+      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "image/png" });
+      const fileId = await ctx.storage.store(blob);
+      await ctx.runMutation(internal.tryOn._completeLook, {
+        lookId: args.lookId,
+        imageFileId: fileId,
+      });
+      return;
+    }
+
+    if (
+      status.status === "FAILED" ||
+      status.status === "CANCELLED" ||
+      status.status === "TIMED_OUT"
+    ) {
+      await ctx.runMutation(internal.tryOn._failLook, {
+        lookId: args.lookId,
+        errorCode: "RUNPOD_FAILED",
+        errorMessage: status.error ?? `RunPod ${status.status}`,
+      });
+      return;
+    }
+
+    // IN_QUEUE / IN_PROGRESS — re-schedule.
+    const attempts = (look.pollAttempts ?? 0) + 1;
+    await ctx.scheduler.runAfter(
+      nextDelayMs(attempts),
+      internal.tryOn.pollJob,
+      { lookId: args.lookId },
+    );
   },
 });
