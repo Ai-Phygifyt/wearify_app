@@ -210,6 +210,14 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Kiosk codeEntry — body-scan deferred (matching phoneAuth)
+
+- **Why:** the `codeEntry` (tablet store-code) path still gated on `scanChoice` / `consent` after my prior phoneAuth change, even though the rest of the kiosk now treats body scan as lazy. Symptom that surfaced this: a returning customer entering via the tablet code with a real `bodyScanFileId` would briefly see `ScanChoiceScreen`'s `!hasPreviousScan` copy (`"Welcome, X / Let's capture a quick body scan…"`) because `bodyScanInfo` is a `useQuery` that returns `undefined` for the first ~100-300ms after `setCustomerId`. The screen self-corrected to `"Welcome back, X"` once the query resolved, but the flicker was visible and confusing.
+- **Fix:** removed the scanChoice/consent gate at the end of `codeEntry onValidCode`. Now lands directly on `trialRoom` (when the tablet pre-loaded a shortlist) or `home` (when there's nothing pre-loaded). Body scan triggers lazily — via the `NO_BODY_SCAN:` catch redirect to `consent` from the codeEntry-loop's `runTryOn` call (changed from `scanChoice` → `consent` to match the phoneAuth path), and via the same catch on home/product-detail picks. Reconciliation effect re-fires `runTryOn` for queued items once the scan completes.
+- **Same UX shape as phoneAuth:** returning customer with a valid `bodyScanFileId` → kiosk never shows a body-scan screen on entry. New customer / no-file → first send-to-trial throws `NO_BODY_SCAN:`, catch redirects to `consent` → `bodyScan` capture, then back into the trial flow.
+- **Dead code now:** `scanChoice` screen is reachable only from the `RetakeConfirmModal` flow in `trialRoom` (line ~2763 — user taps "Retake body scan", confirms via modal, then lands on `scanChoice`). That entry is itself redundant since the retake modal already serves as the "are you sure" prompt; `scanChoice`'s "Use Previous Scan" button effectively undoes the retake intent. Worth retiring `scanChoice` entirely and routing retake → `consent` directly. Not in this pass — flagged.
+- **Dead refs:** `scanEligibleRef` and `returningRef` are now write-only (the only read site was the gate I removed). Left in place for minimal surface area; safe to remove in a future cleanup.
+
 ### Saree image backfill script — closes the seed/runTryOn gap
 
 - **Why:** seeded sarees ship with `grad` + `emoji` only — no `imageIds`. `convex/tryOn.ts` Step 7 hard-requires `saree.imageIds[0]` (RunPod needs an actual garment image), so every try-on against a seeded saree throws `INTERNAL: saree has no image`. The local files in `public/inventory/*` exist for the front-end `SareeThumb` fallback chain but were never linked into Convex Storage. Discovered at runtime when the kiosk hit the error post-pairing.

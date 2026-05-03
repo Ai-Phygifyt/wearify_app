@@ -733,12 +733,14 @@ export default function KioskPage() {
                 scanEligibleRef.current = false;
               }
               // Resolve shortlist items to full saree data
+              let hasResolvedItems = false;
               if (data.mirrorItems && allSarees) {
                 const sareeMap = new Map(allSarees.map((s) => [s._id, s]));
                 const resolved = data.mirrorItems
                   .map((item: { sareeId: Id<"sarees"> }) => sareeMap.get(item.sareeId))
                   .filter(Boolean) as SareeItem[];
                 setTrialItems(resolved);
+                hasResolvedItems = resolved.length > 0;
                 if (data.customer) {
                   for (const item of resolved) {
                     addTrialCartItem({ customerId: data.customer._id, storeId, sareeId: item._id });
@@ -751,18 +753,23 @@ export default function KioskPage() {
                         setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
                       })
                       .catch((err: Error) => {
-                        handleTryOnError(err, showToast, () => navigate("scanChoice"));
+                        // NO_BODY_SCAN: → consent → bodyScan; reconciliation
+                        // effect re-fires runTryOn for the queued items once
+                        // the scan is recorded. Matches the phoneAuth lazy
+                        // gating; replaces the old scanChoice redirect.
+                        handleTryOnError(err, showToast, () => navigate("consent"));
                       });
                   }
                 }
               }
               // Mark code as used
               markCodeUsed({ code: data.trialRoom.code, storeId });
-              if (returningRef.current && scanEligibleRef.current) {
-                navigate("scanChoice");
-              } else {
-                navigate("consent");
-              }
+              // Skip the scanChoice/consent gate — land directly on trialRoom
+              // when the tablet pre-loaded a shortlist, else on home. Body
+              // scan is triggered lazily on first send-to-trial via the
+              // NO_BODY_SCAN: catch path above (or on a from-home pick when
+              // there's no shortlist). Same UX shape as the phoneAuth path.
+              navigate(hasResolvedItems ? "trialRoom" : "home");
             }}
             onBack={() => setScreen("idle")}
           />
