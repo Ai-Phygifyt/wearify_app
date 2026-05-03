@@ -1,9 +1,9 @@
 // convex/tryOn.ts
 //
-// Try-on orchestration. Public actions: runTryOn (Task 7).
-// Public action: retryLook (Task 10).
-// Public query: getLook (Task 11).
-// Internal actions: pollJob (stub — real implementation in Task 8).
+// Try-on orchestration.
+// Public actions: runTryOn, retryLook.
+// Public query: getLook.
+// Internal actions: pollJob.
 // Internal queries: _resolveContext, _lookupDevice, _countActiveForSession,
 //   _countForCustomerSince, _findExistingLook, _readPlatformConfig,
 //   _getLookInternal.
