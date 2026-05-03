@@ -6,6 +6,7 @@ import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SareeThumb } from "@/components/SareeThumb";
+import { useConvexUrl } from "@/lib/ConvexImage";
 import {
   ChevronLeft, ChevronRight, ChevronDown,
   Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
@@ -131,6 +132,10 @@ export default function KioskPage() {
 
   // Trial room items (sarees from tablet shortlist)
   const [trialItems, setTrialItems] = useState<SareeItem[]>([]);
+
+  // Maps sareeId → lookId so TrialTile can subscribe reactively.
+  // Populated as each runTryOn resolves; cleared on session wipe.
+  const [sareeLookIds, setSareeLookIds] = useState<Record<string, Id<"looks">>>({});
 
   // Wardrobe (saved during kiosk session)
   const [wardrobeItems, setWardrobeItems] = useState<SareeItem[]>([]);
@@ -332,6 +337,7 @@ export default function KioskPage() {
     setPhone("");
     setHasBodyScan(false);
     setTrialItems([]);
+    setSareeLookIds({});
     setWardrobeItems([]);
     setCartItems([]);
     setSelectedProduct(null);
@@ -598,9 +604,13 @@ export default function KioskPage() {
                       deviceToken: deviceToken!,
                       sessionId: data.trialRoom.sessionId,
                       sareeId: item._id,
-                    }).catch((err: Error) => {
-                      console.error(err);
-                    });
+                    })
+                      .then((res) => {
+                        setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
+                      })
+                      .catch((err: Error) => {
+                        console.error(err);
+                      });
                   }
                 }
               }
@@ -729,6 +739,7 @@ export default function KioskPage() {
             showToast={showToast}
             maxTrial={CFG.maxTrial}
             tryOnSec={CFG.tryOnSec}
+            sareeLookIds={sareeLookIds}
           />
         );
       case "home":
@@ -747,9 +758,13 @@ export default function KioskPage() {
                     deviceToken: deviceToken!,
                     sessionId,
                     sareeId: item._id,
-                  }).catch((err: Error) => {
-                    console.error(err);
-                  });
+                  })
+                    .then((res) => {
+                      setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
+                    })
+                    .catch((err: Error) => {
+                      console.error(err);
+                    });
                 }
               }
               navigate("aiProcessing");
@@ -785,9 +800,13 @@ export default function KioskPage() {
                   deviceToken: deviceToken!,
                   sessionId,
                   sareeId: selectedProduct._id,
-                }).catch((err: Error) => {
-                  console.error(err);
-                });
+                })
+                  .then((res) => {
+                    setSareeLookIds((prev) => ({ ...prev, [selectedProduct._id]: res.lookId }));
+                  })
+                  .catch((err: Error) => {
+                    console.error(err);
+                  });
               }
               showToast("Added to Trial Room", "success");
               navigate("trialRoom");
@@ -2220,11 +2239,73 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
   );
 }
 
+/* ── TRIAL TILE ── */
+// Per-saree component that subscribes reactively to its look row.
+// Renders skeleton while waiting for runTryOn to resolve or the job to finish,
+// shows the AI result on completion, and falls back to the saree thumbnail on failure.
+// Click handlers, selection badges, and remove buttons stay on the parent wrapper.
+function TrialTile({
+  saree,
+  lookId,
+}: {
+  saree: SareeItem;
+  lookId: Id<"looks"> | undefined;
+}) {
+  const look = useQuery(
+    api.tryOn.getLook,
+    lookId ? { lookId } : "skip",
+  );
+  const status = look?.status;
+  const resultUrl = useConvexUrl(look?.imageFileId);
+
+  // Elapsed counter — only ticks while the job is actively processing.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (status !== "processing" || !look?.startedAt) return;
+    const tick = () => setElapsed(Math.floor((Date.now() - look.startedAt!) / 1000));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [status, look?.startedAt]);
+
+  if (status === "completed" && resultUrl) {
+    return (
+      <div className="k-card k-card-hover" style={{ aspectRatio: "1 / 1.2", overflow: "hidden" }}>
+        <img src={resultUrl} alt={saree.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      </div>
+    );
+  }
+
+  if (status === "queued" || status === "processing" || !lookId) {
+    const subtitle = !lookId
+      ? "Preparing…"
+      : status === "queued"
+        ? "Preparing…"
+        : `Generating your look… ${elapsed}s`;
+    return (
+      <div className="k-card" style={{
+        aspectRatio: "1 / 1.2",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        background: "var(--k-bg)",
+        animation: "k-breathe 2s ease-in-out infinite",
+        gap: 12,
+      }}>
+        <Loader2 size={28} className="k-spin" style={{ color: "var(--k-maroon)" }} />
+        <span className="k-idle-tag">{subtitle}</span>
+      </div>
+    );
+  }
+
+  // Failed state — saree thumbnail fallback. Retry button lands in Task 14.
+  return <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />;
+}
+
 /* ── TRIAL ROOM ── */
-function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec }: {
+function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds }: {
   items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
   onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
+  sareeLookIds: Record<string, Id<"looks">>;
 }) {
   const [timer, setTimer] = useState(tryOnSec);
   const [selIdx, setSelIdx] = useState(0);
@@ -2309,7 +2390,7 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
                 >
                   <div className="k-trial-card-img">
                     <div>
-                      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={38} gradientAngle={135} />
+                      <TrialTile saree={saree} lookId={sareeLookIds[saree._id]} />
                     </div>
                     <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
                       position: "absolute", top: 6, left: 6, zIndex: 2,
