@@ -387,9 +387,8 @@ export type RunPodConfig = { apiKey: string; endpointId: string };
 export function readRunPodConfig(): RunPodConfig {
   const apiKey = process.env.RUNPOD_API_KEY;
   const endpointId = process.env.RUNPOD_ENDPOINT_ID;
-  if (!apiKey || !endpointId) {
-    throw new Error("INTERNAL: RunPod is not configured");
-  }
+  if (!apiKey) throw new Error("INTERNAL: RUNPOD_API_KEY is not set");
+  if (!endpointId) throw new Error("INTERNAL: RUNPOD_ENDPOINT_ID is not set");
   return { apiKey, endpointId };
 }
 
@@ -463,7 +462,7 @@ export function extractImageBase64(
 }
 
 // =====================================================================
-// Canned dry-run image — 1x1 transparent PNG (~70 bytes base64).
+// Canned dry-run image — 1x1 transparent PNG (68 bytes → 92 base64 chars).
 // Used by the orchestrator when platformConfig.tryon.dryRun = "true".
 // Replace with a richer placeholder later if desired.
 // =====================================================================
