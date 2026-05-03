@@ -189,6 +189,12 @@ export default function KioskPage() {
   const scanEligibleRef = useRef(false);
   const returningRef = useRef(false);
 
+  // Tracks sareeIds with an in-flight runTryOn fired by the reconciliation
+  // effect below. Prevents the effect from double-firing while a promise is
+  // pending — without this, every re-render that doesn't yet have the lookId
+  // mapped would queue another action call.
+  const inFlightTryOnRef = useRef<Set<string>>(new Set());
+
   // Toast
   const [toastMsg, setToastMsg] = useState("");
   const [toastType, setToastType] = useState<"info" | "success" | "error" | "warning">("info");
@@ -383,6 +389,41 @@ export default function KioskPage() {
   // we want the latest list when the effect finally fires.
   }, [pendingFanOut, bodyScanInfo, trialItems, sareeLookIds, retryLookMut, deviceToken, showToast]);
 
+  // Reconciliation effect — fires runTryOn for any trialItem that doesn't
+  // yet have a lookId in sareeLookIds, once the body scan exists. Covers
+  // two flows the optimistic call-site fires miss:
+  //   1. Items added to trialItems BEFORE a body scan: the call-site
+  //      runTryOn throws NO_BODY_SCAN: server-side, no looks row gets
+  //      inserted, sareeLookIds stays empty — TrialTile would otherwise
+  //      stay on "Preparing…" forever after the eventual scan completes.
+  //   2. Retention-hydrated trial cart items on a returning customer:
+  //      hydration restores trialItems but not sareeLookIds (the previous
+  //      session's lookIds aren't carried forward), so without this each
+  //      hydrated item would also stick on "Preparing…".
+  // Server-side dedup at _findExistingLook makes a re-fired runTryOn safe
+  // when an existing queued/processing/completed look is already there.
+  useEffect(() => {
+    if (!customerId) return;
+    if (!sessionId) return;
+    if (!deviceToken) return;
+    if (!bodyScanInfo?.hasFileId) return;
+    for (const item of trialItems) {
+      if (sareeLookIds[item._id]) continue;
+      if (inFlightTryOnRef.current.has(item._id)) continue;
+      const sareeId = item._id;
+      inFlightTryOnRef.current.add(sareeId);
+      runTryOn({ deviceToken, sessionId, sareeId })
+        .then((res) => {
+          inFlightTryOnRef.current.delete(sareeId);
+          setSareeLookIds((prev) => ({ ...prev, [sareeId]: res.lookId }));
+        })
+        .catch((err: Error) => {
+          inFlightTryOnRef.current.delete(sareeId);
+          handleTryOnError(err, showToast);
+        });
+    }
+  }, [customerId, sessionId, deviceToken, bodyScanInfo?.hasFileId, trialItems, sareeLookIds, runTryOn, showToast]);
+
   // Stop every track on the current webcam stream and clear the ref.
   // Safe to call even if the stream was already stopped.
   const stopCamera = useCallback(() => {
@@ -440,6 +481,7 @@ export default function KioskPage() {
     // doesn't accidentally fire during the next customer's session.
     setPendingFanOut(false);
     previousScanTs.current = null;
+    inFlightTryOnRef.current.clear();
     stopCamera();
     try { localStorage.removeItem("wearify_kiosk_session"); } catch { /* ignore */ }
     setScreen("sessionEnd");
