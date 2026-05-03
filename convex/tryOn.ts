@@ -1,7 +1,7 @@
 // convex/tryOn.ts
 //
 // Try-on orchestration. Public actions: runTryOn (Task 7).
-// Public action: retryLook (Task 10, not yet implemented).
+// Public action: retryLook (Task 10).
 // Public query: getLook (Task 11, not yet implemented).
 // Internal actions: pollJob (stub — real implementation in Task 8).
 // Internal queries: _resolveContext, _lookupDevice, _countActiveForSession,
@@ -735,5 +735,137 @@ export const pollJob = internalAction({
       internal.tryOn.pollJob,
       { lookId: args.lookId },
     );
+  },
+});
+
+// =====================================================================
+// Public action: retryLook
+// Re-runs a failed look. Optionally re-snapshots personFileId from the
+// customer's current bodyScanFileId (used by the retake fan-out UX).
+// Re-runs all guards — counts toward rate limits.
+// =====================================================================
+
+export const retryLook = action({
+  args: {
+    deviceToken: v.string(),
+    lookId: v.id("looks"),
+    useLatestBodyScan: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args): Promise<{ lookId: Id<"looks"> }> => {
+    const look: Doc<"looks"> | null = await ctx.runQuery(internal.tryOn._getLookInternal, {
+      lookId: args.lookId,
+    });
+    if (!look) throw new Error("INTERNAL: look not found");
+    if (!look.sessionId) throw new Error("INTERNAL: look has no sessionId");
+
+    // Re-resolve context for full guard chain.
+    const ctxData: {
+      session: Doc<"sessions"> | null;
+      customer: Doc<"customers"> | null;
+      saree: Doc<"sarees"> | null;
+    } = await ctx.runQuery(internal.tryOn._resolveContext, {
+      sessionId: look.sessionId,
+      sareeId: look.sareeId,
+    });
+    const { session, customer, saree } = ctxData;
+    if (!session || !saree) throw new Error("INTERNAL: session or saree missing");
+    if (!customer) throw new Error("INTERNAL: anonymous look cannot be retried");
+
+    const cfg: Record<string, string | undefined> = await ctx.runQuery(
+      internal.tryOn._readPlatformConfig,
+      { keys: PLATFORM_KEYS },
+    );
+
+    // Auth.
+    const device: Doc<"devices"> | null = await ctx.runQuery(internal.tryOn._lookupDevice, {
+      deviceToken: args.deviceToken,
+      storeId: session.storeId,
+    });
+    if (!device) throw new Error("UNAUTHORIZED: kiosk device not paired to session store");
+
+    // Kill switch.
+    if (cfg["tryon.enabled"] !== "true") {
+      throw new Error("TRYON_DISABLED: try-on is currently unavailable");
+    }
+
+    // Per-session in-flight cap (we DO want this; SESSION_CAP total is
+    // ambiguous on retries — skip it to allow recovery from failures).
+    const maxConc = readNum(cfg["tryon.maxConcurrentPerSession"], 3);
+    const counts: { total: number; inFlight: number } = await ctx.runQuery(
+      internal.tryOn._countActiveForSession,
+      { sessionId: look.sessionId },
+    );
+    if (counts.inFlight >= maxConc) {
+      throw new Error("CONCURRENCY_LIMIT: wait for current renders to finish");
+    }
+
+    // Per-customer rate limits.
+    const perMin = readNum(cfg["tryon.rateLimitPerMinute"], 5);
+    const perHr = readNum(cfg["tryon.rateLimitPerHour"], 30);
+    const now = Date.now();
+    const minCount: number = await ctx.runQuery(
+      internal.tryOn._countForCustomerSince,
+      { customerId: customer._id, since: now - 60_000 },
+    );
+    if (minCount >= perMin) {
+      throw new Error("RATE_LIMIT_MINUTE: too many try-ons just now");
+    }
+    const hrCount: number = await ctx.runQuery(
+      internal.tryOn._countForCustomerSince,
+      { customerId: customer._id, since: now - 3_600_000 },
+    );
+    if (hrCount >= perHr) {
+      throw new Error("RATE_LIMIT_HOUR: too many try-ons recently");
+    }
+
+    // Resolve images — useLatestBodyScan re-snapshots the current body scan.
+    const personFileId = args.useLatestBodyScan
+      ? customer.bodyScanFileId
+      : (look.personFileId ?? customer.bodyScanFileId);
+    if (!personFileId) {
+      throw new Error("NO_BODY_SCAN: please complete a body scan first");
+    }
+    const garmentFileId = look.garmentFileId ?? saree.imageIds?.[0];
+    if (!garmentFileId) {
+      throw new Error("INTERNAL: saree has no image");
+    }
+
+    // Submit.
+    const dryRun = cfg["tryon.dryRun"] === "true";
+    let runpodJobId: string;
+    let endpointId: string;
+    if (dryRun) {
+      runpodJobId = `DRYRUN-${Math.random().toString(36).slice(2, 10)}`;
+      endpointId = "dryrun";
+    } else {
+      const personBlob = await ctx.storage.get(personFileId);
+      const garmentBlob = await ctx.storage.get(garmentFileId);
+      if (!personBlob || !garmentBlob) {
+        throw new Error("INTERNAL: image missing in storage");
+      }
+      const personB64 = await blobToBase64(personBlob);
+      const garmentB64 = await blobToBase64(garmentBlob);
+      const runpodCfg = readRunPodConfig();
+      const overrideEndpoint = cfg["tryon.runpodEndpointId"];
+      const effectiveCfg = overrideEndpoint && overrideEndpoint.trim() !== ""
+        ? { apiKey: runpodCfg.apiKey, endpointId: overrideEndpoint.trim() }
+        : runpodCfg;
+      const payload = buildSareeWorkflow(personB64, garmentB64);
+      const result = await submitRunPodJob(effectiveCfg, payload);
+      runpodJobId = result.id;
+      endpointId = effectiveCfg.endpointId;
+    }
+
+    await ctx.runMutation(internal.tryOn._patchLookForRetry, {
+      lookId: args.lookId,
+      runpodJobId,
+      runpodEndpointId: endpointId,
+      personFileId,
+      garmentFileId,
+    });
+    await ctx.scheduler.runAfter(1500, internal.tryOn.pollJob, {
+      lookId: args.lookId,
+    });
+    return { lookId: args.lookId };
   },
 });
