@@ -210,6 +210,19 @@ export default function KioskPage() {
   const removeCartItemMut = useMutation(api.sessionOps.removeCartItem);
   const clearCartMut = useMutation(api.sessionOps.clearCart);
 
+  // Fan-out state: set to true when the user chooses "Retake + refresh".
+  // Lives in the parent so the useEffect (below showToast) can access
+  // retryLookMut, trialItems, sareeLookIds, and deviceToken directly —
+  // no prop-drilling of callback.
+  const [pendingFanOut, setPendingFanOut] = useState(false);
+  const lastBodyScanTs = useQuery(
+    api.customers.getLastBodyScanTs,
+    customerId ? { customerId } : "skip",
+  );
+  // Holds the scan ts that was current when the fan-out was armed.
+  // null = not yet armed; any number = the baseline to compare against.
+  const previousScanTs = useRef<number | null>(null);
+
   // Load config
   useEffect(() => {
     const stored = localStorage.getItem("wearify_kiosk_store");
@@ -326,6 +339,47 @@ export default function KioskPage() {
     setToastVisible(true);
   }, []);
 
+  // Fan-out effect: fires retryLook with useLatestBodyScan=true for every
+  // trial look once the customer records a new body scan. Gated on
+  // lastBodyScanTs changing from the value that was snapshotted when the
+  // user clicked "Retake + refresh" — so cancelling mid-scan flow leaves
+  // pendingFanOut=true but the effect never fires (ts didn't change).
+  useEffect(() => {
+    if (!pendingFanOut) return;
+
+    // First render after arming: snapshot the current ts so we can detect
+    // a change in subsequent renders. Do NOT fire the fan-out yet.
+    if (previousScanTs.current === null) {
+      // lastBodyScanTs may still be undefined (query loading); treat null/undefined
+      // as "no existing scan" and store -1 as the baseline so any real ts will differ.
+      previousScanTs.current = lastBodyScanTs ?? -1;
+      return;
+    }
+
+    // No new scan yet — ts unchanged or query still loading.
+    if (!lastBodyScanTs) return;
+    if (lastBodyScanTs === previousScanTs.current) return;
+
+    // The scan ts changed — a fresh scan was recorded after the flag was set.
+    previousScanTs.current = null;
+
+    // Fan-out: retry all looks that have a lookId (completed or failed).
+    // Skipping queued/processing entries avoids double-submitting jobs that
+    // are already in-flight with the old scan. Failed entries are included
+    // because they would benefit from a fresh scan just as much as completed ones.
+    const lookIdsToRetry = trialItems
+      .map((s) => sareeLookIds[s._id])
+      .filter(Boolean) as Id<"looks">[];
+    for (const lookId of lookIdsToRetry) {
+      retryLookMut({ deviceToken, lookId, useLatestBodyScan: true })
+        .catch((err: Error) => handleTryOnError(err, showToast));
+    }
+    setPendingFanOut(false);
+  // trialItems and sareeLookIds are captured at effect-run time; including
+  // them as deps is correct — if the list changes before the scan comes in
+  // we want the latest list when the effect finally fires.
+  }, [pendingFanOut, lastBodyScanTs, trialItems, sareeLookIds, retryLookMut, deviceToken, showToast]);
+
   // Stop every track on the current webcam stream and clear the ref.
   // Safe to call even if the stream was already stopped.
   const stopCamera = useCallback(() => {
@@ -379,6 +433,10 @@ export default function KioskPage() {
     returningRef.current = false;
     scanEligibleRef.current = false;
     hydratedRef.current = null;
+    // Clear fan-out flag so a stale pendingFanOut from a previous session
+    // doesn't accidentally fire during the next customer's session.
+    setPendingFanOut(false);
+    previousScanTs.current = null;
     stopCamera();
     try { localStorage.removeItem("wearify_kiosk_session"); } catch { /* ignore */ }
     setScreen("sessionEnd");
@@ -776,6 +834,8 @@ export default function KioskPage() {
             sareeLookIds={sareeLookIds}
             retryLookMut={retryLookMut}
             deviceToken={deviceToken}
+            navigate={navigate}
+            setPendingFanOut={setPendingFanOut}
           />
         );
       case "home":
@@ -2381,18 +2441,21 @@ function TrialTile({
 }
 
 /* ── TRIAL ROOM ── */
-function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken }: {
+function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken, navigate, setPendingFanOut }: {
   items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
   onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
   sareeLookIds: Record<string, Id<"looks">>;
   retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
   deviceToken: string;
+  navigate: (s: Screen) => void;
+  setPendingFanOut: (v: boolean) => void;
 }) {
   const [timer, setTimer] = useState(tryOnSec);
   const [selIdx, setSelIdx] = useState(0);
   const [selForWard, setSelForWard] = useState<Set<string>>(new Set());
   const [showEnd, setShowEnd] = useState(false);
+  const [retakeOpen, setRetakeOpen] = useState(false);
 
   useEffect(() => { if (timer <= 0) { setShowEnd(true); return; } const t = setTimeout(() => setTimer((v) => v - 1), 1000); return () => clearTimeout(t); }, [timer]);
 
@@ -2443,11 +2506,22 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
             {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
           </span>
         </div>
-        <button onClick={onLogout} className="k-press" aria-label="Logout" style={{
-          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
-          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
-        }}><LogOut size={20} /></button>
+        {/* Right cluster: retake affordance + logout */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            className="k-btn k-btn-ghost k-btn-pill"
+            style={{ fontSize: 12, padding: "6px 12px" }}
+            onClick={() => setRetakeOpen(true)}
+          >
+            <Camera size={14} />
+            Retake body scan
+          </button>
+          <button onClick={onLogout} className="k-press" aria-label="Logout" style={{
+            width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
+          }}><LogOut size={20} /></button>
+        </div>
       </div>
 
       <div style={{ display: "flex", width: "100%", height: "100vh", paddingTop: 72 }}>
@@ -2587,6 +2661,58 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
           </div>
         </div>
       )}
+
+      {/* Retake body scan confirm modal */}
+      {retakeOpen && (
+        <RetakeConfirmModal
+          onClose={() => setRetakeOpen(false)}
+          onConfirm={(alsoRefresh) => {
+            navigate("scanChoice");
+            setRetakeOpen(false);
+            if (alsoRefresh) {
+              setPendingFanOut(true);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── RETAKE CONFIRM MODAL ── */
+function RetakeConfirmModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: (alsoRefresh: boolean) => void;
+}) {
+  return (
+    <div className="k-modal-backdrop" onClick={onClose} style={{
+      position: "fixed", inset: 0,
+      background: "rgba(0,0,0,.5)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 100,
+    }}>
+      <div className="k-card" onClick={(e) => e.stopPropagation()} style={{
+        maxWidth: 420, padding: 24, gap: 16,
+        display: "flex", flexDirection: "column",
+      }}>
+        <h3 className="k-heading" style={{ margin: 0 }}>Retake body scan?</h3>
+        <p style={{ color: "var(--k-text-muted)", margin: 0 }}>
+          We&apos;ll capture a fresh scan. Should we also refresh the
+          looks already in your trial room with the new pose?
+        </p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="k-btn k-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="k-btn k-btn-secondary" onClick={() => onConfirm(false)}>
+            Just retake
+          </button>
+          <button className="k-btn k-btn-primary" onClick={() => onConfirm(true)}>
+            Retake + refresh
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

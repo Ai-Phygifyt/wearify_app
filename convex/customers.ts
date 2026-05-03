@@ -894,6 +894,21 @@ export const listStoreLinksEnriched = query({
   },
 });
 
+// ============================
+// getLastBodyScanTs — lightweight poll for the fan-out gate.
+// Returns the numeric timestamp of the customer's most recent body scan,
+// or null if they haven't scanned yet. Kept separate from getById so
+// the fan-out useEffect can subscribe to a minimal reactive value
+// rather than the whole customer doc.
+// ============================
+export const getLastBodyScanTs = query({
+  args: { customerId: v.id("customers") },
+  handler: async (ctx, args): Promise<number | null> => {
+    const c = await ctx.db.get(args.customerId);
+    return c?.lastBodyScan ?? null;
+  },
+});
+
 // One-shot backfill: trim whitespace on customer string fields. Idempotent.
 export const backfillTrimCustomerStrings = internalMutation({
   args: {},
