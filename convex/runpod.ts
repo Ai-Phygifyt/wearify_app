@@ -377,3 +377,96 @@ export function buildSareeWorkflow(
     },
   };
 }
+
+// =====================================================================
+// Config reader — env vars only. Throws if RunPod isn't configured.
+// =====================================================================
+
+export type RunPodConfig = { apiKey: string; endpointId: string };
+
+export function readRunPodConfig(): RunPodConfig {
+  const apiKey = process.env.RUNPOD_API_KEY;
+  const endpointId = process.env.RUNPOD_ENDPOINT_ID;
+  if (!apiKey || !endpointId) {
+    throw new Error("INTERNAL: RunPod is not configured");
+  }
+  return { apiKey, endpointId };
+}
+
+// =====================================================================
+// REST submit (POST /v2/{ID}/run) — ported from comfyui_next:347-365
+// =====================================================================
+
+export async function submitRunPodJob(
+  cfg: RunPodConfig,
+  payload: RunPodRunPayload,
+): Promise<{ id: string }> {
+  const res = await fetch(`https://api.runpod.ai/v2/${cfg.endpointId}/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${cfg.apiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`INTERNAL: RunPod submit failed (${res.status}): ${text}`);
+  }
+  const json = (await res.json()) as { id?: string };
+  if (!json.id) {
+    throw new Error("INTERNAL: RunPod submit returned no job id");
+  }
+  return { id: json.id };
+}
+
+// =====================================================================
+// REST poll (GET /v2/{ID}/status/{jobId}) — ported from
+// comfyui_next/app/api/status/route.ts
+// =====================================================================
+
+export async function pollRunPodJob(
+  cfg: RunPodConfig,
+  jobId: string,
+): Promise<RunPodStatusResponse> {
+  const res = await fetch(
+    `https://api.runpod.ai/v2/${cfg.endpointId}/status/${jobId}`,
+    {
+      headers: { Authorization: `Bearer ${cfg.apiKey}` },
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`INTERNAL: RunPod poll failed (${res.status}): ${text}`);
+  }
+  return (await res.json()) as RunPodStatusResponse;
+}
+
+// =====================================================================
+// Output extraction — RunPod returns output.images[0] as one of:
+//   • plain base64 string
+//   • { base64: "..." }
+//   • { data: "..." }
+//   • { url: "https://..." } (we don't follow URLs here — caller does)
+// Returns null if not extractable.
+// =====================================================================
+
+export function extractImageBase64(
+  status: RunPodStatusResponse,
+): string | null {
+  const first = status.output?.images?.[0];
+  if (!first) return null;
+  if (typeof first === "string") return fixBase64Padding(first);
+  if (first.base64) return fixBase64Padding(first.base64);
+  if (first.data) return fixBase64Padding(first.data);
+  return null;
+}
+
+// =====================================================================
+// Canned dry-run image — 1x1 transparent PNG (~70 bytes base64).
+// Used by the orchestrator when platformConfig.tryon.dryRun = "true".
+// Replace with a richer placeholder later if desired.
+// =====================================================================
+
+export const DRYRUN_IMAGE_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
