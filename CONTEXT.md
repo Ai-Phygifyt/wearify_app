@@ -210,6 +210,18 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Kiosk phoneAuth — body-scan deferred to first send-to-trial
+
+- **Why:** customer-facing phoneAuth path used to gate the home screen behind `scanChoice` (returning + scan-eligible) or `consent` → `bodyScan` (everyone else). For first-time phone-login customers especially, this meant 3-4 screens of body-scan flow before they ever saw a saree. Brief was: "logs in directly with phone number → directly open the store; if new, body scan kicks in only when they send something to trial."
+- **Three navigation changes in `app/kiosk/page.tsx`:**
+  - OTP `onVerified` (returning-customer branch): `if (scanEligibleRef.current) navigate("scanChoice"); else navigate("consent");` → `navigate("home")` unconditionally.
+  - `newCustomer onRegistered`: `navigate("consent")` → `navigate("home")`.
+  - `onSendToTrial` (home grid) and `onAddToTrial` (product detail) `runTryOn` `.catch` handlers: redirect target on `NO_BODY_SCAN:` changed from `scanChoice` → `consent` (skip the `scanChoice` intro for first-time customers; they go straight into camera permission → bodyScan).
+- **What didn't change:** `codeEntry` (store-code / "store login" path) keeps its scanChoice/consent gating — the tablet-curated flow expects an upfront body-scan handshake. The `codeEntry` shortlist-load `runTryOn` `.catch` (line ~707) also kept its `scanChoice` redirect; it's redundant with the explicit navigation that follows but harmless.
+- **End-to-end new-customer path now:** phoneAuth → otp → newCustomer → home → tap saree → Send to Trial → `setTrialItems` populates → `runTryOn` throws `NO_BODY_SCAN:` → catch redirects to `consent` → user grants camera → `bodyScan` capture → `recordBodyScan` writes `bodyScanFileId` → reconciliation effect (logged just below this entry) re-fires `runTryOn` for the queued items → `aiProcessing` (briefly, while polls run) → `trialRoom` shows AI renders.
+- **Brief aiProcessing/trialRoom flicker on the no-scan path:** `onSendToTrial` calls `navigate("aiProcessing")` synchronously after the for loop; the `runTryOn` `.catch` fires async ~100-300ms later and overrides with `navigate("consent")`. Same shape on `onAddToTrial` (`navigate("trialRoom")` sync, `navigate("consent")` from catch). Acceptable — the user sees ~half a second of the next screen before the consent prompt; not worth gating the sync nav on `bodyScanInfo?.hasFileId` because that query is async-loaded and could regress users in the brief loading window.
+- **Skip on consent is a known UX hole:** the existing consent screen's "Skip" still routes to `trialRoom` (or `home`) without recording a scan. A user who taps Skip from this new entry path will land in `trialRoom` with items but no scan — the reconciliation effect won't fire (gated on `bodyScanInfo?.hasFileId`) and TrialTiles will sit on "Preparing…". Explicit choice; not a default. Revisit if it becomes a real complaint.
+
 ### Kiosk try-on — reconciliation effect closes the no-body-scan + retention-hydration gaps
 
 - **Symptom:** customer reaches `trialRoom`, every TrialTile sits on the "Preparing…" skeleton forever, and RunPod's console shows zero requests.

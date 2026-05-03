@@ -653,11 +653,13 @@ export default function KioskPage() {
                 lang: customer.language ?? "en",
                 hasBodyScan: hasScan,
               });
-              if (scanEligibleRef.current) {
-                navigate("scanChoice");
-              } else {
-                navigate("consent");
-              }
+              // Land directly on home after phone login. Body scan is no longer
+              // an upfront gate — if the customer needs one, the runTryOn catch
+              // at the home/product-detail call sites redirects to consent →
+              // bodyScan on first send-to-trial. This applies to phoneAuth /
+              // OTP only; the codeEntry (store-code) flow keeps its own
+              // scanChoice / consent gating.
+              navigate("home");
             }}
             onBack={goBack}
           />
@@ -689,7 +691,10 @@ export default function KioskPage() {
                 lang,
                 hasBodyScan: false,
               });
-              navigate("consent");
+              // Land directly on home — same rationale as the OTP returning-
+              // customer branch. Body scan is triggered lazily on first
+              // send-to-trial via the NO_BODY_SCAN: catch path.
+              navigate("home");
             }}
             onBack={() => navigate("otp")}
           />
@@ -930,7 +935,10 @@ export default function KioskPage() {
                       setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
                     })
                     .catch((err: Error) => {
-                      handleTryOnError(err, showToast, () => navigate("scanChoice"));
+                      // NO_BODY_SCAN: → consent → bodyScan. Items already sit in
+                      // trialItems; the reconciliation effect re-fires runTryOn
+                      // for them once the scan is recorded.
+                      handleTryOnError(err, showToast, () => navigate("consent"));
                     });
                 }
               }
@@ -972,7 +980,9 @@ export default function KioskPage() {
                     setSareeLookIds((prev) => ({ ...prev, [selectedProduct._id]: res.lookId }));
                   })
                   .catch((err: Error) => {
-                    handleTryOnError(err, showToast, () => navigate("scanChoice"));
+                    // NO_BODY_SCAN: → consent → bodyScan; reconciliation effect
+                    // re-fires runTryOn after the scan is recorded.
+                    handleTryOnError(err, showToast, () => navigate("consent"));
                   });
               }
               showToast("Added to Trial Room", "success");
