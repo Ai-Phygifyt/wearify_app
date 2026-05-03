@@ -987,3 +987,55 @@ export const getLook = query({
     return await ctx.db.get(args.lookId);
   },
 });
+
+// =====================================================================
+// Public query: getCachedLooksForSarees
+// Returns a map sareeId → lookId for the most recent COMPLETED look
+// per requested saree, scoped to one customer. Used by the kiosk on
+// retention hydration (and during a session) to skip a fresh RunPod
+// render when an existing AI result is reusable.
+//
+// Body-scan invalidation: a cached look is only reused when its
+// personFileId matches the customer's CURRENT bodyScanFileId. A
+// rescan / retake automatically invalidates the cache, so the next
+// render reflects the new body. Customers without a current scan
+// get an empty map (forces a fresh render once they capture one).
+//
+// The newest-first scan with a .take(500) cap is bounded by the
+// per-customer rate limit cap (30/hr) — realistic histories stay well
+// under the cap; it's a defensive guard against pathological data.
+// =====================================================================
+
+export const getCachedLooksForSarees = query({
+  args: {
+    customerId: v.id("customers"),
+    sareeIds: v.array(v.id("sarees")),
+  },
+  handler: async (ctx, args): Promise<Record<string, Id<"looks">>> => {
+    if (args.sareeIds.length === 0) return {};
+    const customer = await ctx.db.get(args.customerId);
+    if (!customer || !customer.bodyScanFileId) return {};
+    const currentScan = customer.bodyScanFileId;
+
+    const need = new Set<Id<"sarees">>(args.sareeIds);
+    const result: Record<string, Id<"looks">> = {};
+
+    const looks = await ctx.db
+      .query("looks")
+      .withIndex("by_customerId_and_createdAt", (q) => q.eq("customerId", args.customerId))
+      .order("desc")
+      .take(500);
+
+    for (const look of looks) {
+      if (need.size === 0) break;
+      if (look.status !== "completed") continue;
+      if (!look.imageFileId) continue;
+      if (!need.has(look.sareeId)) continue;
+      if (look.personFileId !== currentScan) continue;
+      result[look.sareeId] = look._id;
+      need.delete(look.sareeId);
+    }
+
+    return result;
+  },
+});

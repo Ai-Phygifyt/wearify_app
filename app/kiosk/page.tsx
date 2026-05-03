@@ -228,6 +228,19 @@ export default function KioskPage() {
     api.customers.getBodyScanInfo,
     customerId ? { customerId } : "skip",
   );
+
+  // Cached AI renders for the current trial cart — keyed sareeId → lookId,
+  // returned only for completed looks whose personFileId matches the
+  // customer's current bodyScanFileId. Used by the reconciliation effect
+  // below to skip a fresh runTryOn (and the cost of a fresh RunPod render)
+  // when a reusable look already exists. A rescan / retake invalidates
+  // automatically because the customer's bodyScanFileId changes.
+  const cachedLooksForTrial = useQuery(
+    api.tryOn.getCachedLooksForSarees,
+    customerId && trialItems.length > 0
+      ? { customerId, sareeIds: trialItems.map((t) => t._id) }
+      : "skip",
+  );
   // Holds the scan ts that was current when the fan-out was armed.
   // null = not yet armed; any number = the baseline to compare against.
   const previousScanTs = useRef<number | null>(null);
@@ -389,26 +402,41 @@ export default function KioskPage() {
   // we want the latest list when the effect finally fires.
   }, [pendingFanOut, bodyScanInfo, trialItems, sareeLookIds, retryLookMut, deviceToken, showToast]);
 
-  // Reconciliation effect — fires runTryOn for any trialItem that doesn't
-  // yet have a lookId in sareeLookIds, once the body scan exists. Covers
-  // two flows the optimistic call-site fires miss:
+  // Reconciliation effect — for each trialItem missing a lookId in
+  // sareeLookIds, either reuse a cached render (cachedLooksForTrial)
+  // or fire runTryOn. Covers three flows:
   //   1. Items added to trialItems BEFORE a body scan: the call-site
   //      runTryOn throws NO_BODY_SCAN: server-side, no looks row gets
   //      inserted, sareeLookIds stays empty — TrialTile would otherwise
   //      stay on "Preparing…" forever after the eventual scan completes.
   //   2. Retention-hydrated trial cart items on a returning customer:
-  //      hydration restores trialItems but not sareeLookIds (the previous
-  //      session's lookIds aren't carried forward), so without this each
-  //      hydrated item would also stick on "Preparing…".
-  // Server-side dedup at _findExistingLook makes a re-fired runTryOn safe
-  // when an existing queued/processing/completed look is already there.
+  //      hydration restores trialItems but not sareeLookIds. With cached
+  //      renders available, no RunPod cost is paid for items the customer
+  //      already had rendered against the same body scan.
+  //   3. Same-session re-add of a previously rendered saree (e.g. via
+  //      wardrobe → cart → trial): the cache returns the existing lookId,
+  //      so no duplicate render fires.
+  // Cache resolution gate: wait for cachedLooksForTrial to settle before
+  // deciding what to fire — without this, the effect could race the cache
+  // resolve and submit a fresh RunPod job for an item we'd otherwise reuse.
+  // Server-side dedup at _findExistingLook still catches concurrent fires
+  // for cache misses, so a fresh runTryOn is safe.
   useEffect(() => {
     if (!customerId) return;
     if (!sessionId) return;
     if (!deviceToken) return;
     if (!bodyScanInfo?.hasFileId) return;
+    if (cachedLooksForTrial === undefined) return;
     for (const item of trialItems) {
       if (sareeLookIds[item._id]) continue;
+      const cachedLookId = cachedLooksForTrial[item._id];
+      if (cachedLookId) {
+        // Cache hit — reuse the existing completed look. The TrialTile
+        // for this saree subscribes via getLook(lookId) and renders the
+        // stored AI image directly. No RunPod call.
+        setSareeLookIds((prev) => ({ ...prev, [item._id]: cachedLookId }));
+        continue;
+      }
       if (inFlightTryOnRef.current.has(item._id)) continue;
       const sareeId = item._id;
       inFlightTryOnRef.current.add(sareeId);
@@ -422,7 +450,7 @@ export default function KioskPage() {
           handleTryOnError(err, showToast);
         });
     }
-  }, [customerId, sessionId, deviceToken, bodyScanInfo?.hasFileId, trialItems, sareeLookIds, runTryOn, showToast]);
+  }, [customerId, sessionId, deviceToken, bodyScanInfo?.hasFileId, trialItems, sareeLookIds, cachedLooksForTrial, runTryOn, showToast]);
 
   // Stop every track on the current webcam stream and clear the ref.
   // Safe to call even if the stream was already stopped.
