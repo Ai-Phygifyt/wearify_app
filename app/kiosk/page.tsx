@@ -2459,6 +2459,11 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
 
   useEffect(() => { if (timer <= 0) { setShowEnd(true); return; } const t = setTimeout(() => setTimer((v) => v - 1), 1000); return () => clearTimeout(t); }, [timer]);
 
+  // Close the Retake confirm modal when the session-end overlay takes over —
+  // both use .k-overlay (z-index 100), so without this the retake modal would
+  // sit above the Time's Up dialog due to render order.
+  useEffect(() => { if (showEnd && retakeOpen) setRetakeOpen(false); }, [showEnd, retakeOpen]);
+
   const toggleWard = (id: string) => { setSelForWard((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
   const moveToWardrobe = () => {
     const sel = items.filter((s) => selForWard.has(s._id));
@@ -2688,12 +2693,7 @@ function RetakeConfirmModal({
   onConfirm: (alsoRefresh: boolean) => void;
 }) {
   return (
-    <div className="k-modal-backdrop" onClick={onClose} style={{
-      position: "fixed", inset: 0,
-      background: "rgba(0,0,0,.5)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 100,
-    }}>
+    <div className="k-overlay" onClick={onClose}>
       <div className="k-card" onClick={(e) => e.stopPropagation()} style={{
         maxWidth: 420, padding: 24, gap: 16,
         display: "flex", flexDirection: "column",
