@@ -49,3 +49,6 @@ next-env.d.ts
 
 # test credentials (never commit)
 TEST_CREDENTIALS.md
+
+# git worktrees
+/.worktrees
