@@ -2317,11 +2317,11 @@ function TrialTile({
           padding: 12, gap: 8,
           background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,.55) 100%)",
         }}>
-          <span className="k-chip k-chip-maroon" style={{ fontSize: 11 }}>
+          <span className="k-chip k-chip-maroon" style={{ fontSize: 13 }}>
             {errMsg}
           </span>
           <button
-            className="k-btn k-btn-secondary k-btn-pill"
+            className="k-btn k-btn-primary k-btn-pill"
             style={{ padding: "8px 14px", fontSize: 13 }}
             onClick={(e) => {
               // stopPropagation keeps the parent tile-selection onClick from
