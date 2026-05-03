@@ -462,9 +462,10 @@ export function extractImageBase64(
 }
 
 // =====================================================================
-// Canned dry-run image — 1x1 transparent PNG (68 bytes → 92 base64 chars).
-// Used by the orchestrator when platformConfig.tryon.dryRun = "true".
-// Replace with a richer placeholder later if desired.
+// Canned image emitted by the dry-run code path (1x1 transparent PNG,
+// 68 bytes → 92 base64 chars). Only used when an operator opts in via
+// platformConfig.tryon.dryRun = "true" — kept as a debugging aid for
+// CI / dev environments without RunPod credits, NOT a default.
 // =====================================================================
 
 export const DRYRUN_IMAGE_BASE64 =

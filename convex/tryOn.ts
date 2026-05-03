@@ -191,7 +191,7 @@ export const seedTryOnDefaults = internalMutation({
   handler: async (ctx): Promise<{ inserted: string[]; existing: string[] }> => {
     const defaults: Array<{ key: string; value: string }> = [
       { key: "tryon.enabled", value: "true" },
-      { key: "tryon.dryRun", value: "true" },
+      { key: "tryon.dryRun", value: "false" },
       { key: "tryon.maxConcurrentPerSession", value: "3" },
       { key: "tryon.maxPerSession", value: "20" },
       { key: "tryon.rateLimitPerMinute", value: "5" },
