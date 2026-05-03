@@ -60,7 +60,7 @@ function BottomNav() {
   );
 }
 
-const PUBLIC_ROUTES = new Set<string>(["/c/login", "/c/register"]);
+const PUBLIC_ROUTES = new Set<string>(["/c/login", "/c/register", "/c/offline"]);
 const SPLASH_MS = 1200;
 
 function Splash() {
