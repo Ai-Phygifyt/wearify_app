@@ -1,8 +1,10 @@
 // convex/tryOn.ts
 //
-// Try-on orchestration. Public actions: runTryOn, retryLook.
-// Public query: getLook. Internal actions: pollJob.
-// Internal queries: _resolveContext, _countActiveForSession,
+// Try-on orchestration. Public actions: runTryOn (Task 7).
+// Public action: retryLook (Task 10, not yet implemented).
+// Public query: getLook (Task 11, not yet implemented).
+// Internal actions: pollJob (stub — real implementation in Task 8).
+// Internal queries: _resolveContext, _lookupDevice, _countActiveForSession,
 //   _countForCustomerSince, _findExistingLook, _readPlatformConfig,
 //   _getLookInternal.
 // Internal mutations: _insertQueuedLook, _patchLookForRetry,
@@ -19,13 +21,6 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
-import {
-  buildSareeWorkflow,
-  blobToBase64,
-  readRunPodConfig,
-  submitRunPodJob,
-  DRYRUN_IMAGE_BASE64,
-} from "./runpod";
 
 // =====================================================================
 // Resolve session, customer, saree in one read. The orchestrator
@@ -375,12 +370,13 @@ export const runTryOn = action({
     );
 
     // -----------------------------------------------------------------
-    // STEP 1 — auth (requireKioskDeviceForStore is a server-runtime
-    // helper; we re-implement the check here in the action runtime by
-    // calling an internal query). NOTE: we cannot call mutation-only
-    // helpers from an action; the lastSeenAt heartbeat is skipped here
-    // since this is a query path. The real auth check happens in
-    // step 1 below; failure throws "UNAUTHORIZED:".
+    // STEP 1 — auth via _lookupDevice (action-runtime equivalent of
+    // requireKioskDeviceForStore). The lastSeenAt heartbeat is skipped
+    // here because actions can't run mutations directly; that's
+    // acceptable since we only need the auth verdict, not telemetry.
+    // platformConfig was read just above as an optimization (it's
+    // non-sensitive), so the kill-switch and limits are ready by the
+    // time auth resolves. Failure throws "UNAUTHORIZED:".
     // -----------------------------------------------------------------
     const device: Doc<"devices"> | null = await ctx.runQuery(
       internal.tryOn._lookupDevice,
@@ -462,6 +458,10 @@ export const runTryOn = action({
 
     // -----------------------------------------------------------------
     // STEP 8 — dedup
+    // TOCTOU: two concurrent calls with the same (sessionId, customerId,
+    // sareeId) can both pass this check and both insert. Accepted per
+    // spec §"Race window" — at most one duplicate per race, bounded by
+    // the concurrency cap + 1.
     // -----------------------------------------------------------------
     const existing: Doc<"looks"> | null = await ctx.runQuery(
       internal.tryOn._findExistingLook,
