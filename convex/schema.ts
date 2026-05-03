@@ -345,13 +345,28 @@ export default defineSchema({
     isFav: v.optional(v.boolean()),
     isWished: v.optional(v.boolean()),
     imageFileId: v.optional(v.id("_storage")),
-    grad: v.optional(v.array(v.string())), // placeholder gradient
-    createdAt: v.number(), // timestamp
+    grad: v.optional(v.array(v.string())),
+    createdAt: v.number(),
+
+    // Try-on lifecycle (added 2026-05-03 — see specs/2026-05-03-kiosk-runpod-tryon-design.md)
+    status: v.optional(v.string()),
+    // "queued" | "processing" | "completed" | "failed"
+    runpodJobId: v.optional(v.string()),
+    runpodEndpointId: v.optional(v.string()),
+    personFileId: v.optional(v.id("_storage")),
+    garmentFileId: v.optional(v.id("_storage")),
+    errorCode: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    pollAttempts: v.optional(v.number()),
+    costPaise: v.optional(v.number()),
   })
     .index("by_customerId", ["customerId"])
     .index("by_storeId", ["storeId"])
     .index("by_sessionId", ["sessionId"])
-    .index("by_customerPhone", ["customerPhone"]),
+    .index("by_customerPhone", ["customerPhone"])
+    .index("by_customerId_and_createdAt", ["customerId", "createdAt"]),
 
   // ============================
   // SHORTLIST (tablet shortlist during session)

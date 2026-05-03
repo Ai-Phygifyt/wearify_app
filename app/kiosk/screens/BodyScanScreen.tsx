@@ -10,7 +10,7 @@ export function BodyScanScreen({
 }: {
   storeName: string;
   stream: MediaStream | null;
-  onCapture: () => void;
+  onCapture: (blob: Blob) => void;
   onBack: () => void;
   onHome: () => void;
 }) {
@@ -32,10 +32,39 @@ export function BodyScanScreen({
   }, [stream]);
 
   // Countdown drives the actual capture — user taps the button, we count
-  // down from 3, then fire onCapture.
+  // down from 10, then draw the current video frame to a hidden canvas and
+  // emit a JPEG Blob. The video preview is mirrored (scaleX(-1)) for UX,
+  // but the capture is NOT mirrored — the AI model expects normal orientation.
   useEffect(() => {
     if (countdown === null) return;
-    if (countdown <= 0) { onCapture(); return; }
+    if (countdown <= 0) {
+      const video = videoRef.current;
+      if (!video || !video.videoWidth) {
+        // Camera not ready — emit empty blob so the parent can show an error toast.
+        onCapture(new Blob([], { type: "image/jpeg" }));
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        onCapture(new Blob([], { type: "image/jpeg" }));
+        return;
+      }
+      // Draw without mirroring — preview uses transform:scaleX(-1) for UX
+      // but the captured frame must be in normal orientation for the AI model.
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) onCapture(blob);
+          else onCapture(new Blob([], { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.9,
+      );
+      return;
+    }
     const t = setTimeout(() => setCountdown((v) => (v === null ? null : v - 1)), 1000);
     return () => clearTimeout(t);
   }, [countdown, onCapture]);

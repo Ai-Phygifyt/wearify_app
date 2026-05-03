@@ -2,16 +2,19 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SareeThumb } from "@/components/SareeThumb";
+import { useConvexUrl } from "@/lib/ConvexImage";
 import {
   ChevronLeft, ChevronRight, ChevronDown,
   Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
   Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal,
 } from "lucide-react";
+import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import { ScanChoiceScreen } from "./screens/ScanChoiceScreen";
 import { ConsentScreen } from "./screens/ConsentScreen";
 import { BodyScanScreen } from "./screens/BodyScanScreen";
@@ -98,6 +101,40 @@ function fmtPrice(n: number) {
   return s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + s.slice(-3);
 }
 
+// Try-on error prefix → user-facing toast text.
+// Action throws strings prefixed with `<CODE>:` so we can pattern-match
+// without parsing free-form errors. See spec §"UX states" §"Synchronous
+// error toasts".
+const TRYON_TOAST: Array<{ prefix: string; text: string; type: "warning" | "error" | "info" }> = [
+  { prefix: "CONCURRENCY_LIMIT:", text: "Wait for current renders to finish", type: "info" },
+  { prefix: "SESSION_CAP_REACHED:", text: "You've reached this session's try-on limit", type: "warning" },
+  { prefix: "RATE_LIMIT_MINUTE:", text: "Too many try-ons just now — wait a moment", type: "warning" },
+  { prefix: "RATE_LIMIT_HOUR:", text: "Too many try-ons recently", type: "warning" },
+  { prefix: "TRYON_DISABLED:", text: "Try-on is temporarily unavailable", type: "warning" },
+  { prefix: "NO_BODY_SCAN:", text: "Please complete a body scan first", type: "warning" },
+  { prefix: "UNAUTHORIZED:", text: "Session error — restart kiosk", type: "error" },
+];
+
+function handleTryOnError(
+  err: Error,
+  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void,
+  onNoBodyScan?: () => void,
+): void {
+  const msg = err.message ?? String(err);
+  if (msg.includes("NO_BODY_SCAN:") && onNoBodyScan) {
+    showToast("Please complete a body scan first", "warning");
+    onNoBodyScan();
+    return;
+  }
+  for (const { prefix, text, type } of TRYON_TOAST) {
+    if (msg.includes(prefix)) {
+      showToast(text, type);
+      return;
+    }
+  }
+  showToast("Something went wrong — try again", "error");
+}
+
 /* ═══ MAIN KIOSK PAGE ═══ */
 export default function KioskPage() {
   const router = useRouter();
@@ -132,6 +169,10 @@ export default function KioskPage() {
   // Trial room items (sarees from tablet shortlist)
   const [trialItems, setTrialItems] = useState<SareeItem[]>([]);
 
+  // Maps sareeId → lookId so TrialTile can subscribe reactively.
+  // Populated as each runTryOn resolves; cleared on session wipe.
+  const [sareeLookIds, setSareeLookIds] = useState<Record<string, Id<"looks">>>({});
+
   // Wardrobe (saved during kiosk session)
   const [wardrobeItems, setWardrobeItems] = useState<SareeItem[]>([]);
 
@@ -148,6 +189,12 @@ export default function KioskPage() {
   const scanEligibleRef = useRef(false);
   const returningRef = useRef(false);
 
+  // Tracks sareeIds with an in-flight runTryOn fired by the reconciliation
+  // effect below. Prevents the effect from double-firing while a promise is
+  // pending — without this, every re-render that doesn't yet have the lookId
+  // mapped would queue another action call.
+  const inFlightTryOnRef = useRef<Set<string>>(new Set());
+
   // Toast
   const [toastMsg, setToastMsg] = useState("");
   const [toastType, setToastType] = useState<"info" | "success" | "error" | "warning">("info");
@@ -158,17 +205,45 @@ export default function KioskPage() {
   const createSessionMut = useMutation(api.sessionOps.createSession);
   const verifyOtpMut = useMutation(api.phoneAuth.verifyOtp);
   const addToWardrobeMut = useMutation(api.sessionOps.addToWardrobe);
-  const createLook = useMutation(api.sessionOps.createLook);
+  const runTryOn = useAction(api.tryOn.runTryOn);
+  const retryLookMut = useAction(api.tryOn.retryLook);
   const createOrder = useMutation(api.sessionOps.createOrder);
   const endSessionMut = useMutation(api.sessionOps.endSession);
   const updateSessionMut = useMutation(api.sessionOps.updateSession);
   const recordBodyScan = useMutation(api.customers.recordBodyScan);
+  const { upload } = useUploadFile();
   const addTrialCartItem = useMutation(api.sessionOps.addTrialCartItem);
   const removeTrialCartItem = useMutation(api.sessionOps.removeTrialCartItem);
   const addCartItem = useMutation(api.sessionOps.addCartItem);
   const updateCartQtyMut = useMutation(api.sessionOps.updateCartQty);
   const removeCartItemMut = useMutation(api.sessionOps.removeCartItem);
   const clearCartMut = useMutation(api.sessionOps.clearCart);
+
+  // Fan-out state: set to true when the user chooses "Retake + refresh".
+  // Lives in the parent so the useEffect (below showToast) can access
+  // retryLookMut, trialItems, sareeLookIds, and deviceToken directly —
+  // no prop-drilling of callback.
+  const [pendingFanOut, setPendingFanOut] = useState(false);
+  const bodyScanInfo = useQuery(
+    api.customers.getBodyScanInfo,
+    customerId ? { customerId } : "skip",
+  );
+
+  // Cached AI renders for the current trial cart — keyed sareeId → lookId,
+  // returned only for completed looks whose personFileId matches the
+  // customer's current bodyScanFileId. Used by the reconciliation effect
+  // below to skip a fresh runTryOn (and the cost of a fresh RunPod render)
+  // when a reusable look already exists. A rescan / retake invalidates
+  // automatically because the customer's bodyScanFileId changes.
+  const cachedLooksForTrial = useQuery(
+    api.tryOn.getCachedLooksForSarees,
+    customerId && trialItems.length > 0
+      ? { customerId, sareeIds: trialItems.map((t) => t._id) }
+      : "skip",
+  );
+  // Holds the scan ts that was current when the fan-out was armed.
+  // null = not yet armed; any number = the baseline to compare against.
+  const previousScanTs = useRef<number | null>(null);
 
   // Load config
   useEffect(() => {
@@ -286,6 +361,97 @@ export default function KioskPage() {
     setToastVisible(true);
   }, []);
 
+  // Fan-out effect: fires retryLook with useLatestBodyScan=true for every
+  // trial look once the customer records a new body scan. Gated on
+  // bodyScanInfo.ts changing from the value that was snapshotted when the
+  // user clicked "Retake + refresh" — so cancelling mid-scan flow leaves
+  // pendingFanOut=true but the effect never fires (ts didn't change).
+  useEffect(() => {
+    if (!pendingFanOut) return;
+
+    // First render after arming: snapshot the current ts so we can detect
+    // a change in subsequent renders. Do NOT fire the fan-out yet.
+    if (previousScanTs.current === null) {
+      // bodyScanInfo may still be undefined (query loading); treat null/undefined
+      // as "no existing scan" and store -1 as the baseline so any real ts will differ.
+      previousScanTs.current = bodyScanInfo?.ts ?? -1;
+      return;
+    }
+
+    // No new scan yet — ts unchanged or query still loading.
+    if (!bodyScanInfo?.ts) return;
+    if (bodyScanInfo.ts === previousScanTs.current) return;
+
+    // The scan ts changed — a fresh scan was recorded after the flag was set.
+    previousScanTs.current = null;
+
+    // Fan-out: retry all looks that have a lookId (completed or failed).
+    // Skipping queued/processing entries avoids double-submitting jobs that
+    // are already in-flight with the old scan. Failed entries are included
+    // because they would benefit from a fresh scan just as much as completed ones.
+    const lookIdsToRetry = trialItems
+      .map((s) => sareeLookIds[s._id])
+      .filter(Boolean) as Id<"looks">[];
+    for (const lookId of lookIdsToRetry) {
+      retryLookMut({ deviceToken, lookId, useLatestBodyScan: true })
+        .catch((err: Error) => handleTryOnError(err, showToast));
+    }
+    setPendingFanOut(false);
+  // trialItems and sareeLookIds are captured at effect-run time; including
+  // them as deps is correct — if the list changes before the scan comes in
+  // we want the latest list when the effect finally fires.
+  }, [pendingFanOut, bodyScanInfo, trialItems, sareeLookIds, retryLookMut, deviceToken, showToast]);
+
+  // Reconciliation effect — for each trialItem missing a lookId in
+  // sareeLookIds, either reuse a cached render (cachedLooksForTrial)
+  // or fire runTryOn. Covers three flows:
+  //   1. Items added to trialItems BEFORE a body scan: the call-site
+  //      runTryOn throws NO_BODY_SCAN: server-side, no looks row gets
+  //      inserted, sareeLookIds stays empty — TrialTile would otherwise
+  //      stay on "Preparing…" forever after the eventual scan completes.
+  //   2. Retention-hydrated trial cart items on a returning customer:
+  //      hydration restores trialItems but not sareeLookIds. With cached
+  //      renders available, no RunPod cost is paid for items the customer
+  //      already had rendered against the same body scan.
+  //   3. Same-session re-add of a previously rendered saree (e.g. via
+  //      wardrobe → cart → trial): the cache returns the existing lookId,
+  //      so no duplicate render fires.
+  // Cache resolution gate: wait for cachedLooksForTrial to settle before
+  // deciding what to fire — without this, the effect could race the cache
+  // resolve and submit a fresh RunPod job for an item we'd otherwise reuse.
+  // Server-side dedup at _findExistingLook still catches concurrent fires
+  // for cache misses, so a fresh runTryOn is safe.
+  useEffect(() => {
+    if (!customerId) return;
+    if (!sessionId) return;
+    if (!deviceToken) return;
+    if (!bodyScanInfo?.hasFileId) return;
+    if (cachedLooksForTrial === undefined) return;
+    for (const item of trialItems) {
+      if (sareeLookIds[item._id]) continue;
+      const cachedLookId = cachedLooksForTrial[item._id];
+      if (cachedLookId) {
+        // Cache hit — reuse the existing completed look. The TrialTile
+        // for this saree subscribes via getLook(lookId) and renders the
+        // stored AI image directly. No RunPod call.
+        setSareeLookIds((prev) => ({ ...prev, [item._id]: cachedLookId }));
+        continue;
+      }
+      if (inFlightTryOnRef.current.has(item._id)) continue;
+      const sareeId = item._id;
+      inFlightTryOnRef.current.add(sareeId);
+      runTryOn({ deviceToken, sessionId, sareeId })
+        .then((res) => {
+          inFlightTryOnRef.current.delete(sareeId);
+          setSareeLookIds((prev) => ({ ...prev, [sareeId]: res.lookId }));
+        })
+        .catch((err: Error) => {
+          inFlightTryOnRef.current.delete(sareeId);
+          handleTryOnError(err, showToast);
+        });
+    }
+  }, [customerId, sessionId, deviceToken, bodyScanInfo?.hasFileId, trialItems, sareeLookIds, cachedLooksForTrial, runTryOn, showToast]);
+
   // Stop every track on the current webcam stream and clear the ref.
   // Safe to call even if the stream was already stopped.
   const stopCamera = useCallback(() => {
@@ -331,6 +497,7 @@ export default function KioskPage() {
     setPhone("");
     setHasBodyScan(false);
     setTrialItems([]);
+    setSareeLookIds({});
     setWardrobeItems([]);
     setCartItems([]);
     setSelectedProduct(null);
@@ -338,6 +505,11 @@ export default function KioskPage() {
     returningRef.current = false;
     scanEligibleRef.current = false;
     hydratedRef.current = null;
+    // Clear fan-out flag so a stale pendingFanOut from a previous session
+    // doesn't accidentally fire during the next customer's session.
+    setPendingFanOut(false);
+    previousScanTs.current = null;
+    inFlightTryOnRef.current.clear();
     stopCamera();
     try { localStorage.removeItem("wearify_kiosk_session"); } catch { /* ignore */ }
     setScreen("sessionEnd");
@@ -509,11 +681,13 @@ export default function KioskPage() {
                 lang: customer.language ?? "en",
                 hasBodyScan: hasScan,
               });
-              if (scanEligibleRef.current) {
-                navigate("scanChoice");
-              } else {
-                navigate("consent");
-              }
+              // Land directly on home after phone login. Body scan is no longer
+              // an upfront gate — if the customer needs one, the runTryOn catch
+              // at the home/product-detail call sites redirects to consent →
+              // bodyScan on first send-to-trial. This applies to phoneAuth /
+              // OTP only; the codeEntry (store-code) flow keeps its own
+              // scanChoice / consent gating.
+              navigate("home");
             }}
             onBack={goBack}
           />
@@ -545,7 +719,10 @@ export default function KioskPage() {
                 lang,
                 hasBodyScan: false,
               });
-              navigate("consent");
+              // Land directly on home — same rationale as the OTP returning-
+              // customer branch. Body scan is triggered lazily on first
+              // send-to-trial via the NO_BODY_SCAN: catch path.
+              navigate("home");
             }}
             onBack={() => navigate("otp")}
           />
@@ -584,45 +761,56 @@ export default function KioskPage() {
                 scanEligibleRef.current = false;
               }
               // Resolve shortlist items to full saree data
+              let hasResolvedItems = false;
               if (data.mirrorItems && allSarees) {
                 const sareeMap = new Map(allSarees.map((s) => [s._id, s]));
                 const resolved = data.mirrorItems
                   .map((item: { sareeId: Id<"sarees"> }) => sareeMap.get(item.sareeId))
                   .filter(Boolean) as SareeItem[];
                 setTrialItems(resolved);
+                hasResolvedItems = resolved.length > 0;
                 if (data.customer) {
                   for (const item of resolved) {
                     addTrialCartItem({ customerId: data.customer._id, storeId, sareeId: item._id });
-                    createLook({
+                    runTryOn({
+                      deviceToken: deviceToken!,
                       sessionId: data.trialRoom.sessionId,
-                      storeId,
-                      customerId: data.customer._id,
                       sareeId: item._id,
-                      sareeName: item.name,
-                      fabric: item.fabric,
-                      price: item.price,
-                      grad: item.grad,
-                    });
+                    })
+                      .then((res) => {
+                        setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
+                      })
+                      .catch((err: Error) => {
+                        // NO_BODY_SCAN: → consent → bodyScan; reconciliation
+                        // effect re-fires runTryOn for the queued items once
+                        // the scan is recorded. Matches the phoneAuth lazy
+                        // gating; replaces the old scanChoice redirect.
+                        handleTryOnError(err, showToast, () => navigate("consent"));
+                      });
                   }
                 }
               }
               // Mark code as used
               markCodeUsed({ code: data.trialRoom.code, storeId });
-              if (returningRef.current && scanEligibleRef.current) {
-                navigate("scanChoice");
-              } else {
-                navigate("consent");
-              }
+              // Skip the scanChoice/consent gate — land directly on trialRoom
+              // when the tablet pre-loaded a shortlist, else on home. Body
+              // scan is triggered lazily on first send-to-trial via the
+              // NO_BODY_SCAN: catch path above (or on a from-home pick when
+              // there's no shortlist). Same UX shape as the phoneAuth path.
+              navigate(hasResolvedItems ? "trialRoom" : "home");
             }}
             onBack={() => setScreen("idle")}
           />
         );
-      case "scanChoice":
+      case "scanChoice": {
+        // Guard: only offer "Use Previous Scan" when a real file was persisted.
+        // Legacy records may have lastBodyScan but no bodyScanFileId.
+        const hasPreviousScan = bodyScanInfo?.hasFileId === true;
         return (
           <ScanChoiceScreen
             customerName={customerName}
+            hasPreviousScan={hasPreviousScan}
             onUsePrevious={() => {
-              // Skip body scan, go directly to trial room or home
               if (trialItems.length > 0) navigate("trialRoom");
               else navigate("home");
             }}
@@ -631,6 +819,7 @@ export default function KioskPage() {
             }}
           />
         );
+      }
       case "consent":
         return (
           <ConsentScreen
@@ -647,15 +836,37 @@ export default function KioskPage() {
           <BodyScanScreen
             storeName={storeName}
             stream={cameraStream}
-            onCapture={() => {
-              if (customerId) {
-                recordBodyScan({ customerId, deviceToken }).catch(() => {});
+            onCapture={async (blob) => {
+              if (!customerId) {
+                stopCamera();
+                goBack();
+                return;
               }
-              setHasBodyScan(true);
-              scanEligibleRef.current = true;
-              persistKioskSession({ hasBodyScan: true });
-              stopCamera();
-              navigate("aiProcessing");
+              if (blob.size === 0) {
+                stopCamera();
+                showToast("Body scan failed — please try again", "error");
+                goBack();
+                return;
+              }
+              try {
+                const file = new File(
+                  [blob],
+                  `bodyscan-${Date.now()}.jpg`,
+                  { type: "image/jpeg" },
+                );
+                const fileId = await upload(file, GUARDS.bodyScan);
+                await recordBodyScan({ customerId, deviceToken, bodyScanFileId: fileId });
+                setHasBodyScan(true);
+                scanEligibleRef.current = true;
+                persistKioskSession({ hasBodyScan: true });
+                stopCamera();
+                navigate("aiProcessing");
+              } catch (err) {
+                console.error(err);
+                stopCamera();
+                showToast("Body scan upload failed — please try again", "error");
+                goBack();
+              }
             }}
             onBack={() => {
               stopCamera();
@@ -731,6 +942,11 @@ export default function KioskPage() {
             showToast={showToast}
             maxTrial={CFG.maxTrial}
             tryOnSec={CFG.tryOnSec}
+            sareeLookIds={sareeLookIds}
+            retryLookMut={retryLookMut}
+            deviceToken={deviceToken}
+            navigate={navigate}
+            setPendingFanOut={setPendingFanOut}
           />
         );
       case "home":
@@ -745,16 +961,20 @@ export default function KioskPage() {
               if (customerId) {
                 for (const item of items) {
                   addTrialCartItem({ customerId, storeId, sareeId: item._id });
-                  createLook({
+                  runTryOn({
+                    deviceToken: deviceToken!,
                     sessionId,
-                    storeId,
-                    customerId,
                     sareeId: item._id,
-                    sareeName: item.name,
-                    fabric: item.fabric,
-                    price: item.price,
-                    grad: item.grad,
-                  });
+                  })
+                    .then((res) => {
+                      setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
+                    })
+                    .catch((err: Error) => {
+                      // NO_BODY_SCAN: → consent → bodyScan. Items already sit in
+                      // trialItems; the reconciliation effect re-fires runTryOn
+                      // for them once the scan is recorded.
+                      handleTryOnError(err, showToast, () => navigate("consent"));
+                    });
                 }
               }
               navigate("aiProcessing");
@@ -786,16 +1006,19 @@ export default function KioskPage() {
               setTrialItems((prev) => [...prev, selectedProduct]);
               if (customerId) {
                 addTrialCartItem({ customerId, storeId, sareeId: selectedProduct._id });
-                createLook({
+                runTryOn({
+                  deviceToken: deviceToken!,
                   sessionId,
-                  storeId,
-                  customerId,
                   sareeId: selectedProduct._id,
-                  sareeName: selectedProduct.name,
-                  fabric: selectedProduct.fabric,
-                  price: selectedProduct.price,
-                  grad: selectedProduct.grad,
-                });
+                })
+                  .then((res) => {
+                    setSareeLookIds((prev) => ({ ...prev, [selectedProduct._id]: res.lookId }));
+                  })
+                  .catch((err: Error) => {
+                    // NO_BODY_SCAN: → consent → bodyScan; reconciliation effect
+                    // re-fires runTryOn after the scan is recorded.
+                    handleTryOnError(err, showToast, () => navigate("consent"));
+                  });
               }
               showToast("Added to Trial Room", "success");
               navigate("trialRoom");
@@ -2228,18 +2451,134 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
   );
 }
 
+/* ── TRIAL TILE ── */
+// Per-saree component that subscribes reactively to its look row.
+// Renders skeleton while waiting for runTryOn to resolve or the job to finish,
+// shows the AI result on completion, and falls back to the saree thumbnail on failure.
+// Click handlers, selection badges, and remove buttons stay on the parent wrapper.
+function TrialTile({
+  saree,
+  lookId,
+  retryLookMut,
+  deviceToken,
+  showToast,
+}: {
+  saree: SareeItem;
+  lookId: Id<"looks"> | undefined;
+  retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
+  deviceToken: string;
+  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
+}) {
+  const look = useQuery(
+    api.tryOn.getLook,
+    lookId ? { lookId } : "skip",
+  );
+  const status = look?.status;
+  const resultUrl = useConvexUrl(look?.imageFileId);
+
+  // Elapsed counter — only ticks while the job is actively processing.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (status !== "processing" || !look?.startedAt) return;
+    const tick = () => setElapsed(Math.floor((Date.now() - look.startedAt!) / 1000));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [status, look?.startedAt]);
+
+  if (status === "completed" && resultUrl) {
+    return (
+      <div className="k-card k-card-hover" style={{ aspectRatio: "1 / 1.2", overflow: "hidden" }}>
+        <img src={resultUrl} alt={saree.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      </div>
+    );
+  }
+
+  if (status === "queued" || status === "processing" || !lookId) {
+    const subtitle = !lookId
+      ? "Preparing…"
+      : status === "queued"
+        ? "Preparing…"
+        : `Generating your look… ${elapsed}s`;
+    return (
+      <div className="k-card k-breathe" style={{
+        aspectRatio: "1 / 1.2",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        background: "var(--k-bg)",
+        gap: 12,
+      }}>
+        <Loader2 size={28} className="k-spin" style={{ color: "var(--k-maroon)" }} />
+        <span className="k-idle-tag">{subtitle}</span>
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    const errMsg = look?.errorMessage ?? "Something went wrong";
+    return (
+      <div className="k-card" style={{
+        aspectRatio: "1 / 1.2",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
+          padding: 12, gap: 8,
+          background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,.55) 100%)",
+        }}>
+          <span className="k-chip k-chip-maroon" style={{ fontSize: 13 }}>
+            {errMsg}
+          </span>
+          <button
+            className="k-btn k-btn-primary k-btn-pill"
+            style={{ padding: "8px 14px", fontSize: 13 }}
+            onClick={(e) => {
+              // stopPropagation keeps the parent tile-selection onClick from
+              // also firing when the user taps Retry.
+              e.stopPropagation();
+              if (!lookId) return;
+              retryLookMut({ deviceToken, lookId })
+                // NO_BODY_SCAN on retry is unusual (scan deleted between original and retry);
+                // no auto-redirect, so onNoBodyScan is omitted here.
+                .catch((err: Error) => handleTryOnError(err, showToast));
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Unknown-status fallback — bare thumbnail (e.g. any future status strings).
+  return <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />;
+}
+
 /* ── TRIAL ROOM ── */
-function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec }: {
+function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken, navigate, setPendingFanOut }: {
   items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
   onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
+  sareeLookIds: Record<string, Id<"looks">>;
+  retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
+  deviceToken: string;
+  navigate: (s: Screen) => void;
+  setPendingFanOut: (v: boolean) => void;
 }) {
   const [timer, setTimer] = useState(tryOnSec);
   const [selIdx, setSelIdx] = useState(0);
   const [selForWard, setSelForWard] = useState<Set<string>>(new Set());
   const [showEnd, setShowEnd] = useState(false);
+  const [retakeOpen, setRetakeOpen] = useState(false);
 
   useEffect(() => { if (timer <= 0) { setShowEnd(true); return; } const t = setTimeout(() => setTimer((v) => v - 1), 1000); return () => clearTimeout(t); }, [timer]);
+
+  // Close the Retake confirm modal when the session-end overlay takes over —
+  // both use .k-overlay (z-index 100), so without this the retake modal would
+  // sit above the Time's Up dialog due to render order.
+  useEffect(() => { if (showEnd && retakeOpen) setRetakeOpen(false); }, [showEnd, retakeOpen]);
 
   const toggleWard = (id: string) => { setSelForWard((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
   const moveToWardrobe = () => {
@@ -2288,11 +2627,22 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
             {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
           </span>
         </div>
-        <button onClick={onLogout} className="k-press" aria-label="Logout" style={{
-          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
-          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
-        }}><LogOut size={20} /></button>
+        {/* Right cluster: retake affordance + logout */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            className="k-btn k-btn-ghost k-btn-pill"
+            style={{ fontSize: 12, padding: "6px 12px" }}
+            onClick={() => setRetakeOpen(true)}
+          >
+            <Camera size={14} />
+            Retake body scan
+          </button>
+          <button onClick={onLogout} className="k-press" aria-label="Logout" style={{
+            width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
+          }}><LogOut size={20} /></button>
+        </div>
       </div>
 
       <div style={{ display: "flex", width: "100%", height: "100vh", paddingTop: 72 }}>
@@ -2317,7 +2667,7 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
                 >
                   <div className="k-trial-card-img">
                     <div>
-                      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={38} gradientAngle={135} />
+                      <TrialTile saree={saree} lookId={sareeLookIds[saree._id]} retryLookMut={retryLookMut} deviceToken={deviceToken} showToast={showToast} />
                     </div>
                     <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
                       position: "absolute", top: 6, left: 6, zIndex: 2,
@@ -2432,6 +2782,53 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
           </div>
         </div>
       )}
+
+      {/* Retake body scan confirm modal */}
+      {retakeOpen && (
+        <RetakeConfirmModal
+          onClose={() => setRetakeOpen(false)}
+          onConfirm={(alsoRefresh) => {
+            navigate("scanChoice");
+            setRetakeOpen(false);
+            if (alsoRefresh) {
+              setPendingFanOut(true);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── RETAKE CONFIRM MODAL ── */
+function RetakeConfirmModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: (alsoRefresh: boolean) => void;
+}) {
+  return (
+    <div className="k-overlay" onClick={onClose}>
+      <div className="k-card" onClick={(e) => e.stopPropagation()} style={{
+        maxWidth: 420, padding: 24, gap: 16,
+        display: "flex", flexDirection: "column",
+      }}>
+        <h3 className="k-heading" style={{ margin: 0 }}>Retake body scan?</h3>
+        <p style={{ color: "var(--k-text-muted)", margin: 0 }}>
+          We&apos;ll capture a fresh scan. Should we also refresh the
+          looks already in your trial room with the new pose?
+        </p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="k-btn k-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="k-btn k-btn-secondary" onClick={() => onConfirm(false)}>
+            Just retake
+          </button>
+          <button className="k-btn k-btn-primary" onClick={() => onConfirm(true)}>
+            Retake + refresh
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

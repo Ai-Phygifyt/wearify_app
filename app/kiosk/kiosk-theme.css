@@ -534,6 +534,13 @@
   width: 120px; height: 1px; margin: 12px auto;
   background: linear-gradient(90deg, transparent, var(--k-gold), transparent);
 }
+.k-idle-tag {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--k-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .k-chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 14px; border-radius: var(--k-r-pill);

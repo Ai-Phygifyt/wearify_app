@@ -27,6 +27,7 @@ import type * as network from "../network.js";
 import type * as phoneAuth from "../phoneAuth.js";
 import type * as releases from "../releases.js";
 import type * as resilience from "../resilience.js";
+import type * as runpod from "../runpod.js";
 import type * as sarees from "../sarees.js";
 import type * as security from "../security.js";
 import type * as seed from "../seed.js";
@@ -36,6 +37,7 @@ import type * as stores from "../stores.js";
 import type * as support from "../support.js";
 import type * as tailorOps from "../tailorOps.js";
 import type * as trialRoom from "../trialRoom.js";
+import type * as tryOn from "../tryOn.js";
 
 import type {
   ApiFromModules,
@@ -63,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   phoneAuth: typeof phoneAuth;
   releases: typeof releases;
   resilience: typeof resilience;
+  runpod: typeof runpod;
   sarees: typeof sarees;
   security: typeof security;
   seed: typeof seed;
@@ -72,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   support: typeof support;
   tailorOps: typeof tailorOps;
   trialRoom: typeof trialRoom;
+  tryOn: typeof tryOn;
 }>;
 
 /**
