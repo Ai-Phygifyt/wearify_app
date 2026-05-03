@@ -595,7 +595,17 @@ export const pollJob = internalAction({
       // under strict TypeScript (Uint8Array<ArrayBufferLike> is not a
       // BlobPart in stricter lib targets).
       const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "image/png" });
-      const fileId = await ctx.storage.store(blob);
+      let fileId: Id<"_storage">;
+      try {
+        fileId = await ctx.storage.store(blob);
+      } catch (e) {
+        await ctx.runMutation(internal.tryOn._failLook, {
+          lookId: args.lookId,
+          errorCode: "INTERNAL",
+          errorMessage: `Storage write failed: ${(e as Error).message}`,
+        });
+        return;
+      }
       await ctx.runMutation(internal.tryOn._completeLook, {
         lookId: args.lookId,
         imageFileId: fileId,
@@ -632,6 +642,12 @@ export const pollJob = internalAction({
       status = await pollRunPodJob(runpodCfg, look.runpodJobId);
     } catch (e) {
       // Network/HTTP errors — re-schedule one more time, then fail.
+      // pollAttempts conflates network errors with successful polls (it
+      // ticks on every _markProcessing). In practice, when RunPod is
+      // healthy and only transient network errors occur, this loop
+      // accommodates ~2 retries before giving up. That's fine — repeated
+      // network failures suggest a real outage worth surfacing rather
+      // than retrying indefinitely.
       const attempts = (look.pollAttempts ?? 0) + 1;
       if (attempts >= 3) {
         await ctx.runMutation(internal.tryOn._failLook, {
@@ -662,7 +678,17 @@ export const pollJob = internalAction({
       const bytes = base64ToBytes(b64);
       // See dry-run note above — cast to ArrayBuffer for BlobPart compat.
       const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "image/png" });
-      const fileId = await ctx.storage.store(blob);
+      let fileId: Id<"_storage">;
+      try {
+        fileId = await ctx.storage.store(blob);
+      } catch (e) {
+        await ctx.runMutation(internal.tryOn._failLook, {
+          lookId: args.lookId,
+          errorCode: "INTERNAL",
+          errorMessage: `Storage write failed: ${(e as Error).message}`,
+        });
+        return;
+      }
       await ctx.runMutation(internal.tryOn._completeLook, {
         lookId: args.lookId,
         imageFileId: fileId,
