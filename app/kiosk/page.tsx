@@ -99,6 +99,40 @@ function fmtPrice(n: number) {
   return s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + s.slice(-3);
 }
 
+// Try-on error prefix → user-facing toast text.
+// Action throws strings prefixed with `<CODE>:` so we can pattern-match
+// without parsing free-form errors. See spec §"UX states" §"Synchronous
+// error toasts".
+const TRYON_TOAST: Array<{ prefix: string; text: string; type: "warning" | "error" | "info" }> = [
+  { prefix: "CONCURRENCY_LIMIT:", text: "Wait for current renders to finish", type: "info" },
+  { prefix: "SESSION_CAP_REACHED:", text: "You've reached this session's try-on limit", type: "warning" },
+  { prefix: "RATE_LIMIT_MINUTE:", text: "Too many try-ons just now — wait a moment", type: "warning" },
+  { prefix: "RATE_LIMIT_HOUR:", text: "Too many try-ons recently", type: "warning" },
+  { prefix: "TRYON_DISABLED:", text: "Try-on is temporarily unavailable", type: "warning" },
+  { prefix: "NO_BODY_SCAN:", text: "Please complete a body scan first", type: "warning" },
+  { prefix: "UNAUTHORIZED:", text: "Session error — restart kiosk", type: "error" },
+];
+
+function handleTryOnError(
+  err: Error,
+  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void,
+  onNoBodyScan?: () => void,
+): void {
+  const msg = err.message ?? String(err);
+  if (msg.includes("NO_BODY_SCAN:") && onNoBodyScan) {
+    showToast("Please complete a body scan first", "warning");
+    onNoBodyScan();
+    return;
+  }
+  for (const { prefix, text, type } of TRYON_TOAST) {
+    if (msg.includes(prefix)) {
+      showToast(text, type);
+      return;
+    }
+  }
+  showToast("Something went wrong — try again", "error");
+}
+
 /* ═══ MAIN KIOSK PAGE ═══ */
 export default function KioskPage() {
   const router = useRouter();
@@ -163,7 +197,6 @@ export default function KioskPage() {
   const createSessionMut = useMutation(api.sessionOps.createSession);
   const verifyOtpMut = useMutation(api.phoneAuth.verifyOtp);
   const addToWardrobeMut = useMutation(api.sessionOps.addToWardrobe);
-  const createLook = useMutation(api.sessionOps.createLook);
   const runTryOn = useAction(api.tryOn.runTryOn);
   const retryLookMut = useAction(api.tryOn.retryLook);
   const createOrder = useMutation(api.sessionOps.createOrder);
@@ -610,7 +643,7 @@ export default function KioskPage() {
                         setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
                       })
                       .catch((err: Error) => {
-                        console.error(err);
+                        handleTryOnError(err, showToast, () => navigate("scanChoice"));
                       });
                   }
                 }
@@ -766,7 +799,7 @@ export default function KioskPage() {
                       setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
                     })
                     .catch((err: Error) => {
-                      console.error(err);
+                      handleTryOnError(err, showToast, () => navigate("scanChoice"));
                     });
                 }
               }
@@ -808,7 +841,7 @@ export default function KioskPage() {
                     setSareeLookIds((prev) => ({ ...prev, [selectedProduct._id]: res.lookId }));
                   })
                   .catch((err: Error) => {
-                    console.error(err);
+                    handleTryOnError(err, showToast, () => navigate("scanChoice"));
                   });
               }
               showToast("Added to Trial Room", "success");
@@ -2252,11 +2285,13 @@ function TrialTile({
   lookId,
   retryLookMut,
   deviceToken,
+  showToast,
 }: {
   saree: SareeItem;
   lookId: Id<"looks"> | undefined;
   retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
   deviceToken: string;
+  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
 }) {
   const look = useQuery(
     api.tryOn.getLook,
@@ -2329,7 +2364,9 @@ function TrialTile({
               e.stopPropagation();
               if (!lookId) return;
               retryLookMut({ deviceToken, lookId })
-                .catch((err: Error) => console.error(err));
+                // NO_BODY_SCAN on retry is unusual (scan deleted between original and retry);
+                // no auto-redirect, so onNoBodyScan is omitted here.
+                .catch((err: Error) => handleTryOnError(err, showToast));
             }}
           >
             Retry
@@ -2435,7 +2472,7 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
                 >
                   <div className="k-trial-card-img">
                     <div>
-                      <TrialTile saree={saree} lookId={sareeLookIds[saree._id]} retryLookMut={retryLookMut} deviceToken={deviceToken} />
+                      <TrialTile saree={saree} lookId={sareeLookIds[saree._id]} retryLookMut={retryLookMut} deviceToken={deviceToken} showToast={showToast} />
                     </div>
                     <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
                       position: "absolute", top: 6, left: 6, zIndex: 2,
