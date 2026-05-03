@@ -69,3 +69,305 @@ export function base64ToBytes(base64: string): Uint8Array {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
+
+// =====================================================================
+// Saree config — ported from comfyui_next/app/api/run/route.ts:52-65
+// (CATEGORY_CONFIG.saree). Other categories (mens_formal,
+// mens_traditional) intentionally dropped — see spec §5.3.
+// =====================================================================
+
+const SAREE_CONFIG = {
+  lora: "Qwen-Image-Edit-2511-Object-Adder.safetensors",
+  prompt:
+    "Perform a high-accuracy virtual try-on.\n\nCompletely replace the existing garment on the woman in Image 1 with the exact saree from Image 2.\n\nDo not just transfer color or texture; replace the entire saree. The generated saree MUST have the exact same motifs, border design, pallu pattern, fabric texture, and color as the reference saree in Image 2.\n\nIgnore the original saree's patterns, colors, and details.\n\nEdit only the saree region.\n\nPreserve blouse, face, hairstyle, body shape, pose, lighting and background.\n\nDrape the new saree naturally according to the body shape and pose.\n\nDo not invent new patterns, colors, or mix the old and new designs.",
+  negativePrompt:
+    "no extra limbs, no extra hands, no extra legs, no body reshaping, no face change, no pose change, no blouse modification, no leg regeneration, no background change, no outfit merging, no embroidery blur, color bleeding, texture mixing, original garment showing through, recoloring only, half try-on\n",
+};
+
+// =====================================================================
+// Workflow builder — ported byte-for-byte from
+// comfyui_next/app/api/run/route.ts:72-344. Two injection points:
+//   • Node 12: cloth (saree) base64
+//   • Node 13: person base64
+// All other nodes / params verbatim from the reference. If you tune
+// the workflow, update both places.
+// =====================================================================
+
+export function buildSareeWorkflow(
+  personBase64: string,
+  garmentBase64: string,
+): RunPodRunPayload {
+  return {
+    input: {
+      workflow: {
+        "4": {
+          inputs: {
+            lora_name: SAREE_CONFIG.lora,
+            strength_model: 0.9,
+            model: ["126", 0],
+          },
+          class_type: "LoraLoaderModelOnly",
+          _meta: {
+            title: "LoraLoaderModelOnly",
+          },
+        },
+        "5": {
+          inputs: {
+            conditioning: ["10", 0],
+          },
+          class_type: "ConditioningZeroOut",
+          _meta: {
+            title: "ConditioningZeroOut",
+          },
+        },
+        "6": {
+          inputs: {
+            custom_output: ["10", 2],
+          },
+          class_type: "QwenEditOutputExtractor",
+          _meta: {
+            title: "Qwen Edit Output Extractor",
+          },
+        },
+        "8": {
+          inputs: {
+            value: SAREE_CONFIG.prompt,
+          },
+          class_type: "PrimitiveStringMultiline",
+          _meta: {
+            title: "String (Multiline)",
+          },
+        },
+        "9": {
+          inputs: {
+            max_size: 2300,
+            image: ["111", 0],
+          },
+          class_type: "QwenEditAdaptiveLongestEdge",
+          _meta: {
+            title: "Qwen Edit Adaptive Longest Edge",
+          },
+        },
+        "10": {
+          inputs: {
+            prompt: ["8", 0],
+            return_full_refs_cond: true,
+            instruction:
+              "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.",
+            clip: ["125", 0],
+            vae: ["124", 0],
+            configs: ["15", 0],
+          },
+          class_type: "TextEncodeQwenImageEditPlusCustom_lrzjason",
+          _meta: {
+            title: "TextEncodeQwenImageEditPlusCustom lrzjason",
+          },
+        },
+        "11": {
+          inputs: {
+            max_size: 1536,
+            image: ["12", 0],
+          },
+          class_type: "QwenEditAdaptiveLongestEdge",
+          _meta: {
+            title: "Qwen Edit Adaptive Longest Edge",
+          },
+        },
+        "12": {
+          inputs: {
+            base64_data: garmentBase64,
+            image_output: "Preview",
+            save_prefix: "ComfyUI",
+          },
+          class_type: "easy loadImageBase64",
+          _meta: {
+            title: "Load Cloth Image",
+          },
+        },
+        "13": {
+          inputs: {
+            base64_data: personBase64,
+            image_output: "Preview",
+            save_prefix: "ComfyUI",
+          },
+          class_type: "easy loadImageBase64",
+          _meta: {
+            title: "Load Person Image",
+          },
+        },
+        "15": {
+          inputs: {
+            to_ref: true,
+            ref_main_image: false,
+            ref_longest_edge: ["11", 0],
+            ref_crop: "center",
+            ref_upscale: "lanczos",
+            to_vl: true,
+            vl_resize: true,
+            vl_target_size: 384,
+            vl_crop: "center",
+            vl_upscale: "bicubic",
+            image: ["12", 0],
+            configs: ["16", 0],
+          },
+          class_type: "QwenEditConfigPreparer",
+          _meta: {
+            title: "Qwen Edit Config Preparer",
+          },
+        },
+        "16": {
+          inputs: {
+            to_ref: true,
+            ref_main_image: true,
+            ref_longest_edge: ["9", 0],
+            ref_crop: "pad",
+            ref_upscale: "lanczos",
+            to_vl: true,
+            vl_resize: true,
+            vl_target_size: 384,
+            vl_crop: "center",
+            vl_upscale: "bicubic",
+            image: ["111", 0],
+          },
+          class_type: "QwenEditConfigPreparer",
+          _meta: {
+            title: "Qwen Edit Config Preparer",
+          },
+        },
+        "18": {
+          inputs: {
+            image: ["22", 0],
+            pad_info: ["6", 0],
+          },
+          class_type: "CropWithPadInfo",
+          _meta: {
+            title: "Crop With Pad Info",
+          },
+        },
+        "22": {
+          inputs: {
+            samples: ["123", 0],
+            vae: ["124", 0],
+          },
+          class_type: "VAEDecode",
+          _meta: {
+            title: "VAE Decode",
+          },
+        },
+        "44": {
+          inputs: {
+            reference_latents_method: "index_timestep_zero",
+            conditioning: ["10", 0],
+          },
+          class_type: "FluxKontextMultiReferenceLatentMethod",
+          _meta: {
+            title: "FluxKontextMultiReferenceLatentMethod",
+          },
+        },
+        "111": {
+          inputs: {
+            Input: 1,
+            image1: ["13", 0],
+          },
+          class_type: "CR Image Input Switch",
+          _meta: {
+            title: "🔀 CR Image Input Switch",
+          },
+        },
+        "123": {
+          inputs: {
+            seed: Math.floor(Math.random() * 1000000000000000),
+            steps: 4,
+            cfg: 1,
+            sampler_name: "euler",
+            scheduler: "beta",
+            denoise: 1,
+            model: ["4", 0],
+            positive: ["44", 0],
+            negative: ["135", 0],
+            latent_image: ["10", 1],
+          },
+          class_type: "KSampler",
+          _meta: {
+            title: "KSampler",
+          },
+        },
+        "124": {
+          inputs: {
+            vae_name: "qwen_image_vae.safetensors",
+          },
+          class_type: "VAELoader",
+          _meta: {
+            title: "Load VAE",
+          },
+        },
+        "125": {
+          inputs: {
+            clip_name: "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+            type: "qwen_image",
+            device: "default",
+          },
+          class_type: "CLIPLoader",
+          _meta: {
+            title: "Load CLIP",
+          },
+        },
+        "126": {
+          inputs: {
+            unet_name:
+              "qwen_image_edit_2511_fp8_e4m3fn_scaled_lightning_comfyui_4steps_v1.0.safetensors",
+            weight_dtype: "default",
+          },
+          class_type: "UNETLoader",
+          _meta: {
+            title: "Load Diffusion Model",
+          },
+        },
+        "134": {
+          inputs: {
+            rgthree_comparer: {
+              images: [
+                {
+                  name: "A",
+                  selected: true,
+                  url: "/api/view?filename=rgthree.compare._temp_zeeyv_00027_.png&type=temp&subfolder=&rand=0.7585319046781084",
+                },
+                {
+                  name: "B",
+                  selected: true,
+                  url: "/api/view?filename=rgthree.compare._temp_zeeyv_00028_.png&type=temp&subfolder=&rand=0.18510602073287685",
+                },
+              ],
+            },
+            image_a: ["13", 0],
+            image_b: ["18", 0],
+          },
+          class_type: "Image Comparer (rgthree)",
+          _meta: {
+            title: "Image Comparer (rgthree)",
+          },
+        },
+        "135": {
+          inputs: {
+            text: SAREE_CONFIG.negativePrompt,
+            clip: ["125", 0],
+          },
+          class_type: "CLIPTextEncode",
+          _meta: {
+            title: "CLIP Text Encode (Prompt)",
+          },
+        },
+        "200": {
+          inputs: {
+            filename_prefix: "ComfyUI",
+            images: ["18", 0],
+          },
+          class_type: "SaveImage",
+          _meta: {
+            title: "Save Image",
+          },
+        },
+      },
+    },
+  };
+}
