@@ -7,6 +7,7 @@ import { getToken, clearToken, getStoredUser, AuthUser } from "@/lib/phoneAuth";
 import { useRouter, usePathname } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import { Home, Sparkles, Heart, Shirt, User } from "lucide-react";
+import InstallPrompt from "@/components/c/InstallPrompt";
 import "./customer-theme.css";
 
 type CustomerCtx = {
@@ -231,6 +232,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       <div className="cx-page-root">
         <div className="cx-shell">
           <div className="cx-screen">{children}</div>
+          <InstallPrompt />
           <BottomNav />
         </div>
       </div>
