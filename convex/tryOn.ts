@@ -9,7 +9,7 @@
 
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
-import { Doc, Id } from "./_generated/dataModel";
+import { Doc } from "./_generated/dataModel";
 
 // =====================================================================
 // Resolve session, customer, saree in one read. The orchestrator
@@ -64,6 +64,9 @@ export const _countActiveForSession = internalQuery({
 // Count looks for a customer since a timestamp. Backs §4.1 guard 5
 // (RATE_LIMIT_MINUTE / RATE_LIMIT_HOUR). Uses the composite index
 // by_customerId_and_createdAt for an O(log N) range scan.
+// Result set bounded by tryon.rateLimitPerHour (default 30) — the
+// rate-limit guard rejects further calls once the cap is hit, so
+// .collect() is safe at this N.
 // =====================================================================
 
 export const _countForCustomerSince = internalQuery({
