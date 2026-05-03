@@ -241,6 +241,7 @@ export const _patchLookForRetry = internalMutation({
       runpodEndpointId: args.runpodEndpointId,
       personFileId: args.personFileId,
       garmentFileId: args.garmentFileId,
+      imageFileId: undefined,
       errorCode: undefined,
       errorMessage: undefined,
       startedAt: undefined,
@@ -758,6 +759,19 @@ export const retryLook = action({
     if (!look) throw new Error("INTERNAL: look not found");
     if (!look.sessionId) throw new Error("INTERNAL: look has no sessionId");
 
+    // Idempotency: refuse retries unless the row is in a state that warrants
+    // a re-submission. Failed rows are always retriable. Completed rows are
+    // only retriable when useLatestBodyScan is set (the retake fan-out path
+    // explicitly re-renders completed looks against a new body scan). Queued
+    // and processing rows are never retriable — concurrent re-tap would
+    // orphan the in-flight RunPod job.
+    if (look.status === "queued" || look.status === "processing") {
+      return { lookId: args.lookId };
+    }
+    if (look.status === "completed" && !args.useLatestBodyScan) {
+      return { lookId: args.lookId };
+    }
+
     // Re-resolve context for full guard chain.
     const ctxData: {
       session: Doc<"sessions"> | null;
@@ -771,6 +785,10 @@ export const retryLook = action({
     if (!session || !saree) throw new Error("INTERNAL: session or saree missing");
     if (!customer) throw new Error("INTERNAL: anonymous look cannot be retried");
 
+    // platformConfig is read here as an optimization (it's non-sensitive,
+    // contains tunable defaults like the kill-switch flag and rate-limit
+    // ceilings). Auth fires immediately below — an unauthenticated caller
+    // learns nothing actionable from the config values alone.
     const cfg: Record<string, string | undefined> = await ctx.runQuery(
       internal.tryOn._readPlatformConfig,
       { keys: PLATFORM_KEYS },
@@ -840,9 +858,8 @@ export const retryLook = action({
     } else {
       const personBlob = await ctx.storage.get(personFileId);
       const garmentBlob = await ctx.storage.get(garmentFileId);
-      if (!personBlob || !garmentBlob) {
-        throw new Error("INTERNAL: image missing in storage");
-      }
+      if (!personBlob) throw new Error("INTERNAL: person image not found in storage");
+      if (!garmentBlob) throw new Error("INTERNAL: garment image not found in storage");
       const personB64 = await blobToBase64(personBlob);
       const garmentB64 = await blobToBase64(garmentBlob);
       const runpodCfg = readRunPodConfig();
