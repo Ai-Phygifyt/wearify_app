@@ -2283,11 +2283,10 @@ function TrialTile({
         ? "Preparing…"
         : `Generating your look… ${elapsed}s`;
     return (
-      <div className="k-card" style={{
+      <div className="k-card k-breathe" style={{
         aspectRatio: "1 / 1.2",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         background: "var(--k-bg)",
-        animation: "k-breathe 2s ease-in-out infinite",
         gap: 12,
       }}>
         <Loader2 size={28} className="k-spin" style={{ color: "var(--k-maroon)" }} />
