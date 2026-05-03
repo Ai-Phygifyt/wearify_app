@@ -13,6 +13,8 @@ import {
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
   Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal,
 } from "lucide-react";
+import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
 import { ScanChoiceScreen } from "./screens/ScanChoiceScreen";
 import { ConsentScreen } from "./screens/ConsentScreen";
 import { BodyScanScreen } from "./screens/BodyScanScreen";
@@ -203,6 +205,7 @@ export default function KioskPage() {
   const endSessionMut = useMutation(api.sessionOps.endSession);
   const updateSessionMut = useMutation(api.sessionOps.updateSession);
   const recordBodyScan = useMutation(api.customers.recordBodyScan);
+  const { upload } = useUploadFile();
   const addTrialCartItem = useMutation(api.sessionOps.addTrialCartItem);
   const removeTrialCartItem = useMutation(api.sessionOps.removeTrialCartItem);
   const addCartItem = useMutation(api.sessionOps.addCartItem);
@@ -215,8 +218,8 @@ export default function KioskPage() {
   // retryLookMut, trialItems, sareeLookIds, and deviceToken directly —
   // no prop-drilling of callback.
   const [pendingFanOut, setPendingFanOut] = useState(false);
-  const lastBodyScanTs = useQuery(
-    api.customers.getLastBodyScanTs,
+  const bodyScanInfo = useQuery(
+    api.customers.getBodyScanInfo,
     customerId ? { customerId } : "skip",
   );
   // Holds the scan ts that was current when the fan-out was armed.
@@ -341,7 +344,7 @@ export default function KioskPage() {
 
   // Fan-out effect: fires retryLook with useLatestBodyScan=true for every
   // trial look once the customer records a new body scan. Gated on
-  // lastBodyScanTs changing from the value that was snapshotted when the
+  // bodyScanInfo.ts changing from the value that was snapshotted when the
   // user clicked "Retake + refresh" — so cancelling mid-scan flow leaves
   // pendingFanOut=true but the effect never fires (ts didn't change).
   useEffect(() => {
@@ -350,15 +353,15 @@ export default function KioskPage() {
     // First render after arming: snapshot the current ts so we can detect
     // a change in subsequent renders. Do NOT fire the fan-out yet.
     if (previousScanTs.current === null) {
-      // lastBodyScanTs may still be undefined (query loading); treat null/undefined
+      // bodyScanInfo may still be undefined (query loading); treat null/undefined
       // as "no existing scan" and store -1 as the baseline so any real ts will differ.
-      previousScanTs.current = lastBodyScanTs ?? -1;
+      previousScanTs.current = bodyScanInfo?.ts ?? -1;
       return;
     }
 
     // No new scan yet — ts unchanged or query still loading.
-    if (!lastBodyScanTs) return;
-    if (lastBodyScanTs === previousScanTs.current) return;
+    if (!bodyScanInfo?.ts) return;
+    if (bodyScanInfo.ts === previousScanTs.current) return;
 
     // The scan ts changed — a fresh scan was recorded after the flag was set.
     previousScanTs.current = null;
@@ -378,7 +381,7 @@ export default function KioskPage() {
   // trialItems and sareeLookIds are captured at effect-run time; including
   // them as deps is correct — if the list changes before the scan comes in
   // we want the latest list when the effect finally fires.
-  }, [pendingFanOut, lastBodyScanTs, trialItems, sareeLookIds, retryLookMut, deviceToken, showToast]);
+  }, [pendingFanOut, bodyScanInfo, trialItems, sareeLookIds, retryLookMut, deviceToken, showToast]);
 
   // Stop every track on the current webcam stream and clear the ref.
   // Safe to call even if the stream was already stopped.
@@ -717,12 +720,15 @@ export default function KioskPage() {
             onBack={() => setScreen("idle")}
           />
         );
-      case "scanChoice":
+      case "scanChoice": {
+        // Guard: only offer "Use Previous Scan" when a real file was persisted.
+        // Legacy records may have lastBodyScan but no bodyScanFileId.
+        const hasPreviousScan = bodyScanInfo?.hasFileId === true;
         return (
           <ScanChoiceScreen
             customerName={customerName}
+            hasPreviousScan={hasPreviousScan}
             onUsePrevious={() => {
-              // Skip body scan, go directly to trial room or home
               if (trialItems.length > 0) navigate("trialRoom");
               else navigate("home");
             }}
@@ -731,6 +737,7 @@ export default function KioskPage() {
             }}
           />
         );
+      }
       case "consent":
         return (
           <ConsentScreen
@@ -747,15 +754,37 @@ export default function KioskPage() {
           <BodyScanScreen
             storeName={storeName}
             stream={cameraStream}
-            onCapture={() => {
-              if (customerId) {
-                recordBodyScan({ customerId, deviceToken }).catch(() => {});
+            onCapture={async (blob) => {
+              if (!customerId) {
+                stopCamera();
+                goBack();
+                return;
               }
-              setHasBodyScan(true);
-              scanEligibleRef.current = true;
-              persistKioskSession({ hasBodyScan: true });
-              stopCamera();
-              navigate("aiProcessing");
+              if (blob.size === 0) {
+                stopCamera();
+                showToast("Body scan failed — please try again", "error");
+                goBack();
+                return;
+              }
+              try {
+                const file = new File(
+                  [blob],
+                  `bodyscan-${Date.now()}.jpg`,
+                  { type: "image/jpeg" },
+                );
+                const fileId = await upload(file, GUARDS.bodyScan);
+                await recordBodyScan({ customerId, deviceToken, bodyScanFileId: fileId });
+                setHasBodyScan(true);
+                scanEligibleRef.current = true;
+                persistKioskSession({ hasBodyScan: true });
+                stopCamera();
+                navigate("aiProcessing");
+              } catch (err) {
+                console.error(err);
+                stopCamera();
+                showToast("Body scan upload failed — please try again", "error");
+                goBack();
+              }
             }}
             onBack={() => {
               stopCamera();

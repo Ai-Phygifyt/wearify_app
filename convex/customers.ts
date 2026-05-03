@@ -895,17 +895,20 @@ export const listStoreLinksEnriched = query({
 });
 
 // ============================
-// getLastBodyScanTs — lightweight poll for the fan-out gate.
-// Returns the numeric timestamp of the customer's most recent body scan,
-// or null if they haven't scanned yet. Kept separate from getById so
-// the fan-out useEffect can subscribe to a minimal reactive value
-// rather than the whole customer doc.
+// getBodyScanInfo — lightweight poll for the fan-out gate and scan-choice UI.
+// Returns both the timestamp and whether a real file was persisted so the
+// kiosk can distinguish a legacy "scan recorded but no image" from a true scan.
+// Kept separate from getById so the fan-out useEffect can subscribe to a
+// minimal reactive value rather than the whole customer doc.
 // ============================
-export const getLastBodyScanTs = query({
+export const getBodyScanInfo = query({
   args: { customerId: v.id("customers") },
-  handler: async (ctx, args): Promise<number | null> => {
+  handler: async (ctx, args): Promise<{ ts: number | null; hasFileId: boolean }> => {
     const c = await ctx.db.get(args.customerId);
-    return c?.lastBodyScan ?? null;
+    return {
+      ts: c?.lastBodyScan ?? null,
+      hasFileId: c?.bodyScanFileId !== undefined,
+    };
   },
 });
 
