@@ -1,9 +1,12 @@
 // convex/tryOn.ts
 //
 // Try-on orchestration. Public actions: runTryOn, retryLook.
-// Public query: getLook. Internal: pollJob, _resolveContext,
-// _countActiveForSession, _countForCustomerSince, _insertQueuedLook,
-// _patchLook.
+// Public query: getLook. Internal actions: pollJob.
+// Internal queries: _resolveContext, _countActiveForSession,
+//   _countForCustomerSince, _findExistingLook, _readPlatformConfig,
+//   _getLookInternal.
+// Internal mutations: _insertQueuedLook, _patchLookForRetry,
+//   _markProcessing, _completeLook, _failLook.
 //
 // See docs/superpowers/specs/2026-05-03-kiosk-runpod-tryon-design.md
 
@@ -217,7 +220,7 @@ export const _markProcessing = internalMutation({
     if (!row) return;
     // Only advance from queued/processing — do not re-open completed/failed rows.
     if (row.status !== "queued" && row.status !== "processing") return;
-    const patch: Record<string, unknown> = {
+    const patch: Partial<Doc<"looks">> = {
       status: "processing",
       pollAttempts: (row.pollAttempts ?? 0) + 1,
     };
