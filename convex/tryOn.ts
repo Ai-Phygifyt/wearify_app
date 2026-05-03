@@ -2,7 +2,7 @@
 //
 // Try-on orchestration. Public actions: runTryOn (Task 7).
 // Public action: retryLook (Task 10).
-// Public query: getLook (Task 11, not yet implemented).
+// Public query: getLook (Task 11).
 // Internal actions: pollJob (stub — real implementation in Task 8).
 // Internal queries: _resolveContext, _lookupDevice, _countActiveForSession,
 //   _countForCustomerSince, _findExistingLook, _readPlatformConfig,
@@ -18,6 +18,7 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  query,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
@@ -884,5 +885,18 @@ export const retryLook = action({
       lookId: args.lookId,
     });
     return { lookId: args.lookId };
+  },
+});
+
+// =====================================================================
+// Public query: getLook
+// Reactive read — kiosk subscribes per-saree to drive UI states.
+// Returns null if the row doesn't exist (or the lookId is stale).
+// =====================================================================
+
+export const getLook = query({
+  args: { lookId: v.id("looks") },
+  handler: async (ctx, args): Promise<Doc<"looks"> | null> => {
+    return await ctx.db.get(args.lookId);
   },
 });
