@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SareeThumb } from "@/components/SareeThumb";
@@ -159,6 +159,7 @@ export default function KioskPage() {
   const verifyOtpMut = useMutation(api.phoneAuth.verifyOtp);
   const addToWardrobeMut = useMutation(api.sessionOps.addToWardrobe);
   const createLook = useMutation(api.sessionOps.createLook);
+  const runTryOn = useAction(api.tryOn.runTryOn);
   const createOrder = useMutation(api.sessionOps.createOrder);
   const endSessionMut = useMutation(api.sessionOps.endSession);
   const updateSessionMut = useMutation(api.sessionOps.updateSession);
@@ -593,15 +594,12 @@ export default function KioskPage() {
                 if (data.customer) {
                   for (const item of resolved) {
                     addTrialCartItem({ customerId: data.customer._id, storeId, sareeId: item._id });
-                    createLook({
+                    runTryOn({
+                      deviceToken: deviceToken!,
                       sessionId: data.trialRoom.sessionId,
-                      storeId,
-                      customerId: data.customer._id,
                       sareeId: item._id,
-                      sareeName: item.name,
-                      fabric: item.fabric,
-                      price: item.price,
-                      grad: item.grad,
+                    }).catch((err: Error) => {
+                      console.error(err);
                     });
                   }
                 }
@@ -745,15 +743,12 @@ export default function KioskPage() {
               if (customerId) {
                 for (const item of items) {
                   addTrialCartItem({ customerId, storeId, sareeId: item._id });
-                  createLook({
+                  runTryOn({
+                    deviceToken: deviceToken!,
                     sessionId,
-                    storeId,
-                    customerId,
                     sareeId: item._id,
-                    sareeName: item.name,
-                    fabric: item.fabric,
-                    price: item.price,
-                    grad: item.grad,
+                  }).catch((err: Error) => {
+                    console.error(err);
                   });
                 }
               }
@@ -786,15 +781,12 @@ export default function KioskPage() {
               setTrialItems((prev) => [...prev, selectedProduct]);
               if (customerId) {
                 addTrialCartItem({ customerId, storeId, sareeId: selectedProduct._id });
-                createLook({
+                runTryOn({
+                  deviceToken: deviceToken!,
                   sessionId,
-                  storeId,
-                  customerId,
                   sareeId: selectedProduct._id,
-                  sareeName: selectedProduct.name,
-                  fabric: selectedProduct.fabric,
-                  price: selectedProduct.price,
-                  grad: selectedProduct.grad,
+                }).catch((err: Error) => {
+                  console.error(err);
                 });
               }
               showToast("Added to Trial Room", "success");
