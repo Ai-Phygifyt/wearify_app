@@ -22,10 +22,13 @@ import {
 import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import {
+  blobToBase64,
+  buildSareeWorkflow,
   pollRunPodJob,
   extractImageBase64,
   base64ToBytes,
   readRunPodConfig,
+  submitRunPodJob,
   DRYRUN_IMAGE_BASE64,
 } from "./runpod";
 
@@ -507,9 +510,25 @@ export const runTryOn = action({
       runpodJobId = `DRYRUN-${Math.random().toString(36).slice(2, 10)}`;
       endpointId = "dryrun";
     } else {
-      // Real RunPod path is wired in Task 9. For Task 7, throw if
-      // someone tries to use the real path before that wiring lands.
-      throw new Error("INTERNAL: real RunPod path not yet implemented (Task 9)");
+      // Read images from Convex Storage and convert to base64.
+      const personBlob = await ctx.storage.get(personFileId);
+      const garmentBlob = await ctx.storage.get(garmentFileId);
+      if (!personBlob) throw new Error("INTERNAL: person image not found in storage");
+      if (!garmentBlob) throw new Error("INTERNAL: garment image not found in storage");
+      const personB64 = await blobToBase64(personBlob);
+      const garmentB64 = await blobToBase64(garmentBlob);
+
+      // Resolve RunPod config — platformConfig override beats env.
+      const runpodCfg = readRunPodConfig();
+      const overrideEndpoint = cfg["tryon.runpodEndpointId"];
+      const effectiveCfg = overrideEndpoint && overrideEndpoint.trim() !== ""
+        ? { apiKey: runpodCfg.apiKey, endpointId: overrideEndpoint.trim() }
+        : runpodCfg;
+
+      const payload = buildSareeWorkflow(personB64, garmentB64);
+      const result = await submitRunPodJob(effectiveCfg, payload);
+      runpodJobId = result.id;
+      endpointId = effectiveCfg.endpointId;
     }
 
     // -----------------------------------------------------------------
