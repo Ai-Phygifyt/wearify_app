@@ -179,6 +179,44 @@ export const _readPlatformConfig = internalQuery({
 });
 
 // =====================================================================
+// Idempotent seeder for the tryon.* platformConfig keys. Run once on
+// each environment (dev / prod) via:
+//   npx convex run tryOn:seedTryOnDefaults '{}'
+// Re-runs are safe: existing rows are left alone; only missing keys
+// get inserted with the defaults.
+// =====================================================================
+
+export const seedTryOnDefaults = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<{ inserted: string[]; existing: string[] }> => {
+    const defaults: Array<{ key: string; value: string }> = [
+      { key: "tryon.enabled", value: "true" },
+      { key: "tryon.dryRun", value: "true" },
+      { key: "tryon.maxConcurrentPerSession", value: "3" },
+      { key: "tryon.maxPerSession", value: "20" },
+      { key: "tryon.rateLimitPerMinute", value: "5" },
+      { key: "tryon.rateLimitPerHour", value: "30" },
+      { key: "tryon.timeoutMs", value: "300000" },
+    ];
+    const inserted: string[] = [];
+    const existing: string[] = [];
+    for (const { key, value } of defaults) {
+      const row = await ctx.db
+        .query("platformConfig")
+        .withIndex("by_key", (q) => q.eq("key", key))
+        .unique();
+      if (row) {
+        existing.push(key);
+      } else {
+        await ctx.db.insert("platformConfig", { key, value });
+        inserted.push(key);
+      }
+    }
+    return { inserted, existing };
+  },
+});
+
+// =====================================================================
 // Insert a new looks row in "queued" state. Mirrors createLook's row
 // shape so /c/looks display + dedup behavior carry over.
 // =====================================================================
