@@ -173,6 +173,7 @@ export function buildSareeWorkflow(
             title: "Qwen Edit Adaptive Longest Edge",
           },
         },
+        // INJECTION POINT — saree (garment) image
         "12": {
           inputs: {
             base64_data: garmentBase64,
@@ -184,6 +185,7 @@ export function buildSareeWorkflow(
             title: "Load Cloth Image",
           },
         },
+        // INJECTION POINT — person image
         "13": {
           inputs: {
             base64_data: personBase64,
@@ -323,6 +325,10 @@ export function buildSareeWorkflow(
             title: "Load Diffusion Model",
           },
         },
+        // ComfyUI rgthree Image Comparer — UI-only debug node. The
+        // hardcoded temp URLs in `rgthree_comparer.images` are not
+        // execution inputs (RunPod ignores them); kept verbatim from
+        // the reference port so the workflow JSON stays diff-free.
         "134": {
           inputs: {
             rgthree_comparer: {
