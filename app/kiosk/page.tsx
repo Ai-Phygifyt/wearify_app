@@ -165,6 +165,7 @@ export default function KioskPage() {
   const addToWardrobeMut = useMutation(api.sessionOps.addToWardrobe);
   const createLook = useMutation(api.sessionOps.createLook);
   const runTryOn = useAction(api.tryOn.runTryOn);
+  const retryLookMut = useAction(api.tryOn.retryLook);
   const createOrder = useMutation(api.sessionOps.createOrder);
   const endSessionMut = useMutation(api.sessionOps.endSession);
   const updateSessionMut = useMutation(api.sessionOps.updateSession);
@@ -740,6 +741,8 @@ export default function KioskPage() {
             maxTrial={CFG.maxTrial}
             tryOnSec={CFG.tryOnSec}
             sareeLookIds={sareeLookIds}
+            retryLookMut={retryLookMut}
+            deviceToken={deviceToken}
           />
         );
       case "home":
@@ -2247,9 +2250,13 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
 function TrialTile({
   saree,
   lookId,
+  retryLookMut,
+  deviceToken,
 }: {
   saree: SareeItem;
   lookId: Id<"looks"> | undefined;
+  retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
+  deviceToken: string;
 }) {
   const look = useQuery(
     api.tryOn.getLook,
@@ -2295,16 +2302,55 @@ function TrialTile({
     );
   }
 
-  // Failed state — saree thumbnail fallback. Retry button lands in Task 14.
+  if (status === "failed") {
+    const errMsg = look?.errorMessage ?? "Something went wrong";
+    return (
+      <div className="k-card" style={{
+        aspectRatio: "1 / 1.2",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
+          padding: 12, gap: 8,
+          background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,.55) 100%)",
+        }}>
+          <span className="k-chip k-chip-maroon" style={{ fontSize: 11 }}>
+            {errMsg}
+          </span>
+          <button
+            className="k-btn k-btn-secondary k-btn-pill"
+            style={{ padding: "8px 14px", fontSize: 13 }}
+            onClick={(e) => {
+              // stopPropagation keeps the parent tile-selection onClick from
+              // also firing when the user taps Retry.
+              e.stopPropagation();
+              if (!lookId) return;
+              retryLookMut({ deviceToken, lookId })
+                .catch((err: Error) => console.error(err));
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Unknown-status fallback — bare thumbnail (e.g. any future status strings).
   return <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />;
 }
 
 /* ── TRIAL ROOM ── */
-function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds }: {
+function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken }: {
   items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
   onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
   sareeLookIds: Record<string, Id<"looks">>;
+  retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
+  deviceToken: string;
 }) {
   const [timer, setTimer] = useState(tryOnSec);
   const [selIdx, setSelIdx] = useState(0);
@@ -2389,7 +2435,7 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
                 >
                   <div className="k-trial-card-img">
                     <div>
-                      <TrialTile saree={saree} lookId={sareeLookIds[saree._id]} />
+                      <TrialTile saree={saree} lookId={sareeLookIds[saree._id]} retryLookMut={retryLookMut} deviceToken={deviceToken} />
                     </div>
                     <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
                       position: "absolute", top: 6, left: 6, zIndex: 2,
