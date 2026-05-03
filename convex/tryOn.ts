@@ -201,7 +201,7 @@ export const _insertQueuedLook = internalMutation({
   },
   handler: async (ctx, args): Promise<Id<"looks">> => {
     const now = Date.now();
-    return await ctx.db.insert("looks", {
+    const lookId = await ctx.db.insert("looks", {
       sessionId: args.sessionId,
       storeId: args.storeId,
       customerId: args.customerId,
@@ -219,6 +219,41 @@ export const _insertQueuedLook = internalMutation({
       garmentFileId: args.garmentFileId,
       pollAttempts: 0,
     });
+
+    // Ensure customer ↔ store link is recorded — preserves the
+    // side-effect that createLook had in convex/sessionOps.ts so
+    // analytics, /c/me/history, and related store-scoped queries
+    // continue to see this customer at this store.
+    if (args.customerId) {
+      const today = new Date().toLocaleDateString("en-IN", {
+        day: "2-digit", month: "short", year: "numeric",
+      });
+      const existing = await ctx.db
+        .query("customerStoreLinks")
+        .withIndex("by_customerId_and_storeId", (q) =>
+          q.eq("customerId", args.customerId!).eq("storeId", args.storeId),
+        )
+        .unique();
+      if (!existing) {
+        const store = await ctx.db
+          .query("stores")
+          .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+          .unique();
+        await ctx.db.insert("customerStoreLinks", {
+          customerId: args.customerId,
+          storeId: args.storeId,
+          storeName: store?.name,
+          visits: 0,
+          lastVisit: today,
+          clv: 0,
+          segment: "New",
+        });
+      } else if (existing.lastVisit !== today) {
+        await ctx.db.patch(existing._id, { lastVisit: today });
+      }
+    }
+
+    return lookId;
   },
 });
 
@@ -409,7 +444,10 @@ export const runTryOn = action({
     // -----------------------------------------------------------------
     // STEP 2 — kill switch
     // -----------------------------------------------------------------
-    if (cfg["tryon.enabled"] !== "true") {
+    // Kill switch: only an explicit "false" disables. Absence (undefined)
+    // means enabled — so a fresh deployment without the platformConfig row
+    // doesn't appear broken to the kiosk.
+    if (cfg["tryon.enabled"] === "false") {
       throw new Error("TRYON_DISABLED: try-on is currently unavailable");
     }
 
@@ -658,9 +696,17 @@ export const pollJob = internalAction({
       return;
     }
 
+    // Poll against the endpoint that submitted the job — runpodEndpointId
+    // was snapshotted on the looks row at submit time so a later env or
+    // platformConfig change doesn't orphan in-flight jobs.
+    const effectivePollCfg = {
+      apiKey: runpodCfg.apiKey,
+      endpointId: look.runpodEndpointId ?? runpodCfg.endpointId,
+    };
+
     let status: Awaited<ReturnType<typeof pollRunPodJob>>;
     try {
-      status = await pollRunPodJob(runpodCfg, look.runpodJobId);
+      status = await pollRunPodJob(effectivePollCfg, look.runpodJobId);
     } catch (e) {
       // Network/HTTP errors — re-schedule one more time, then fail.
       // pollAttempts conflates network errors with successful polls (it
@@ -803,7 +849,10 @@ export const retryLook = action({
     if (!device) throw new Error("UNAUTHORIZED: kiosk device not paired to session store");
 
     // Kill switch.
-    if (cfg["tryon.enabled"] !== "true") {
+    // Kill switch: only an explicit "false" disables. Absence (undefined)
+    // means enabled — so a fresh deployment without the platformConfig row
+    // doesn't appear broken to the kiosk.
+    if (cfg["tryon.enabled"] === "false") {
       throw new Error("TRYON_DISABLED: try-on is currently unavailable");
     }
 
