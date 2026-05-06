@@ -995,6 +995,7 @@ export default function KioskPage() {
             sarees={allSarees || []}
             trialItems={trialItems}
             wardrobeItems={wardrobeItems}
+            shortlistedItems={shortlistedItems}
             onProductTap={(p) => navigate("productDetail", p)}
             onSendToTrial={(items) => {
               setTrialItems((prev) => [...prev, ...items]);
@@ -1962,8 +1963,9 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
 }
 
 /* ── HOME ── */
-function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToTrial, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxTrial, showToast, storeName, storeLogoFileId }: {
+function HomeScreen({ sarees, trialItems, wardrobeItems, shortlistedItems, onProductTap, onSendToTrial, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxTrial, showToast, storeName, storeLogoFileId }: {
   sarees: SareeItem[]; trialItems: SareeItem[]; wardrobeItems: SareeItem[];
+  shortlistedItems: SareeItem[];
   onProductTap: (p: SareeItem) => void; onSendToTrial: (items: SareeItem[]) => void;
   navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxTrial: number;
@@ -2241,6 +2243,15 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
                 }}>{occ}</button>
               ))}
             </div>
+
+            {shortlistedItems.length > 0 && (
+              <ScrollSection title="Shortlisted">
+                {shortlistedItems.map((s) => (
+                  <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} onCheck={() => toggleSelect(s)}
+                    isSelected={selectedIds.has(s._id)} isInTrial={isInTrial(s._id)} isInWardrobe={isInWardrobe(s._id)} />
+                ))}
+              </ScrollSection>
+            )}
 
             <ScrollSection title="Trending Now">
               {trending.map((s) => (
