@@ -111,6 +111,10 @@ export default function TabletCataloguePage() {
 
   const handleAddToShortlist = async (sareeId: Id<"sarees">) => {
     if (!sessionId || !storeId) return;
+    if ((shortlistItems?.length ?? 0) >= 10) {
+      alert("Shortlist full — remove an item to add more (max 10).");
+      return;
+    }
     try {
       await addToShortlist({
         sessionId,
@@ -118,8 +122,12 @@ export default function TabletCataloguePage() {
         storeId,
         ...(customerId ? { customerId } : {}),
       });
-    } catch {
-      // already added or error
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.startsWith("SHORTLIST_FULL:")) {
+        alert("Shortlist full — remove an item to add more (max 10).");
+      }
+      // else: already-added or other error; silent like before
     }
   };
 

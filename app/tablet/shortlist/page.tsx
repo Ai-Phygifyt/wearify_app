@@ -168,7 +168,7 @@ export default function TabletShortlistPage() {
         <div>
           <h1 className="text-xl font-extrabold text-wf-text">Shortlist</h1>
           <p className="text-sm text-wf-subtext">
-            {totalCount} {totalCount === 1 ? "item" : "items"} shortlisted &middot; {sentCount} sent to mirror
+            {totalCount}/10 {totalCount === 1 ? "item" : "items"} shortlisted &middot; {sentCount} sent to mirror
           </p>
         </div>
         <div className="flex gap-3">
@@ -194,7 +194,7 @@ export default function TabletShortlistPage() {
       <div className="flex gap-4 mb-4">
         <div className="bg-wf-card rounded-lg border border-wf-border px-5 py-3 flex-1">
           <div className="text-xs text-wf-subtext mb-0.5">Items Shortlisted</div>
-          <div className="text-2xl font-extrabold text-wf-text font-mono">{totalCount}</div>
+          <div className="text-2xl font-extrabold text-wf-text font-mono">{totalCount}/10</div>
         </div>
         <div className="bg-wf-card rounded-lg border border-wf-border px-5 py-3 flex-1">
           <div className="text-xs text-wf-subtext mb-0.5">Sent to Mirror</div>

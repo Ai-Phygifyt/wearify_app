@@ -59,10 +59,19 @@ export default function SareeDetailPage() {
 
   const handleAddToShortlist = async () => {
     if (!sessionId || !storeId || addedToShortlist) return;
+    if ((shortlistItems?.length ?? 0) >= 10) {
+      alert("Shortlist full — remove an item to add more (max 10).");
+      return;
+    }
     try {
       await addToShortlist({ sessionId, sareeId, storeId });
       setAddedToShortlist(true);
-    } catch { /* ignore */ }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.startsWith("SHORTLIST_FULL:")) {
+        alert("Shortlist full — remove an item to add more (max 10).");
+      }
+    }
   };
 
   const handleSendToMirror = async () => {
@@ -70,6 +79,10 @@ export default function SareeDetailPage() {
     try {
       // Add to shortlist if not already
       if (!addedToShortlist) {
+        if ((shortlistItems?.length ?? 0) >= 10) {
+          alert("Shortlist full — remove an item to add more (max 10).");
+          return;
+        }
         await addToShortlist({ sessionId, sareeId, storeId });
         setAddedToShortlist(true);
       }
@@ -79,7 +92,12 @@ export default function SareeDetailPage() {
         await markSentToMirror({ shortlistId: item._id, sessionId });
       }
       setSentToMirror(true);
-    } catch { /* ignore */ }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.startsWith("SHORTLIST_FULL:")) {
+        alert("Shortlist full — remove an item to add more (max 10).");
+      }
+    }
   };
 
   if (!saree) {
