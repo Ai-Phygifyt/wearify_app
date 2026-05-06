@@ -532,6 +532,7 @@ export default function KioskPage() {
     setPhone("");
     setHasBodyScan(false);
     setTrialItems([]);
+    setShortlistedItems([]);
     setSareeLookIds({});
     setWardrobeItems([]);
     setCartItems([]);
@@ -540,6 +541,7 @@ export default function KioskPage() {
     returningRef.current = false;
     scanEligibleRef.current = false;
     hydratedRef.current = null;
+    shortlistHydratedRef.current = null;
     // Clear fan-out flag so a stale pendingFanOut from a previous session
     // doesn't accidentally fire during the next customer's session.
     setPendingFanOut(false);
@@ -547,6 +549,7 @@ export default function KioskPage() {
     inFlightTryOnRef.current.clear();
     stopCamera();
     try { localStorage.removeItem("wearify_kiosk_session"); } catch { /* ignore */ }
+    try { localStorage.removeItem("wearify_kiosk_shortlisted"); } catch { /* ignore */ }
     setScreen("sessionEnd");
   }, [stopCamera]);
 
