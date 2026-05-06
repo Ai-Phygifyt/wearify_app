@@ -212,8 +212,6 @@ export default function KioskPage() {
   const updateSessionMut = useMutation(api.sessionOps.updateSession);
   const recordBodyScan = useMutation(api.customers.recordBodyScan);
   const { upload } = useUploadFile();
-  const addTrialCartItem = useMutation(api.sessionOps.addTrialCartItem);
-  const removeTrialCartItem = useMutation(api.sessionOps.removeTrialCartItem);
   const addCartItem = useMutation(api.sessionOps.addCartItem);
   const updateCartQtyMut = useMutation(api.sessionOps.updateCartQty);
   const removeCartItemMut = useMutation(api.sessionOps.removeCartItem);
@@ -531,15 +529,12 @@ export default function KioskPage() {
     storeId ? { storeId } : "skip"
   );
 
-  // Persistent retention — load the customer's wardrobe + trial cart for THIS store.
+  // Persistent retention — load the customer's wardrobe + cart for THIS store.
   // Hydrates local state once `customerId`, `storeId`, and `allSarees` are all ready.
+  // Trial items are NOT persisted — they live only in React state for the session.
   const savedWardrobe = useQuery(
     api.sessionOps.listWardrobeByCustomer,
     customerId ? { customerId } : "skip",
-  );
-  const savedTrialCart = useQuery(
-    api.sessionOps.listTrialCart,
-    customerId && storeId ? { customerId, storeId } : "skip",
   );
   const savedCart = useQuery(
     api.sessionOps.listCart,
@@ -548,7 +543,7 @@ export default function KioskPage() {
   const hydratedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!customerId || !storeId || !allSarees) return;
-    if (savedWardrobe === undefined || savedTrialCart === undefined || savedCart === undefined) return;
+    if (savedWardrobe === undefined || savedCart === undefined) return;
     const key = `${customerId}:${storeId}`;
     if (hydratedRef.current === key) return;
     hydratedRef.current = key;
@@ -573,11 +568,6 @@ export default function KioskPage() {
         .map((w) => sareeMap.get(w.sareeId))
         .filter(Boolean) as SareeItem[]
     );
-    const trialForStore = uniqBySareeId(
-      savedTrialCart
-        .map((t) => sareeMap.get(t.sareeId))
-        .filter(Boolean) as SareeItem[]
-    );
     const cartForStore = uniqBySareeId(
       savedCart
         .map((c) => {
@@ -586,20 +576,15 @@ export default function KioskPage() {
         })
         .filter(Boolean) as Array<SareeItem & { qty: number }>
     );
-    // Merge rather than replace — codeEntry may have already populated trialItems from tablet shortlist.
     setWardrobeItems((prev) => {
       const have = new Set(prev.map((s) => s._id));
       return [...prev, ...wardrobeForStore.filter((s) => !have.has(s._id))];
-    });
-    setTrialItems((prev) => {
-      const have = new Set(prev.map((s) => s._id));
-      return [...prev, ...trialForStore.filter((s) => !have.has(s._id))];
     });
     setCartItems((prev) => {
       const have = new Set(prev.map((s) => s._id));
       return [...prev, ...cartForStore.filter((s) => !have.has(s._id))];
     });
-  }, [customerId, storeId, allSarees, savedWardrobe, savedTrialCart, savedCart]);
+  }, [customerId, storeId, allSarees, savedWardrobe, savedCart]);
 
   if (!storeId) return null;
 
@@ -771,7 +756,6 @@ export default function KioskPage() {
                 hasResolvedItems = resolved.length > 0;
                 if (data.customer) {
                   for (const item of resolved) {
-                    addTrialCartItem({ customerId: data.customer._id, storeId, sareeId: item._id });
                     runTryOn({
                       deviceToken: deviceToken!,
                       sessionId: data.trialRoom.sessionId,
@@ -894,7 +878,6 @@ export default function KioskPage() {
             wardrobeItems={wardrobeItems}
             onRemoveItem={(id) => {
               setTrialItems((prev) => prev.filter((s) => s._id !== id));
-              if (customerId) removeTrialCartItem({ customerId, storeId, sareeId: id });
             }}
             onAddToWardrobe={(items) => {
               // Filter out any saree that's already in the wardrobe —
@@ -916,13 +899,6 @@ export default function KioskPage() {
               setTrialItems((prev) =>
                 prev.filter((s) => !items.some((i) => i._id === s._id))
               );
-              if (customerId) {
-                // Every trial item gets removed from the trial cart — regardless
-                // of whether the wardrobe add was a no-op (already there).
-                for (const item of items) {
-                  removeTrialCartItem({ customerId, storeId, sareeId: item._id });
-                }
-              }
               // Only persist the fresh sarees. Server-side is idempotent now
               // too but skipping a round-trip when we know it's a no-op.
               for (const item of fresh) {
@@ -960,7 +936,6 @@ export default function KioskPage() {
               setTrialItems((prev) => [...prev, ...items]);
               if (customerId) {
                 for (const item of items) {
-                  addTrialCartItem({ customerId, storeId, sareeId: item._id });
                   runTryOn({
                     deviceToken: deviceToken!,
                     sessionId,
@@ -1005,7 +980,6 @@ export default function KioskPage() {
               }
               setTrialItems((prev) => [...prev, selectedProduct]);
               if (customerId) {
-                addTrialCartItem({ customerId, storeId, sareeId: selectedProduct._id });
                 runTryOn({
                   deviceToken: deviceToken!,
                   sessionId,
