@@ -210,6 +210,32 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Catelog-21 seed — 21-saree fresh catalog for ST-001 (dev only)
+
+- **Why:** ST-001's seeded catalog from `seed.ts` (the 14 sarees in section 8) was a hand-crafted demo set with mismatched/missing images and inconsistent metadata. A real product photoshoot bundle landed in `Catelog-21/` — 21 numbered subfolders (`01`–`21`), each with 4 product images plus an `Input Img.{png}` (the AI-input source for the photoshoot, not catalog content), plus a `Catelog-21 _ 060526_ Details.xlsx` with one row per saree (description, fabric, work, color, material/care, price). Goal: replace ST-001's catalog wholesale with these 21, each populated with all 4 images so the kiosk + tablet + RunPod try-on flows work against real product photography.
+- **Mapping decisions** (asked, not invented):
+  - **Replace, don't merge.** All existing ST-001 sarees deleted before insert. The owner had already manually deleted most via the retail UI; the script catches any orphans.
+  - **Skip `Input Img.{png}`** in each folder — that's the AI photoshoot source, not a catalog image. Only the 4 numbered files (`01-04.{webp,jpg,png}`) go to Convex storage.
+  - **Occasion = price band:** ≥ ₹20,000 → Wedding, ≥ ₹10,000 → Festival, else Party. Yields 2/12/7 — clean spread.
+  - **Stock random 5–15** per saree. All `status: "active"` (5 isn't low_stock here; the auto-status logic only kicks in on `updateStock`).
+  - **Name = `${colorName} ${fabric} Saree`** (e.g. "Pink Banarasi Silk Saree"). The xlsx description blurb is too long for a card title; the constructed name is short, sortable, and the full blurb still lives in `description`.
+  - **Type derived from fabric:** `Banarasi`/`Banarasi Silk` → "Banarasi"; `Soft Silk`/`Art Silk` → "Designer Silk"; `Chiffon`/`Georgette`/`Net` → fabric-as-type; everything else → "Designer".
+  - **Tag = "New"** on all 21 — fresh drop.
+  - **Column-vs-description conflicts:** the xlsx fabric column reads "Tissue" for sarees `10`/`15`/`16`/`19`, but each row's description blurb explicitly says Georgette/Satin/Satin/Georgette respectively. The column was a data-entry slip — overrode with the description. Customer sees the right thing.
+  - **MRP** is computed (`price × random(1.15..1.25)`, rounded to nearest ₹100) — the xlsx has only one price column, so this gives the UI a "Save ₹X" badge without faking discounts.
+- **Where the data lives.** [scripts/seed-catelog21.mjs](scripts/seed-catelog21.mjs) hardcodes all 21 mappings as a JS array — chose this over parsing the xlsx at runtime because (a) the xlsx column-vs-description conflicts needed manual judgment anyway, and (b) the script is read-once-run-once; reproducibility matters more than DRY against the xlsx. The 50MB `Catelog-21/` source folder (images + xlsx) is intentionally **untracked** — too large for git, and the script+xlsx-parse already encode the mapping. If a teammate needs to re-run, they need the source folder shipped out-of-band.
+- **Safety guards** (the script is destructive — deletes ST-001's catalog before re-inserting):
+  - Refuses to run unless `CONVEX_URL`/`NEXT_PUBLIC_CONVEX_URL` contains the known dev deployment string `formal-snake-780`. Refuses outright on `quirky-narwhal-971` or any URL matching `/prod/`. `FORCE=1` overrides the unknown-dev case but NOT the known-prod refusal — i.e. you can re-target to a *different* dev deployment, never to prod.
+  - Pre-flights every folder before any DB write: exactly 4 image files per folder, each ≤ 5MB (the `sareePhoto` upload guard), MIME inferred from extension. Aborts before deletion if any check fails.
+  - Uses the public `sarees.create` mutation (which calls `assertFiles` against the `sareePhoto` guard) so server-side validation runs even though the script bypasses the UI.
+- **Result on dev (`formal-snake-780`):** 21 sarees inserted, 84 images uploaded (4/saree), prices ₹4,999–₹24,999, stock 5–15 (avg 11), occasion split Wedding=2/Festival=12/Party=7, type split Designer=7/Georgette=5/Designer Silk=4/Banarasi=2/Chiffon=2/Net=1.
+- **Run command:** `pnpm run seed:catelog21` (added to [package.json](package.json) scripts).
+- **Not done (flagged):**
+  - Prod deployment never seeded (out of scope; dev-only run per request). If/when prod is ready, re-run with explicit URL override AND re-confirm the source folder is on the runner machine.
+  - `Catelog-21/` source folder isn't in git or LFS — if multiple devs need to re-run the seed, decide on storage (Git LFS / S3 bucket / shared drive). Currently: one machine has the source, the script encodes the metadata, so the seed is reproducible only from that machine.
+  - The seeded-saree image-name → file mapping in [components/SareeThumb.tsx](components/SareeThumb.tsx) (`SAREE_IMAGE`) was for the OLD seeded catalog and doesn't include any of the new 21 names. Not a problem — the new sarees have `imageIds[]` populated directly from Convex storage, so `SareeThumb` falls through to the storage-URL tier (priority 2 in its three-tier fallback), skipping the local-inventory tier entirely. Safe to ignore unless you want offline thumbnail support.
+  - `daysOld` set to 0 by `sarees.create`. Aging analytics on `/store/inventory` will treat the whole catalog as just-added.
+
 ### Kiosk Shortlisted home rail + tablet 10-cap + trial-room non-persistence
 
 - **Why:** the tablet → kiosk handoff used to dump every shortlisted saree straight into the trial room and navigate to `trialRoom` on code entry. With staff curating up to ~10 picks per customer, that auto-fired 10 RunPod jobs per pairing (~₹30) before the customer had even seen anything. The new model: shortlisted items render as a "Shortlisted" `ScrollSection` on the kiosk home above "Trending Now"; only the **first 2** (oldest by `addedAt`) auto-trial, the customer self-adds the rest. Spec at [docs/superpowers/specs/2026-05-06-kiosk-shortlist-home-rail-design.md](docs/superpowers/specs/2026-05-06-kiosk-shortlist-home-rail-design.md), plan at [docs/superpowers/plans/2026-05-06-kiosk-shortlist-home-rail.md](docs/superpowers/plans/2026-05-06-kiosk-shortlist-home-rail.md).
