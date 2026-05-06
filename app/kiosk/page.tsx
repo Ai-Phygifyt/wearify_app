@@ -6,6 +6,7 @@ import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SareeThumb } from "@/components/SareeThumb";
+import { SareeImageGallery } from "@/components/SareeImageGallery";
 import { useConvexUrl } from "@/lib/ConvexImage";
 import {
   ChevronLeft, ChevronRight, ChevronDown,
@@ -2426,7 +2427,7 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
             overflow: "hidden", boxShadow: "var(--k-shadow-md)", flexShrink: 0, aspectRatio: "3/4",
           }}>
             <div style={{ position: "absolute", inset: 0 }}>
-              <SareeThumb name={product.name} fileId={product.imageIds?.[0]} grad={product.grad} emoji={product.emoji} emojiSize={72} />
+              <SareeImageGallery name={product.name} imageIds={product.imageIds} grad={product.grad} emoji={product.emoji} emojiSize={72} />
             </div>
             {/* Tag */}
             {product.tag && (

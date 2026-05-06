@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge, Btn, PageLoading } from "@/components/ui/wearify-ui";
-import { SareeThumb } from "@/components/SareeThumb";
+import { SareeImageGallery } from "@/components/SareeImageGallery";
 import { Id } from "@/convex/_generated/dataModel";
 
 export default function SareeDetailPage() {
@@ -132,9 +132,9 @@ export default function SareeDetailPage() {
         {/* Left: Image (or gradient placeholder if none) */}
         <div className="w-1/3 flex-shrink-0">
           <div className="w-full aspect-[3/4] rounded-xl relative overflow-hidden">
-            <SareeThumb
+            <SareeImageGallery
               name={saree.name}
-              fileId={saree.imageIds?.[0]}
+              imageIds={saree.imageIds}
               grad={saree.grad}
               emoji={saree.emoji}
               emojiSize={80}
