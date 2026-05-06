@@ -782,17 +782,41 @@ export default function KioskPage() {
                 returningRef.current = false;
                 scanEligibleRef.current = false;
               }
-              // Resolve shortlist items to full saree data
-              let hasResolvedItems = false;
+              // Resolve shortlist items to full saree data, sorted by addedAt
+              // ascending (oldest first — staff queues priority items first).
+              let resolved: SareeItem[] = [];
               if (data.mirrorItems && allSarees) {
                 const sareeMap = new Map(allSarees.map((s) => [s._id, s]));
-                const resolved = data.mirrorItems
+                const sortedMirror = [...data.mirrorItems].sort(
+                  (a: { addedAt?: number }, b: { addedAt?: number }) =>
+                    (a.addedAt ?? 0) - (b.addedAt ?? 0),
+                );
+                resolved = sortedMirror
                   .map((item: { sareeId: Id<"sarees"> }) => sareeMap.get(item.sareeId))
                   .filter(Boolean) as SareeItem[];
-                setTrialItems(resolved);
-                hasResolvedItems = resolved.length > 0;
+              }
+              setShortlistedItems(resolved);
+              persistShortlisted({
+                sessionId: data.trialRoom.sessionId,
+                sareeIds: resolved.map((s) => s._id),
+                autoTrialDone: false,
+              });
+
+              // Auto-trial the first 2 (oldest by addedAt). Remaining items
+              // sit in the Shortlisted home rail until the customer self-adds
+              // them. Replaces the previous bulk-dump-into-trialRoom behavior.
+              const firstTwo = resolved.slice(0, 2);
+              if (firstTwo.length > 0) {
+                setTrialItems((prev) => {
+                  const existingIds = new Set(prev.map((s) => s._id));
+                  const merged = [...prev];
+                  for (const item of firstTwo) {
+                    if (!existingIds.has(item._id)) merged.push(item);
+                  }
+                  return merged;
+                });
                 if (data.customer) {
-                  for (const item of resolved) {
+                  for (const item of firstTwo) {
                     runTryOn({
                       deviceToken: deviceToken!,
                       sessionId: data.trialRoom.sessionId,
@@ -804,21 +828,24 @@ export default function KioskPage() {
                       .catch((err: Error) => {
                         // NO_BODY_SCAN: → consent → bodyScan; reconciliation
                         // effect re-fires runTryOn for the queued items once
-                        // the scan is recorded. Matches the phoneAuth lazy
-                        // gating; replaces the old scanChoice redirect.
+                        // the scan is recorded.
                         handleTryOnError(err, showToast, () => navigate("consent"));
                       });
                   }
                 }
               }
+              persistShortlisted({
+                sessionId: data.trialRoom.sessionId,
+                sareeIds: resolved.map((s) => s._id),
+                autoTrialDone: true,
+              });
               // Mark code as used
               markCodeUsed({ code: data.trialRoom.code, storeId });
-              // Skip the scanChoice/consent gate — land directly on trialRoom
-              // when the tablet pre-loaded a shortlist, else on home. Body
-              // scan is triggered lazily on first send-to-trial via the
-              // NO_BODY_SCAN: catch path above (or on a from-home pick when
-              // there's no shortlist). Same UX shape as the phoneAuth path.
-              navigate(hasResolvedItems ? "trialRoom" : "home");
+              // Always land on home — the Shortlisted rail renders the curated
+              // items above Trending; the first 2 are already in the trial room
+              // (chip-indicated). Body scan triggers lazily via the NO_BODY_SCAN:
+              // catch above when the customer has no scan on file.
+              navigate("home");
             }}
             onBack={() => setScreen("idle")}
           />
