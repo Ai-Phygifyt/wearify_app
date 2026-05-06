@@ -169,6 +169,11 @@ export default function KioskPage() {
   // Trial room items (sarees from tablet shortlist)
   const [trialItems, setTrialItems] = useState<SareeItem[]>([]);
 
+  // Shortlisted items from the tablet (only populated when the customer
+  // entered via store code — codeEntry path). Renders as a "Shortlisted"
+  // ScrollSection above Trending on the kiosk home screen.
+  const [shortlistedItems, setShortlistedItems] = useState<SareeItem[]>([]);
+
   // Maps sareeId → lookId so TrialTile can subscribe reactively.
   // Populated as each runTryOn resolves; cleared on session wipe.
   const [sareeLookIds, setSareeLookIds] = useState<Record<string, Id<"looks">>>({});
@@ -305,6 +310,38 @@ export default function KioskPage() {
       const current = JSON.parse(localStorage.getItem("wearify_kiosk_session") ?? "{}");
       localStorage.setItem("wearify_kiosk_session", JSON.stringify({ ...current, ...patch }));
     } catch { /* ignore */ }
+  }, []);
+
+  // Shortlisted-rail persistence — sessionId-keyed so a stale entry from a
+  // previous customer's pairing won't surface for the next pairing.
+  // autoTrialDone prevents re-firing the first-2 auto-trial on mid-session
+  // page refresh.
+  const persistShortlisted = useCallback(
+    (record: { sessionId: string; sareeIds: Id<"sarees">[]; autoTrialDone: boolean }) => {
+      try {
+        localStorage.setItem("wearify_kiosk_shortlisted", JSON.stringify(record));
+      } catch { /* ignore quota errors */ }
+    },
+    [],
+  );
+
+  const readShortlistedRecord = useCallback(():
+    | { sessionId: string; sareeIds: Id<"sarees">[]; autoTrialDone: boolean }
+    | null => {
+    try {
+      const raw = localStorage.getItem("wearify_kiosk_shortlisted");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.sessionId !== "string") return null;
+      if (!Array.isArray(parsed?.sareeIds)) return null;
+      return parsed as {
+        sessionId: string;
+        sareeIds: Id<"sarees">[];
+        autoTrialDone: boolean;
+      };
+    } catch {
+      return null;
+    }
   }, []);
 
   // 5-minute inactivity auto-logout. Also listens to keydown (forms) and
