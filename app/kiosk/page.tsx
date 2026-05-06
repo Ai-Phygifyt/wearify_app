@@ -623,6 +623,28 @@ export default function KioskPage() {
     });
   }, [customerId, storeId, allSarees, savedWardrobe, savedCart]);
 
+  // Restore the Shortlisted rail across browser refresh. Keyed on sessionId
+  // so a stale localStorage entry from a previous customer's pairing won't
+  // surface for the next pairing — sessionId-mismatch is a no-op.
+  // The shortlistedItems.length === 0 guard prevents re-hydrating on top of
+  // fresh state set by the codeEntry handler in the same render cycle.
+  const shortlistHydratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessionId || !allSarees) return;
+    if (shortlistedItems.length > 0) return;
+    if (shortlistHydratedRef.current === sessionId) return;
+    const record = readShortlistedRecord();
+    if (!record || record.sessionId !== sessionId) return;
+    const sareeMap = new Map(allSarees.map((s) => [s._id, s] as const));
+    const restored = record.sareeIds
+      .map((id) => sareeMap.get(id))
+      .filter(Boolean) as SareeItem[];
+    if (restored.length > 0) {
+      setShortlistedItems(restored);
+      shortlistHydratedRef.current = sessionId;
+    }
+  }, [sessionId, allSarees, shortlistedItems.length, readShortlistedRecord]);
+
   if (!storeId) return null;
 
   // ═══ RENDER SCREENS ═══
