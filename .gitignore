@@ -13,7 +13,11 @@
 # testing
 /coverage
 .agents
-.claude
+.claude/*
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/check-gstack.sh
+!.claude/settings.json
 .git
 .goose
 .cursor
