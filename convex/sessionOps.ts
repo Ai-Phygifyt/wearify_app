@@ -450,6 +450,15 @@ export const addToShortlist = mutation({
     customerId: v.optional(v.id("customers")),
   },
   handler: async (ctx, args) => {
+    // Max 10 items per session — server is the source of truth.
+    const existing = await ctx.db
+      .query("shortlist")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+      .take(11);
+    if (existing.length >= 10) {
+      throw new Error("SHORTLIST_FULL: Shortlist is full (max 10 items)");
+    }
+
     const id = await ctx.db.insert("shortlist", {
       sessionId: args.sessionId,
       sareeId: args.sareeId,
