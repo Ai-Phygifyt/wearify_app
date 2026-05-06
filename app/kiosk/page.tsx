@@ -213,6 +213,7 @@ export default function KioskPage() {
   const createSessionMut = useMutation(api.sessionOps.createSession);
   const verifyOtpMut = useMutation(api.phoneAuth.verifyOtp);
   const addToWardrobeMut = useMutation(api.sessionOps.addToWardrobe);
+  const removeFromWardrobeMut = useMutation(api.sessionOps.removeFromWardrobe);
   const runTryOn = useAction(api.tryOn.runTryOn);
   const retryLookMut = useAction(api.tryOn.retryLook);
   const createOrder = useMutation(api.sessionOps.createOrder);
@@ -1015,6 +1016,9 @@ export default function KioskPage() {
             deviceToken={deviceToken}
             navigate={navigate}
             setPendingFanOut={setPendingFanOut}
+            cartCount={cartItems.reduce((n, c) => n + c.qty, 0)}
+            storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
           />
         );
       case "home":
@@ -1168,6 +1172,22 @@ export default function KioskPage() {
                     deviceToken,
                   });
                   const cartIds = cartItems.map((c) => c._id);
+
+                  // Remove the purchased items from server-side wardrobe so
+                  // /c/wardrobe (customer PWA, reactive subscription) and
+                  // future kiosk hydrations no longer show them. Best-effort
+                  // per-row delete — race / missing rows are silent.
+                  if (customerId && savedWardrobe) {
+                    for (const sareeId of cartIds) {
+                      const row = savedWardrobe.find((w) => w.sareeId === sareeId);
+                      if (row) {
+                        try {
+                          await removeFromWardrobeMut({ wardrobeId: row._id, customerId });
+                        } catch { /* ignore */ }
+                      }
+                    }
+                  }
+
                   setWardrobeItems((prev) => prev.filter((w) => !cartIds.includes(w._id)));
                   if (customerId) {
                     try { await clearCartMut({ customerId, storeId }); } catch { /* ignore */ }
@@ -2634,7 +2654,7 @@ function TrialTile({
 }
 
 /* ── TRIAL ROOM ── */
-function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken, navigate, setPendingFanOut }: {
+function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken, navigate, setPendingFanOut, cartCount, storeName, storeLogoFileId }: {
   items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
   onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
@@ -2643,6 +2663,9 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
   deviceToken: string;
   navigate: (s: Screen) => void;
   setPendingFanOut: (v: boolean) => void;
+  cartCount: number;
+  storeName?: string;
+  storeLogoFileId?: Id<"_storage">;
 }) {
   const [timer, setTimer] = useState(tryOnSec);
   const [selIdx, setSelIdx] = useState(0);
@@ -2688,20 +2711,32 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
   const current = items[selIdx] || items[0];
 
   if (items.length === 0) return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-popIn" style={{
-        width: 110, height: 110, borderRadius: "50%",
-        background: "linear-gradient(135deg, rgba(104,38,42,.08), rgba(201,148,26,.1))",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "var(--k-maroon)",
-      }}>
-        <Shirt size={52} strokeWidth={1.6} />
+    <div className="k-shell">
+      <KioskHeader
+        trialCount={items.length}
+        wardrobeCount={wardrobeItems.length}
+        cartCount={cartCount}
+        goHome={onGoHome}
+        triggerLogout={onLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+        <div className="k-popIn" style={{
+          width: 110, height: 110, borderRadius: "50%",
+          background: "linear-gradient(135deg, rgba(104,38,42,.08), rgba(201,148,26,.1))",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--k-maroon)",
+        }}>
+          <Shirt size={52} strokeWidth={1.6} />
+        </div>
+        <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, color: "var(--k-text)", marginTop: 18 }}>Trial Room Empty</h2>
+        <p className="k-slideUp k-d3" style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Select sarees from the catalog to get started</p>
+        <button onClick={onGoHome} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp k-d4" style={{ marginTop: 22, padding: "14px 32px", fontSize: 16, fontWeight: 600 }}>
+          Browse Sarees <ChevronRight size={18} />
+        </button>
       </div>
-      <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, color: "var(--k-text)", marginTop: 18 }}>Trial Room Empty</h2>
-      <p className="k-slideUp k-d3" style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Select sarees from the catalog to get started</p>
-      <button onClick={onGoHome} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp k-d4" style={{ marginTop: 22, padding: "14px 32px", fontSize: 16, fontWeight: 600 }}>
-        Browse Sarees <ChevronRight size={18} />
-      </button>
     </div>
   );
 
