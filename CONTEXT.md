@@ -210,6 +210,27 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Multi-image gallery on product detail + trial-room timer extended
+
+- **Why (gallery):** sarees in the new Catelog-21 batch ship with 4 product images each (`imageIds[]`), but [components/SareeThumb.tsx](components/SareeThumb.tsx) only ever rendered `imageIds[0]`. The remaining 3 images per saree were sitting in Convex Storage with no UI to view them. Customers in the kiosk and staff in the tablet detail view need an e-commerce-style gallery with arrows/dots/swipe to browse all four.
+- **Component:** new [components/SareeImageGallery.tsx](components/SareeImageGallery.tsx) wraps `SareeThumb` per-image. Behavior:
+  - **0 or 1 images** → falls through to plain `SareeThumb`. No arrows, no dots, no swipe handlers attached. Older seeded sarees (still 0–1 images) render unchanged.
+  - **≥ 2 images** → 44px circular chevron buttons left/right (semi-transparent dark bg, white icon), animated dot pill at bottom-center (active dot widens to 22px), touch swipe with a 40-px threshold via `touchstart`/`touchend`.
+  - Arrows **disable at the ends** (no wraparound) so the affordance stays clear — preferred over wrap-around per spec.
+  - Click handlers `e.stopPropagation()` so an arrow tap doesn't bubble to the surrounding "tap card" handler in either surface.
+- **Surfaces wired** — only product-detail surfaces:
+  - [app/tablet/catalogue/[id]/page.tsx](app/tablet/catalogue/[id]/page.tsx) hero image (replaces direct `SareeThumb`).
+  - [app/kiosk/page.tsx](app/kiosk/page.tsx) `ProductDetailScreen` hero (replaces direct `SareeThumb`).
+- **Surfaces NOT wired** (intentionally): grid cards on home/catalogue/wardrobe — those should stay tap-to-detail. Kiosk `TrialRoomScreen` full-bleed preview — that's the AI-render of the currently-selected saree, not a gallery moment.
+- **Why (trial timer):** customers were complaining the trial-room countdown was too short (3 min); the "Time's Up" popup also waited indefinitely for a response, which left abandoned sessions with PII on the mirror until staff intervened.
+- **Three CFG knobs in [app/kiosk/page.tsx](app/kiosk/page.tsx) `CFG`:**
+  - `tryOnSec: 240` — bumped from 180 (3 min → 4 min trial-room countdown).
+  - `trialEndAutoLogoutSec: 180` — new. The "Time's Up" popup now auto-fires `onLogout` after 3 minutes of no user response.
+  - `trialEndContinueSec: 120` — new. The "Continue" button adds 2 minutes to the trial timer (was hardcoded 60s).
+- **Auto-logout countdown UX:** the popup shows `Auto-logout in M:SS` in maroon so the customer sees the deadline. Re-initializes to 180s every time the popup opens (so a Continue → re-trigger sequence gets a fresh window). Both Continue and Logout cancel it (Continue by closing the popup; Logout by firing immediately).
+- **Files touched:** `components/SareeImageGallery.tsx` (new), `app/tablet/catalogue/[id]/page.tsx` (replaced SareeThumb in hero), `app/kiosk/page.tsx` (replaced SareeThumb in ProductDetailScreen hero, three CFG knobs, popup countdown UI + effect).
+- **Not done (flagged):** desktop-style thumbnail strip below the gallery — out of scope per "arrows + dots" answer; can layer on later if a desktop admin view ever shows the gallery. Pinch-zoom on the active image — not requested. Per-image lazy loading — `SareeThumb` already passes `loading="lazy"` on the `<img>`, so non-active images effectively don't fetch until selected. Keyboard arrow nav — kiosks/tablets are touch-first, no keyboard.
+
 ### Catelog-21 seed — 21-saree fresh catalog for ST-001 (dev only)
 
 - **Why:** ST-001's seeded catalog from `seed.ts` (the 14 sarees in section 8) was a hand-crafted demo set with mismatched/missing images and inconsistent metadata. A real product photoshoot bundle landed in `Catelog-21/` — 21 numbered subfolders (`01`–`21`), each with 4 product images plus an `Input Img.{png}` (the AI-input source for the photoshoot, not catalog content), plus a `Catelog-21 _ 060526_ Details.xlsx` with one row per saree (description, fabric, work, color, material/care, price). Goal: replace ST-001's catalog wholesale with these 21, each populated with all 4 images so the kiosk + tablet + RunPod try-on flows work against real product photography.
