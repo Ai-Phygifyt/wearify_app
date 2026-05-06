@@ -29,7 +29,9 @@ import { TailorDetailModal } from "./screens/TailorDetailModal";
 const CFG = {
   maxTrial: 5,
   maxWardrobe: 10,
-  tryOnSec: 180,
+  tryOnSec: 240, // 4-minute trial-room countdown
+  trialEndAutoLogoutSec: 180, // 3-min grace on the "Time's Up" popup before auto-logout
+  trialEndContinueSec: 120, // "Continue" button adds 2 minutes
   inactivitySec: 300,
   scanValidMonths: 6,
 };
@@ -2646,9 +2648,29 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
   const [selIdx, setSelIdx] = useState(0);
   const [selForWard, setSelForWard] = useState<Set<string>>(new Set());
   const [showEnd, setShowEnd] = useState(false);
+  const [endCountdown, setEndCountdown] = useState(CFG.trialEndAutoLogoutSec);
   const [retakeOpen, setRetakeOpen] = useState(false);
 
   useEffect(() => { if (timer <= 0) { setShowEnd(true); return; } const t = setTimeout(() => setTimer((v) => v - 1), 1000); return () => clearTimeout(t); }, [timer]);
+
+  // Auto-logout grace timer on the "Time's Up" popup. Re-initializes every
+  // time the popup opens so a Continue → re-trigger sequence gets a fresh
+  // 3-minute window. Cleared when the popup closes (Continue button) or
+  // when the user explicitly hits Logout.
+  useEffect(() => {
+    if (!showEnd) return;
+    setEndCountdown(CFG.trialEndAutoLogoutSec);
+  }, [showEnd]);
+
+  useEffect(() => {
+    if (!showEnd) return;
+    if (endCountdown <= 0) {
+      onLogout();
+      return;
+    }
+    const t = setTimeout(() => setEndCountdown((v) => v - 1), 1000);
+    return () => clearTimeout(t);
+  }, [showEnd, endCountdown, onLogout]);
 
   // Close the Retake confirm modal when the session-end overlay takes over —
   // both use .k-overlay (z-index 100), so without this the retake modal would
@@ -2841,18 +2863,21 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
         <div className="k-overlay">
           <div className="k-modal k-scaleIn" style={{ maxWidth: 400 }}>
             <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Time&apos;s Up!</h3>
-            <p style={{ fontSize: 15, color: "var(--k-text-muted)", marginBottom: 20 }}>Session ending. Continue or logout?</p>
+            <p style={{ fontSize: 15, color: "var(--k-text-muted)", marginBottom: 8 }}>Session ending. Continue or logout?</p>
+            <p style={{ fontSize: 13, color: "var(--k-red)", fontWeight: 600, marginBottom: 20 }}>
+              Auto-logout in {Math.floor(endCountdown / 60)}:{String(endCountdown % 60).padStart(2, "0")}
+            </p>
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={onLogout} className="k-press" style={{
                 flex: 1, padding: 16, borderRadius: "var(--k-r-pill)",
                 background: "var(--k-red)", color: "#fff", border: "none",
                 fontSize: 16, fontWeight: 600, cursor: "pointer",
               }}>Logout</button>
-              <button onClick={() => { setTimer((v) => v + 60); setShowEnd(false); }} className="k-press" style={{
+              <button onClick={() => { setTimer((v) => v + CFG.trialEndContinueSec); setShowEnd(false); }} className="k-press" style={{
                 flex: 1, padding: 16, borderRadius: "var(--k-r-pill)",
                 background: "transparent", border: "1.5px solid var(--k-border)",
                 fontSize: 16, fontWeight: 600, cursor: "pointer",
-              }}>Continue (+1 min)</button>
+              }}>Continue (+2 min)</button>
             </div>
           </div>
         </div>
