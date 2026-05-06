@@ -2314,6 +2314,22 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, shortlistedItems, onPro
                   isSelected={selectedIds.has(s._id)} isInTrial={isInTrial(s._id)} isInWardrobe={isInWardrobe(s._id)} />
               ))}
             </ScrollSection>
+
+            {/* All sarees — full grid below the curated rails so customers
+                aren't capped at the 16 visible in Trending + New Arrivals.
+                Uses the same grid layout as the filtered-results view. */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", marginBottom: 14 }}>
+                <div className="k-display" style={{ fontSize: 20 }}>All Sarees</div>
+                <div style={{ fontSize: 13, color: "var(--k-text-muted)" }}>{sarees.length} {sarees.length === 1 ? "item" : "items"}</div>
+              </div>
+              <div style={{ padding: "0 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+                {sarees.map((s) => (
+                  <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} onCheck={() => toggleSelect(s)}
+                    isSelected={selectedIds.has(s._id)} isInTrial={isInTrial(s._id)} isInWardrobe={isInWardrobe(s._id)} />
+                ))}
+              </div>
+            </div>
           </>
         )}
       </div>
