@@ -64,6 +64,13 @@ export default function EditProfilePage() {
   const [heightCm, setHeightCmState] = useState<number>(160);
   const [ftVal, setFtVal] = useState<number>(5);
   const [inVal, setInVal] = useState<number>(3);
+  // Mid-typing string mirrors of the height inputs. Numeric state has range
+  // clamps that would snap a half-typed value (e.g. user types "1" en route
+  // to "175" and the input snaps back to MIN_HEIGHT_CM=120). Keeping the
+  // displayed text in raw form while typing fixes that — clamp only on blur.
+  const [heightCmInput, setHeightCmInput] = useState<string>("160");
+  const [ftInput, setFtInput] = useState<string>("5");
+  const [inInput, setInInput] = useState<string>("3");
   const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
   const [photoFileId, setPhotoFileId] = useState<Id<"_storage"> | null>(null);
@@ -82,9 +89,12 @@ export default function EditProfilePage() {
     const h = (customer as Record<string, unknown>).heightCm as number | undefined;
     if (typeof h === "number") {
       setHeightCmState(h);
+      setHeightCmInput(String(h));
       const ftIn = cmToFtIn(h);
       setFtVal(ftIn.ft);
       setInVal(ftIn.inch);
+      setFtInput(String(ftIn.ft));
+      setInInput(String(ftIn.inch));
     }
     const hu = (customer as Record<string, unknown>).heightUnit as string | undefined;
     if (hu === "ftin") setHeightUnit("ftin");
@@ -111,19 +121,64 @@ export default function EditProfilePage() {
     return (v: T) => { setter(v); setDirty(true); };
   }
 
-  function setHeightCm(n: number) {
-    const clamped = Math.min(MAX_HEIGHT_CM, Math.max(MIN_HEIGHT_CM, Math.round(n)));
+  // Live updates while the user types in the cm field — accept any
+  // number so we don't clamp mid-keystroke. Updates the linked ft/in
+  // state for the unit-toggle but doesn't reformat the user's input.
+  function onHeightCmChange(raw: string) {
+    setHeightCmInput(raw);
+    setDirty(true);
+    const n = Number(raw);
+    if (raw.trim() !== "" && Number.isFinite(n)) {
+      setHeightCmState(n);
+      const ftIn = cmToFtIn(n);
+      setFtVal(ftIn.ft);
+      setInVal(ftIn.inch);
+      setFtInput(String(ftIn.ft));
+      setInInput(String(ftIn.inch));
+    }
+  }
+  // On blur, snap the value into [MIN, MAX] and rewrite the input
+  // string to the clamped value so the user sees what got committed.
+  function onHeightCmBlur() {
+    const parsed = Number(heightCmInput);
+    const safe = Number.isFinite(parsed) ? Math.round(parsed) : heightCm;
+    const clamped = Math.min(MAX_HEIGHT_CM, Math.max(MIN_HEIGHT_CM, safe));
     setHeightCmState(clamped);
+    setHeightCmInput(String(clamped));
     const ftIn = cmToFtIn(clamped);
     setFtVal(ftIn.ft);
     setInVal(ftIn.inch);
-    setDirty(true);
+    setFtInput(String(ftIn.ft));
+    setInInput(String(ftIn.inch));
   }
-  function setHeightFromFtIn(ft: number, inch: number) {
-    setFtVal(ft);
-    setInVal(inch);
-    setHeightCmState(ftInToCm(ft, inch));
+  function onFtInChange(rawFt: string, rawIn: string) {
+    setFtInput(rawFt);
+    setInInput(rawIn);
     setDirty(true);
+    const ft = Number(rawFt);
+    const inch = Number(rawIn);
+    if (rawFt.trim() !== "" && Number.isFinite(ft) && rawIn.trim() !== "" && Number.isFinite(inch)) {
+      setFtVal(ft);
+      setInVal(inch);
+      const cm = ftInToCm(ft, inch);
+      setHeightCmState(cm);
+      setHeightCmInput(String(cm));
+    }
+  }
+  function onFtInBlur() {
+    const ft = Number(ftInput);
+    const inch = Number(inInput);
+    const safeFt = Number.isFinite(ft) ? Math.round(ft) : ftVal;
+    const safeIn = Number.isFinite(inch) ? Math.round(inch) : inVal;
+    const clampedFt = Math.min(7, Math.max(3, safeFt));
+    const clampedIn = Math.min(11, Math.max(0, safeIn));
+    setFtVal(clampedFt);
+    setInVal(clampedIn);
+    setFtInput(String(clampedFt));
+    setInInput(String(clampedIn));
+    const cm = Math.min(MAX_HEIGHT_CM, Math.max(MIN_HEIGHT_CM, ftInToCm(clampedFt, clampedIn)));
+    setHeightCmState(cm);
+    setHeightCmInput(String(cm));
   }
 
   async function handlePhotoPick(file: File) {
@@ -299,20 +354,42 @@ export default function EditProfilePage() {
           </div>
         }>
           {heightUnit === "cm" ? (
-            <input type="number" min={MIN_HEIGHT_CM} max={MAX_HEIGHT_CM} value={heightCm}
-              onChange={(e) => setHeightCm(Number(e.target.value))} style={inputStyle} />
+            <input
+              type="number"
+              inputMode="numeric"
+              min={MIN_HEIGHT_CM}
+              max={MAX_HEIGHT_CM}
+              value={heightCmInput}
+              onChange={(e) => onHeightCmChange(e.target.value)}
+              onBlur={onHeightCmBlur}
+              style={inputStyle}
+            />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", border: "1.5px solid var(--cx-border)", borderRadius: 10, background: "white", overflow: "hidden" }}>
-                <input type="number" min={3} max={7} value={ftVal}
-                  onChange={(e) => setHeightFromFtIn(Number(e.target.value), inVal)}
-                  style={{ ...inputStyle, border: "none", flex: 1 }} />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={3}
+                  max={7}
+                  value={ftInput}
+                  onChange={(e) => onFtInChange(e.target.value, inInput)}
+                  onBlur={onFtInBlur}
+                  style={{ ...inputStyle, border: "none", flex: 1 }}
+                />
                 <span style={{ paddingRight: 12, fontSize: 12, color: "var(--cx-text-muted)" }}>ft</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", border: "1.5px solid var(--cx-border)", borderRadius: 10, background: "white", overflow: "hidden" }}>
-                <input type="number" min={0} max={11} value={inVal}
-                  onChange={(e) => setHeightFromFtIn(ftVal, Number(e.target.value))}
-                  style={{ ...inputStyle, border: "none", flex: 1 }} />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={11}
+                  value={inInput}
+                  onChange={(e) => onFtInChange(ftInput, e.target.value)}
+                  onBlur={onFtInBlur}
+                  style={{ ...inputStyle, border: "none", flex: 1 }}
+                />
                 <span style={{ paddingRight: 12, fontSize: 12, color: "var(--cx-text-muted)" }}>in</span>
               </div>
             </div>
