@@ -346,7 +346,7 @@ export default function EditProfilePage() {
           //   - saved   → gold-ghost background, dark gold text (resolved/idle)
           ...(dirty
             ? {
-                background: "var(--cx-grad-plum)",
+                background: "var(--cx-primary)",
                 color: "white",
                 border: "none",
                 opacity: saving ? 0.7 : 1,
