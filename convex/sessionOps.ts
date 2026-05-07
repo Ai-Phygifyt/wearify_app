@@ -376,12 +376,20 @@ export const listByCustomer = query({
       .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
       .order("desc")
       .take(200);
-    // Enrich with saree cover image so /c/looks can fall back when the look
-    // itself has no imageFileId (e.g. try-ons produced before image capture).
+    // Only surface completed AI try-ons. queued / processing / failed /
+    // abandoned looks would otherwise fall back to the saree's model
+    // catalog photo (no imageFileId yet) and surface as "look" cards
+    // with a model-wearing-saree image — confusing the customer into
+    // thinking that's their try-on render. Filter them out at source.
+    const completed = looks.filter((l) => l.status === "completed");
+    // Enrich with saree fallback. Prefer slot 3 (flat-lay, no model)
+    // over slot 0 (model shot) — defense in depth in case a completed
+    // look somehow lacks imageFileId.
     return await Promise.all(
-      looks.map(async (l) => {
+      completed.map(async (l) => {
         const saree = await ctx.db.get(l.sareeId);
-        const sareeImageId = saree?.imageIds?.[0];
+        const sareeImageId =
+          saree?.imageIds?.[3] ?? saree?.imageIds?.[2] ?? saree?.imageIds?.[0];
         return {
           ...l,
           sareeImageId,
@@ -402,15 +410,16 @@ export const listBySession = query({
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
       .order("desc")
       .take(200);
-    // Enrich with saree fields so consumers (e.g. the "From the Same
-    // Session" rail on /c/looks/[id]) can fall back to the catalog photo
-    // when look.imageFileId is empty. Mirrors the listByCustomer shape.
-    const sarees = await Promise.all(looks.map((l) => ctx.db.get(l.sareeId)));
-    return looks.map((l, i) => {
+    // Same completed-only filter and flat-lay fallback as listByCustomer.
+    // See the rationale comments there.
+    const completed = looks.filter((l) => l.status === "completed");
+    const sarees = await Promise.all(completed.map((l) => ctx.db.get(l.sareeId)));
+    return completed.map((l, i) => {
       const saree = sarees[i];
       return {
         ...l,
-        sareeImageId: saree?.imageIds?.[0],
+        sareeImageId:
+          saree?.imageIds?.[3] ?? saree?.imageIds?.[2] ?? saree?.imageIds?.[0],
         sareeGrad: saree?.grad,
         sareeEmoji: saree?.emoji,
       };
