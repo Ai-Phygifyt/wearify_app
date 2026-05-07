@@ -210,6 +210,69 @@ npx convex run seed:seedAll '{}'   # Seed demo data
 
 Reverse-chronological. Each entry = a reason-to-exist for surrounding code. When extending or changing any of these, read the rationale first so you don't regress the intent.
 
+### Wardrobe shows the AI try-on render as the thumbnail
+
+- **Why:** `/c/wardrobe` and the kiosk wardrobe screen both rendered the saree's catalog photo as the thumbnail. Customers couldn't see "themselves" wearing the saree once they moved it from trial to wardrobe — visually identical to a regular product browse. The AI render exists on the corresponding `looks.imageFileId`; the wardrobe row just didn't link to it.
+- **Schema:** new optional `wardrobe.lookId: v.id("looks")`. Records the look that was active when the customer hit "Add to wardrobe" inside the trial room. Optional because: (a) older rows pre-shipping this field, (b) the customer can move trial → wardrobe before the AI render completes (3A: allowed by design, the render shows up reactively when ready), (c) guest paths.
+- **Backend:**
+  - `addToWardrobe` accepts optional `lookId`. The dedup branch (when re-adding the same saree) patches `lookId` onto the existing row if it was missing — covers the "moved before render finished, re-added later" path.
+  - `listWardrobeByCustomer` resolves the linked look and returns `lookImageFileId` only when `look.status === "completed"`. So a still-queued look doesn't surface a half-rendered image.
+  - Catalog fallback chain switched from `imageIds[0]` to `imageIds[3] → [2] → [0]` — same flat-lay-first order used by the try-on garment input. Avoids the model-leak that `imageIds[0]` (model-wearing-saree shot) caused.
+- **Kiosk:**
+  - `TrialRoomScreen.onAddToWardrobe` passes `sareeLookIds[item._id]` through to `addToWardrobeMut`. `sareeLookIds` is already populated by the `runTryOn` `.then()` callback when each render completes.
+  - Parent component derives `wardrobeLookImages: Record<sareeId, fileId>` reactively from `savedWardrobe.lookImageFileId`. Passed to `WardrobeScreen` as a `lookImages` prop.
+  - `WardrobeScreen` thumbnail prefers `lookImages[saree._id]` over `saree.imageIds[3]/[2]/[0]`. `SareeThumb`'s existing fallback chain handles the case where neither resolves (gradient + emoji).
+- **Customer PWA:** `/c/wardrobe`'s `<Thumb>` now reads `w.lookImageFileId ?? w.sareeImageId`. Convex's reactive subscription means a render that finishes after the customer is already viewing `/c/wardrobe` will swap in automatically — no refresh needed.
+- **Backfill:** new `backfillWardrobeLookIds` `internalMutation` walks every wardrobe row missing `lookId`, finds a matching completed look (same session preferred, else most recent completed look for that customer + saree), patches the row. Idempotent — re-runs are no-ops once linked. Run on dev: `25 scanned, 2 patched, 23 noMatch`. The 23 unmatched rows fall through to the flat-lay catalog photo, which is correct for orphan / pre-AI rows.
+- **Race the design accepts (3A):** customer hits "Add to wardrobe" while the AI render is still queued. Wardrobe row is created with `lookId` pointing at the queued look. `listWardrobeByCustomer` returns `lookImageFileId: undefined` because the status isn't `completed` yet. Thumbnail falls back to slot 3. When the look completes (status flips reactively), the query re-runs and the AI render appears in-place. No customer action needed.
+- **What I deliberately did NOT touch:** kiosk `OrderScreen` (cart) thumbnails — those are still catalog photos. The cart represents items being purchased, not "the customer wearing them." Different surface, different intent.
+- **Files touched:** `convex/schema.ts` (new field), `convex/sessionOps.ts` (mutation accepts lookId, query joins look, dedup-patch path, backfill mutation), `app/kiosk/page.tsx` (call-site pass-through, parent map, WardrobeScreen prop), `app/c/wardrobe/page.tsx` (Thumb fallback chain).
+
+### Try-on uses flat-lay slot 3, not model-shot slot 0
+
+- **Why:** the AI try-on was treating the customer's saree input image as "the whole scene" — copying body shape, hair, and face from whoever was modelling the saree in the catalog photo onto the customer in the output render. Visually wrong and creepy. Customer reported seeing "themselves with someone else's body" in `/c/looks`.
+- **Root cause:** `convex/tryOn.ts` Step 7 (initial garment resolution) and `retryLook` both used `saree.imageIds[0]` as the garment input. Slot 0 is the front-facing model-wearing-saree shot in every Catelog-21 retailer upload. The RunPod model treats whatever it gets as a reference and bleeds the model into the output.
+- **Inspection** of folders 01 / 05 / 11 / 15 in `Catelog-21/` confirmed the convention across the catalog drop:
+  - Slot 0 (`01.*`) — front pose, full model
+  - Slot 1 (`02.*`) — alternate pose, full model
+  - Slot 2 (`03.*`) — closeup of border embroidery (sometimes hands)
+  - **Slot 3 (`04.*`) — flat-lay top-down of the full saree, no model**. `imageIds[3]` is reliably a clean garment shot.
+- **Fix:** garment resolution chain in both `runTryOn` (Step 7) and `retryLook` is now `imageIds[3] → imageIds[2] → imageIds[0]`. Slot 3 first means the AI sees only fabric — the only "human" reference comes from the customer's own `bodyScanFileId`. Body / face / hair leak eliminated.
+- **One iteration:** first attempt was `imageIds[2]` (commit `0e5f809`). That helped most cases but still leaked sometimes because slot 2's closeups occasionally included hands. Bumped to slot 3 (commit `e25ed24`).
+- **Existing in-flight looks** (already inserted with a stored `garmentFileId` from the old chain) keep using whatever was picked at queue time. Only NEW try-ons starting from now use slot 3. Acceptable — the customer can retry and that uses `look.garmentFileId ?? saree.imageIds[3] → ...` so a retry on an old failed look picks up the new chain.
+- **Cleanup of sarees that can't comply** — separate commit `3904ad6`. New script `scripts/cleanup-flatlay-less-sarees.mjs` removed any saree whose `imageIds[3]` was missing. On dev: 4 sarees removed (ST-002 ×2, ST-003 ×2, all had 0 images). ST-001 retained all 21 Catelog-21 entries. ST-004 / ST-005 were already empty. Same dev-URL safety guard pattern as `seed-catelog21.mjs` — refuses prod, refuses unknown deployments without `FORCE=1`.
+- **`listByCustomer` + `listBySession` filter to `status === "completed"`** (commit `f1f0863`) — same root issue surfaced differently. A queued / processing / failed / abandoned look had no `imageFileId` yet, so `/c/looks` fell through the same `sareeImageId` chain and again surfaced the model-wearing shot. Filter at source: in-flight looks simply don't appear until they finish; failed / abandoned ones never appear. Convex's reactive subscription means a queued look auto-appears once it completes. Saree fallback chain in those queries also bumped to slot 3 → 2 → 0 (defense in depth, mostly moot after the status filter).
+- **`listWardrobeByCustomer`** (a separate query for saved-for-later items, not "AI try-on result") was deliberately NOT given the status filter — its semantics are different. Its catalog fallback chain WAS upgraded to slot 3 → 2 → 0 in the same pass, paired with the new wardrobe lookId lookup described in the next entry up.
+
+### `/c/looks` images, lightbox, and full-drape sizing
+
+- **`/c/looks/[id]` hero used to be gradient-only.** Detail page hero rendered a silk shimmer + cross-hatch pattern + generic saree-silhouette SVG, never the actual `look.imageFileId`. Even the catalog fallback wasn't wired. So every look detail showed the same placeholder regardless of what was tried on. Fixed by adding a `StoredImage` component with the priority chain `look.imageFileId → look.sareeImageId → gradient` (commit `c66e86c`). Decorations only render on the gradient-only path so they don't obscure a real image; bottom dark-to-transparent gradient stays for title legibility.
+- **"From the Same Session" rail** had the same bug (commit `a94ebfc`). Required enriching `convex/sessionOps.ts` `listBySession` with the saree join (`sareeImageId`, `sareeGrad`, `sareeEmoji`) — it had been returning raw look rows. Same shape as `listByCustomer` now so consumers don't care which query feeds the data.
+- **Recent Looks rail on `/c` home** (commit `790a7bd`) was rendering hard-coded `/kiosk/img1.jpg`–`img4.jpg` placeholders via a `pickImg(i+1)` helper — same content for every look. Replaced with the same priority chain via a new `LookTileImage` component. Also dropped the gold "LOOK" badge — redundant in a "Recent Looks" rail.
+- **Hero lightbox** (commit `b09261d`). Tap the hero on `/c/looks/[id]` → fullscreen modal with the image at `object-fit: contain` (full saree visible vs the hero crop). Z-index 1000, dark backdrop, body scroll locked, safe-area-inset padding for notched devices, close button (×) and backdrop tap dismiss. Back / wishlist / share buttons inside the hero now `stopPropagation()` so tapping them doesn't also open the lightbox. Cursor on the hero is `zoom-in` when there's a real image, `default` on the gradient fallback.
+- **Card / hero sizing** (commits `a0ff349`, `644c584`). Customer feedback: "the saree drape is cropped at the torso." Bumped:
+  - `/c/looks` list cards: `140 → 240` (≈1.4:1 portrait at ~170px width on phones)
+  - `/c/looks/[id]` hero: `360 → 520` (full head-to-hem)
+  - "From the Same Session" rail: `130 × 130 → 150 × 210` (1:1.4 portrait)
+
+### `/c/me` mobile polish + nav-sticky fix
+
+- **Bottom nav was scrolling away on mobile** (commit `f99473d`). The nav used `position: sticky; bottom: 0;` but its parent `.cx-shell` had `overflow: hidden` and the inner `.cx-screen` was the actual scroll container. Sticky needs the element to be inside the scrolling ancestor — the nav was a sibling, so sticky silently fell back to static at the bottom of the shell. On viewport-sized devices the whole shell scrolled with the page, taking the nav with it. **Fix:** moved scroll from `.cx-screen` to `.cx-shell` (`overflow-x: hidden; overflow-y: auto; max-height: 100svh`). Nav as the last flex child + sticky bottom: 0 now resolves correctly. Mirror change in the tablet+ media query (windowed shell). The previous `.cx-shell { overflow: hidden }` clipped rounded corners — now achieved via `overflow-x: hidden` alone.
+- **Profile photo on `/c/me` hero** (commit `5e7e771`). The hero rendered initials only, even when the customer had uploaded a photo via Edit Profile. Now reads `customer.photoFileId`, resolves via `useConvexUrl`, renders an `<img>` cropped into the existing 64×64 gold-bordered circle. Falls back to italic-serif initials when no photo.
+- **`/c/me` hero compaction** (commit `b7c701b`). On a 360×640 phone the hero + zari decoration + stats + My Stores combined ate ~390px before any menu row — only 1–2 rows visible above the fold. Reclaimed ~50–60px by tightening hero padding (24/22 → 16/16), shrinking avatar (64 → 56, font 22 → 19), trimming brand-row marginBottom (14 → 10) and font (17 → 15), and removing the decorative `cx-zari` line below the hero. All overrides are inline on this page so other heroes (e.g. `/c` home) are unaffected.
+- **Tap-target audit:** `.cx-row` is a full-width `<button>` at ~70px tall — the icon container being 42px doesn't matter for touch. Bottom-nav items are ~50px × ~90px. All ≥ 44px. No fix needed.
+- **`/c/me/profile` Save button polish** (commits `8123d4e`, `077e769`).
+  - Was: plum gradient at `opacity: 0.5` when saved (idle, no dirty changes) → white text washed out on beige page background.
+  - Three explicit states now: **Save Changes** (solid `var(--cx-primary)` maroon, white text, gold shadow), **Saving...** (same maroon at 0.7 opacity), **✓ Saved** (gold-ghost background, dark-gold text, gold-glow border, checkmark glyph). No layout shift, no opacity ambiguity.
+  - First pass used a plum gradient on Save Changes; flipped to solid maroon (`077e769`) per user preference for cleaner non-gradient brand.
+- **Height input no longer snaps mid-keystroke** (commit `8125b65`). `setHeightCm` clamped to `[MIN_HEIGHT_CM, MAX_HEIGHT_CM]` on every onChange. Browser select-all-on-focus + typing `1` (en route to `175`) → state clamped to `120` → input snapped back. Field was effectively uneditable without using the spinner. **Fix:** new string-state mirrors (`heightCmInput` / `ftInput` / `inInput`) bound to the input's `value`. onChange updates the string + the underlying numeric state without clamping. onBlur clamps and rewrites the input string to the clamped value. Live "X ft Y in" helper updates as you type. Added `inputMode="numeric"` so iOS/Android shows the numeric keypad.
+
+### Kiosk: 'All Sarees' grid below New Arrivals
+
+- **Why:** the kiosk home was rendering only Trending Now (`sarees.slice(0, 8)`) + New Arrivals (`reverse().slice(0, 8)`) — capped at ~16 visible. For ST-001 with 21 sarees, customers had to type in the search bar or apply a filter to see the rest. There was no "browse all" affordance.
+- **Fix:** new "All Sarees" `<ScrollSection>` rendered below New Arrivals when no filter is active. Uses the same `repeat(auto-fill, minmax(160px, 1fr))` grid as the filtered-results view for visual consistency. Inline `{n} items` counter on the section header. Curated rails (Trending / New Arrivals / Shortlisted) remain on top so the "pick of the day" affordance is preserved.
+- **Files touched:** `app/kiosk/page.tsx` HomeScreen — single insertion below the New Arrivals `ScrollSection`.
+
 ### Trial-empty header + checkout actually removes wardrobe rows
 
 - **Why (trial-empty header):** the `TrialRoomScreen` empty branch (when `items.length === 0`) returned a centered-only layout with no top bar. Customer could only escape via the inline "Browse Sarees" button — no path to wardrobe / cart / logout from an empty trial. Felt like a stuck screen.
