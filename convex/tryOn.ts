@@ -545,8 +545,12 @@ export const runTryOn = action({
 
     // -----------------------------------------------------------------
     // STEP 7 — saree image present
+    // Prefer imageIds[2] (the 3rd photo) since retailers upload the
+    // full drape / back view at slot 3 — best signal for the try-on
+    // model. Falls back to slot 0 for sarees that have fewer than 3
+    // images (older seeded entries).
     // -----------------------------------------------------------------
-    const garmentFileId = saree.imageIds?.[0];
+    const garmentFileId = saree.imageIds?.[2] ?? saree.imageIds?.[0];
     if (!garmentFileId) {
       throw new Error("INTERNAL: saree has no image");
     }
@@ -931,7 +935,10 @@ export const retryLook = action({
     if (!personFileId) {
       throw new Error("NO_BODY_SCAN: please complete a body scan first");
     }
-    const garmentFileId = look.garmentFileId ?? saree.imageIds?.[0];
+    // Same imageIds[2] preference as the initial runTryOn — when a retry
+    // doesn't have a stored garmentFileId, prefer the 3rd image (full
+    // drape/back view) and fall back to the 1st.
+    const garmentFileId = look.garmentFileId ?? saree.imageIds?.[2] ?? saree.imageIds?.[0];
     if (!garmentFileId) {
       throw new Error("INTERNAL: saree has no image");
     }
