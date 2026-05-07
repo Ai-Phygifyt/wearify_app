@@ -568,13 +568,13 @@ export default function LookDetailPage() {
                   className={`cx-scaleIn ${delayClass} cx-hover-lift cx-silk`}
                   onClick={() => router.push(`/c/looks/${sl._id}`)}
                   style={{
-                    flexShrink: 0, width: 130, borderRadius: P.r,
+                    flexShrink: 0, width: 150, borderRadius: P.r,
                     overflow: "hidden", cursor: "pointer",
                     background: P.white, boxShadow: P.shadow,
                   }}
                 >
                   <div style={{
-                    height: 130, position: "relative",
+                    height: 210, position: "relative",
                     background: `linear-gradient(135deg, ${slGrad[0]}, ${slGrad[1] || slGrad[0]})`,
                   }}>
                     {slImageFileId ? (
