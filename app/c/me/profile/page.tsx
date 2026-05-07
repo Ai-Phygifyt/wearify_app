@@ -335,13 +335,32 @@ export default function EditProfilePage() {
 
       <button onClick={handleSave} disabled={saving || !dirty || photoUploading}
         style={{
-          width: "100%", marginTop: 24, padding: "14px 20px", borderRadius: 10, border: "none",
-          background: "var(--cx-grad-plum)", color: "white", fontSize: 15, fontWeight: 700,
-          cursor: saving || !dirty ? "not-allowed" : "pointer",
-          opacity: saving || !dirty ? 0.5 : 1,
-          boxShadow: "var(--cx-shadow-gold)", fontFamily: "inherit",
+          width: "100%", marginTop: 24, padding: "14px 20px", borderRadius: 10,
+          fontSize: 15, fontWeight: 700, fontFamily: "inherit",
+          cursor: saving || !dirty ? "default" : "pointer",
+          transition: "background .18s ease, color .18s ease, opacity .18s ease",
+          // Three distinct states so "Saved" reads cleanly instead of as a
+          // washed-out version of the active button:
+          //   - dirty   → plum gradient, white (call-to-action)
+          //   - saving  → plum gradient at 0.7 opacity, white (in-flight)
+          //   - saved   → gold-ghost background, dark gold text (resolved/idle)
+          ...(dirty
+            ? {
+                background: "var(--cx-grad-plum)",
+                color: "white",
+                border: "none",
+                opacity: saving ? 0.7 : 1,
+                boxShadow: "var(--cx-shadow-gold)",
+              }
+            : {
+                background: "var(--cx-gold-soft)",
+                color: "var(--cx-gold-d)",
+                border: "1px solid var(--cx-gold-glow)",
+                opacity: 1,
+                boxShadow: "none",
+              }),
         }}>
-        {saving ? "Saving..." : dirty ? "Save Changes" : "Saved"}
+        {saving ? "Saving..." : dirty ? "Save Changes" : "✓ Saved"}
       </button>
 
       {toast && (
