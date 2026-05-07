@@ -5,6 +5,24 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "./layout";
 import { useRouter } from "next/navigation";
+import { Id } from "@/convex/_generated/dataModel";
+
+// Convex-storage image loader for the Recent Looks tiles. Returns null
+// while the URL is resolving so the parent's gradient/decoration can
+// stand in until the real image lands.
+function LookTileImage({ fileId, alt }: { fileId: Id<"_storage">; alt: string }) {
+  const url = useQuery(api.files.getUrl, { fileId });
+  if (!url) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={alt}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+      loading="lazy"
+    />
+  );
+}
 import {
   Sparkles,
   Wallet,
@@ -438,6 +456,14 @@ export default function CustomerHomePage() {
 
           <div className="cx-no-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 18px" }}>
             {recentLooks.map((look: Record<string, unknown>, i: number) => {
+              // Real image priority: AI try-on render → catalog photo → gradient.
+              // Drops the old hard-coded /kiosk/img*.jpg placeholders and the
+              // gold "LOOK" badge (redundant inside a "Recent Looks" rail).
+              const imageFileId = (look.imageFileId ?? look.sareeImageId) as Id<"_storage"> | undefined;
+              const grad = (look.grad ?? look.sareeGrad) as string[] | undefined;
+              const fallbackBg = grad && grad.length
+                ? `linear-gradient(135deg, ${grad[0]}, ${grad[1] ?? grad[0]})`
+                : "linear-gradient(135deg, #71221D, #D4A843)";
               return (
                 <div
                   key={look._id as string}
@@ -446,12 +472,15 @@ export default function CustomerHomePage() {
                   style={{ flexShrink: 0, width: 156, cursor: "pointer", animationDelay: `${0.05 * i}s` }}
                 >
                   <div
-                    className="cx-tile-img cx-silk"
+                    className="cx-silk"
                     style={{
+                      position: "relative",
                       height: 180,
-                      backgroundImage: `url(${pickImg(i + 1)})`,
+                      overflow: "hidden",
+                      background: fallbackBg,
                     }}
                   >
+                    {imageFileId && <LookTileImage fileId={imageFileId} alt={look.sareeName as string} />}
                     {(look.storeId as string) && (
                       <div
                         style={{
@@ -471,24 +500,6 @@ export default function CustomerHomePage() {
                         {look.storeId as string}
                       </div>
                     )}
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 8,
-                        right: 8,
-                        background: "var(--cx-grad-gold)",
-                        borderRadius: "var(--cx-r-pill)",
-                        padding: "3px 8px",
-                        fontSize: 9,
-                        fontWeight: 700,
-                        color: "var(--cx-primary-d)",
-                        letterSpacing: ".04em",
-                        zIndex: 2,
-                      }}
-                    >
-                      <Heart size={9} strokeWidth={2.5} style={{ marginRight: 3, verticalAlign: "-1px" }} />
-                      LOOK
-                    </div>
                   </div>
                   <div style={{ padding: "8px 10px 10px" }}>
                     <div className="cx-truncate" style={{ fontSize: 13, fontWeight: 700, color: "var(--cx-text)" }}>
