@@ -6,6 +6,21 @@ import { useCustomer } from "../../layout";
 import { useRouter, useParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 
+// Renders an actual stored image when a fileId resolves; null otherwise so
+// the parent's gradient/silhouette decoration shows through as fallback.
+function StoredImage({ fileId, alt }: { fileId: Id<"_storage">; alt: string }) {
+  const url = useQuery(api.files.getUrl, { fileId });
+  if (!url) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={alt}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+    />
+  );
+}
+
 /* ── colour tokens (inline) ──────────────────────────────────────── */
 const P = {
   plum: "#8B2E2B", plumD: "#5E1A18", plumL: "#A94540", plumGhost: "#F5E6E3",
@@ -151,6 +166,9 @@ export default function LookDetailPage() {
   }
 
   const grad = look.grad || ["#71221D", "#D4A843"];
+  // Priority: AI try-on render → saree catalog photo → gradient placeholder.
+  // Mirrors the /c/looks list-page chain so detail and list stay consistent.
+  const heroImageFileId = (look.imageFileId ?? look.sareeImageId) as Id<"_storage"> | undefined;
   const shareMessage = encodeURIComponent(
     `Check out this beautiful ${look.sareeName} saree I tried on at Wearify! ${look.price ? fmt(look.price) : ""}`
   );
@@ -188,40 +206,47 @@ export default function LookDetailPage() {
   return (
     <div className="cx-pageIn" style={{ background: P.ivory, minHeight: "100%" }}>
 
-      {/* ── 1. Full-bleed gradient hero ─────────────────────────── */}
+      {/* ── 1. Full-bleed hero — image when available, gradient fallback ── */}
       <div style={{
-        height: 300, position: "relative", overflow: "hidden",
+        height: 360, position: "relative", overflow: "hidden",
         background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
       }}>
-        <SilkOverlay />
+        {/* Real image (AI try-on render or catalog photo). Falls through to
+            the gradient + decorations if fileId doesn't resolve. */}
+        {heroImageFileId && <StoredImage fileId={heroImageFileId} alt={look.sareeName} />}
 
-        {/* cross-hatch SVG overlay */}
-        <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.14, pointerEvents: "none" }}>
-          <defs>
-            <pattern id="hero-hatch" width="14" height="14" patternUnits="userSpaceOnUse">
-              <path d="M0 14L14 0M-3 3L3 -3M11 17L17 11" stroke="#fff" strokeWidth=".6" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hero-hatch)" />
-        </svg>
+        {/* Decorations (silk shimmer, cross-hatch, silhouette) only show on
+            the placeholder path — would obscure a real image. */}
+        {!heroImageFileId && (
+          <>
+            <SilkOverlay />
+            <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.14, pointerEvents: "none" }}>
+              <defs>
+                <pattern id="hero-hatch" width="14" height="14" patternUnits="userSpaceOnUse">
+                  <path d="M0 14L14 0M-3 3L3 -3M11 17L17 11" stroke="#fff" strokeWidth=".6" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#hero-hatch)" />
+            </svg>
+            <svg
+              viewBox="0 0 120 160" width="90" height="120"
+              style={{
+                position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+                opacity: 0.22, pointerEvents: "none",
+              }}
+            >
+              <path d="M60 5 C30 5 20 35 20 65 C20 95 32 135 60 155 C88 135 100 95 100 65 C100 35 90 5 60 5Z" fill={P.goldL} />
+              <ellipse cx="60" cy="48" rx="10" ry="16" fill="none" stroke={P.goldL} strokeWidth="1.5" />
+              <circle cx="60" cy="36" r="3" fill={P.goldL} opacity=".5" />
+            </svg>
+          </>
+        )}
 
-        {/* saree silhouette */}
-        <svg
-          viewBox="0 0 120 160" width="90" height="120"
-          style={{
-            position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
-            opacity: 0.22, pointerEvents: "none",
-          }}
-        >
-          <path d="M60 5 C30 5 20 35 20 65 C20 95 32 135 60 155 C88 135 100 95 100 65 C100 35 90 5 60 5Z" fill={P.goldL} />
-          <ellipse cx="60" cy="48" rx="10" ry="16" fill="none" stroke={P.goldL} strokeWidth="1.5" />
-          <circle cx="60" cy="36" r="3" fill={P.goldL} opacity=".5" />
-        </svg>
-
-        {/* dark-to-transparent gradient at bottom */}
+        {/* dark-to-transparent gradient at bottom — keep on both paths so
+            the title overlay text stays legible against any image. */}
         <div style={{
-          position: "absolute", bottom: 0, left: 0, right: 0, height: 120,
-          background: "linear-gradient(to top, rgba(58, 15, 13, .7) 0%, transparent 100%)",
+          position: "absolute", bottom: 0, left: 0, right: 0, height: 140,
+          background: "linear-gradient(to top, rgba(28, 17, 8, .75) 0%, transparent 100%)",
           pointerEvents: "none",
         }} />
 
