@@ -21,6 +21,64 @@ function StoredImage({ fileId, alt }: { fileId: Id<"_storage">; alt: string }) {
   );
 }
 
+// Fullscreen lightbox — dark backdrop, contains image at object-fit: contain
+// so the whole frame is visible (vs the hero crop which is object-fit: cover).
+// Tap backdrop or close button to dismiss; body scroll is locked while open.
+function ImageLightbox({ fileId, alt, onClose }: { fileId: Id<"_storage">; alt: string; onClose: () => void }) {
+  const url = useQuery(api.files.getUrl, { fileId });
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0, 0, 0, 0.92)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px)",
+        animation: "cx-fadeIn 0.2s ease",
+      }}
+    >
+      <button
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        aria-label="Close"
+        className="cx-press"
+        style={{
+          position: "absolute",
+          top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+          right: 12,
+          width: 40, height: 40, borderRadius: "50%",
+          background: "rgba(255,255,255,.14)",
+          backdropFilter: "blur(8px)",
+          border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#fff", fontSize: 22, fontWeight: 300,
+          zIndex: 2,
+        }}
+      >
+        ×
+      </button>
+      {url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={alt}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            maxWidth: "100%", maxHeight: "100%",
+            objectFit: "contain",
+            borderRadius: 6,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 /* ── colour tokens (inline) ──────────────────────────────────────── */
 const P = {
   plum: "#8B2E2B", plumD: "#5E1A18", plumL: "#A94540", plumGhost: "#F5E6E3",
@@ -99,6 +157,7 @@ export default function LookDetailPage() {
   const lookId = params.id as Id<"looks">;
   const { customerId } = useCustomer();
   const [shared, setShared] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const allLooks = useQuery(
     api.sessionOps.listByCustomer,
@@ -207,12 +266,17 @@ export default function LookDetailPage() {
     <div className="cx-pageIn" style={{ background: P.ivory, minHeight: "100%" }}>
 
       {/* ── 1. Full-bleed hero — image when available, gradient fallback ── */}
-      <div style={{
-        height: 360, position: "relative", overflow: "hidden",
-        background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
-      }}>
+      <div
+        onClick={heroImageFileId ? () => setLightboxOpen(true) : undefined}
+        style={{
+          height: 360, position: "relative", overflow: "hidden",
+          background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
+          cursor: heroImageFileId ? "zoom-in" : "default",
+        }}
+      >
         {/* Real image (AI try-on render or catalog photo). Falls through to
-            the gradient + decorations if fileId doesn't resolve. */}
+            the gradient + decorations if fileId doesn't resolve. Tap to open
+            in a fullscreen lightbox. */}
         {heroImageFileId && <StoredImage fileId={heroImageFileId} alt={look.sareeName} />}
 
         {/* Decorations (silk shimmer, cross-hatch, silhouette) only show on
@@ -250,9 +314,10 @@ export default function LookDetailPage() {
           pointerEvents: "none",
         }} />
 
-        {/* back button (top-left) */}
+        {/* back button (top-left). stopPropagation so tapping it doesn't
+            also open the hero lightbox. */}
         <button
-          onClick={() => router.back()}
+          onClick={(e) => { e.stopPropagation(); router.back(); }}
           className="cx-press"
           style={{
             position: "absolute", top: 16, left: 16,
@@ -265,10 +330,11 @@ export default function LookDetailPage() {
           <BackArrow />
         </button>
 
-        {/* fav + share buttons (top-right) */}
+        {/* fav + share buttons (top-right) — stopPropagation for the same
+            reason as the back button. */}
         <div style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 10, zIndex: 5 }}>
           <button
-            onClick={toggleWishlist}
+            onClick={(e) => { e.stopPropagation(); toggleWishlist(); }}
             className="cx-press"
             aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
             style={{
@@ -282,7 +348,7 @@ export default function LookDetailPage() {
             <HeartIcon filled={wished} />
           </button>
           <button
-            onClick={handleShare}
+            onClick={(e) => { e.stopPropagation(); handleShare(); }}
             className="cx-press"
             style={{
               width: 38, height: 38, borderRadius: "50%", border: "none",
@@ -556,6 +622,14 @@ export default function LookDetailPage() {
           padding: "10px 18px", borderRadius: 100, background: P.plum, color: P.white,
           fontSize: 13, fontWeight: 600, boxShadow: P.shadowMd, zIndex: 50,
         }}>{toast}</div>
+      )}
+
+      {lightboxOpen && heroImageFileId && (
+        <ImageLightbox
+          fileId={heroImageFileId}
+          alt={look.sareeName}
+          onClose={() => setLightboxOpen(false)}
+        />
       )}
     </div>
   );
