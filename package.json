@@ -15,7 +15,8 @@
     "seed": "convex run seed:seedAll '{}'",
     "seed:relational": "convex run seed:seedRelational '{}'",
     "seed:saree-images": "node scripts/backfill-saree-images.mjs",
-    "seed:catelog21": "node scripts/seed-catelog21.mjs"
+    "seed:catelog21": "node scripts/seed-catelog21.mjs",
+    "cleanup:flatlay-less": "node scripts/cleanup-flatlay-less-sarees.mjs"
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.11.4",
