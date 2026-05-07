@@ -265,11 +265,13 @@ export default function LookDetailPage() {
   return (
     <div className="cx-pageIn" style={{ background: P.ivory, minHeight: "100%" }}>
 
-      {/* ── 1. Full-bleed hero — image when available, gradient fallback ── */}
+      {/* ── 1. Full-bleed hero — image when available, gradient fallback ──
+          Tall enough (520px) to show the full saree drape head-to-hem on a
+          typical phone screen without cropping at the knees. */}
       <div
         onClick={heroImageFileId ? () => setLightboxOpen(true) : undefined}
         style={{
-          height: 360, position: "relative", overflow: "hidden",
+          height: 520, position: "relative", overflow: "hidden",
           background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
           cursor: heroImageFileId ? "zoom-in" : "default",
         }}
