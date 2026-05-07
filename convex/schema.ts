@@ -733,6 +733,13 @@ export default defineSchema({
     accessories: v.optional(v.array(v.string())),
     neckline: v.optional(v.string()),
     price: v.optional(v.number()),
+    // Pointer to the AI try-on look that was active when the customer
+    // moved this saree from trial → wardrobe. listWardrobeByCustomer
+    // resolves this to look.imageFileId so /c/wardrobe + kiosk wardrobe
+    // show the customer-on-saree render instead of the catalog photo.
+    // Optional because rows from before this field shipped don't have it,
+    // and because the move can happen before the AI render completes.
+    lookId: v.optional(v.id("looks")),
     addedAt: v.number(),
   })
     .index("by_sessionId", ["sessionId"])

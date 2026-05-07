@@ -584,6 +584,20 @@ export default function KioskPage() {
     api.sessionOps.listCart,
     customerId && storeId ? { customerId, storeId } : "skip",
   );
+  // Reactive sareeId → AI-render fileId map for the wardrobe screen.
+  // listWardrobeByCustomer surfaces lookImageFileId per row when the
+  // wardrobe item is bound to a completed look. The screen renders this
+  // in preference to the catalog photo.
+  const wardrobeLookImages = React.useMemo(() => {
+    const m: Record<string, Id<"_storage">> = {};
+    if (savedWardrobe) {
+      for (const w of savedWardrobe) {
+        const fid = (w as { lookImageFileId?: Id<"_storage"> }).lookImageFileId;
+        if (fid) m[w.sareeId] = fid;
+      }
+    }
+    return m;
+  }, [savedWardrobe]);
   const hydratedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!customerId || !storeId || !allSarees) return;
@@ -994,6 +1008,12 @@ export default function KioskPage() {
               );
               // Only persist the fresh sarees. Server-side is idempotent now
               // too but skipping a round-trip when we know it's a no-op.
+              // Pass the AI try-on lookId (when one exists) so /c/wardrobe
+              // and the kiosk wardrobe surface the customer-on-saree render
+              // instead of the catalog photo. Per-customer sareeLookIds is
+              // populated by runTryOn .then() callbacks; for items added
+              // before the render completes, lookId stays undefined here
+              // and the customer can re-trigger by re-adding later.
               for (const item of fresh) {
                 addToWardrobeMut({
                   sessionId,
@@ -1001,6 +1021,7 @@ export default function KioskPage() {
                   sareeId: item._id,
                   sareeName: item.name,
                   price: item.price,
+                  lookId: sareeLookIds[item._id],
                 });
               }
               showToast(`Added ${fresh.length} to wardrobe`, "success");
@@ -1108,6 +1129,7 @@ export default function KioskPage() {
         return (
           <WardrobeScreen
             items={wardrobeItems}
+            lookImages={wardrobeLookImages}
             onMoveToCart={(items) => {
               setCartItems((prev) => {
                 const have = new Set(prev.map((s) => s._id));
@@ -2985,8 +3007,14 @@ function RetakeConfirmModal({
 }
 
 /* ── WARDROBE ── */
-function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, showToast, storeName, storeLogoFileId }: {
-  items: SareeItem[]; onMoveToCart: (items: SareeItem[]) => void;
+function WardrobeScreen({ items, lookImages, onMoveToCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, showToast, storeName, storeLogoFileId }: {
+  items: SareeItem[];
+  // sareeId → AI try-on render fileId. Built reactively from
+  // listWardrobeByCustomer in the parent. Empty object until the
+  // wardrobe query resolves; per-saree value undefined until that
+  // saree's bound look reaches status="completed".
+  lookImages: Record<string, Id<"_storage">>;
+  onMoveToCart: (items: SareeItem[]) => void;
   navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxWardrobe: number;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
@@ -3023,11 +3051,29 @@ function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, maxWidth: 960, margin: "0 auto" }}>
             {items.map((saree) => {
               const selC = selForCart.has(saree._id);
+              const lookFileId = lookImages[saree._id];
               return (
                 <div key={saree._id} className="k-product-card k-slideUp" style={{ border: selC ? "2px solid var(--k-green)" : undefined }}>
                   <div style={{ position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden" }}>
                     <div style={{ position: "absolute", inset: 0 }}>
-                      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={32} gradientAngle={135} />
+                      {/* AI try-on render takes priority — that's the customer
+                          wearing this saree. SareeThumb's three-tier fallback
+                          (Convex storage URL → gradient + emoji) handles both
+                          cases via its `fileId` prop. Slot 3 (flat-lay) is
+                          preferred over slot 0 (model-leak) when no look. */}
+                      <SareeThumb
+                        name={saree.name}
+                        fileId={
+                          lookFileId ??
+                          saree.imageIds?.[3] ??
+                          saree.imageIds?.[2] ??
+                          saree.imageIds?.[0]
+                        }
+                        grad={saree.grad}
+                        emoji={saree.emoji}
+                        emojiSize={32}
+                        gradientAngle={135}
+                      />
                     </div>
                   </div>
                   <div style={{ padding: "10px 12px" }}>

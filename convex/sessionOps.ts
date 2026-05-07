@@ -571,6 +571,12 @@ export const addToWardrobe = mutation({
     accessories: v.optional(v.array(v.string())),
     neckline: v.optional(v.string()),
     price: v.optional(v.number()),
+    // The AI try-on look the customer is moving from trial → wardrobe.
+    // Optional because the move can happen before the render completes,
+    // and because guest/dry-run paths may not have one. When present,
+    // listWardrobeByCustomer surfaces the look's imageFileId as the
+    // primary thumbnail for /c/wardrobe + the kiosk wardrobe screen.
+    lookId: v.optional(v.id("looks")),
   },
   handler: async (ctx, args) => {
     // Idempotent: if the same customer already has this saree in their
@@ -583,7 +589,16 @@ export const addToWardrobe = mutation({
         .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
         .take(200);
       const dup = prior.find((w) => w.sareeId === args.sareeId);
-      if (dup) return dup._id;
+      if (dup) {
+        // If the existing row had no lookId and the caller now has one,
+        // patch it in. Lets a customer who previously moved a saree to
+        // wardrobe before the AI render completed get the try-on image
+        // bound on a subsequent re-add.
+        if (args.lookId && !dup.lookId) {
+          await ctx.db.patch(dup._id, { lookId: args.lookId });
+        }
+        return dup._id;
+      }
     }
 
     // Max 10 items per session
@@ -604,6 +619,7 @@ export const addToWardrobe = mutation({
       accessories: args.accessories,
       neckline: args.neckline,
       price: args.price,
+      lookId: args.lookId,
       addedAt: Date.now(),
     });
     if (args.customerId) {
@@ -636,6 +652,59 @@ export const removeFromWardrobe = mutation({
 // One-shot cleanup for wardrobe rows that duplicated before addToWardrobe
 // became idempotent. For every (customerId, sareeId) pair keep the OLDEST
 // row and delete the rest. Run once: `npx convex run sessionOps:dedupeWardrobe '{}'`.
+// One-shot: link existing wardrobe rows to their matching completed look.
+// Walks every wardrobe row that's missing `lookId`; finds a look in the
+// same session for the same (customer, saree) with status="completed";
+// patches the row. Idempotent — re-runs are a no-op once linked, and we
+// only patch when status === "completed" so in-flight looks are skipped.
+//
+// Run once per environment: npx convex run sessionOps:backfillWardrobeLookIds '{}'
+export const backfillWardrobeLookIds = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const wardrobe = await ctx.db.query("wardrobe").take(5000);
+    let scanned = 0;
+    let patched = 0;
+    let noMatch = 0;
+    for (const w of wardrobe) {
+      scanned += 1;
+      if (w.lookId) continue; // already linked
+      if (!w.customerId) continue; // guest rows have no customer-keyed look match
+
+      // Prefer a look from the SAME session (the move trial→wardrobe path
+      // produces a look in the active session). Fall back to any completed
+      // look this customer has for this saree if the session match is empty.
+      const sessionMatches = await ctx.db
+        .query("looks")
+        .withIndex("by_sessionId", (q) => q.eq("sessionId", w.sessionId))
+        .take(200);
+      let candidate = sessionMatches.find(
+        (l) =>
+          l.customerId === w.customerId &&
+          l.sareeId === w.sareeId &&
+          l.status === "completed",
+      );
+      if (!candidate) {
+        const customerLooks = await ctx.db
+          .query("looks")
+          .withIndex("by_customerId", (q) => q.eq("customerId", w.customerId))
+          .take(500);
+        // Most recent completed look for this saree.
+        candidate = customerLooks
+          .filter((l) => l.sareeId === w.sareeId && l.status === "completed")
+          .sort((a, b) => b.createdAt - a.createdAt)[0];
+      }
+      if (!candidate) {
+        noMatch += 1;
+        continue;
+      }
+      await ctx.db.patch(w._id, { lookId: candidate._id });
+      patched += 1;
+    }
+    return { scanned, patched, noMatch, alreadyLinked: scanned - patched - noMatch };
+  },
+});
+
 export const dedupeWardrobe = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -672,6 +741,12 @@ export const listWardrobeByCustomer = query({
     // Fetch all sarees in parallel, then look up each unique store at most once
     // (a customer typically has few distinct stores in their wardrobe).
     const sarees = await Promise.all(items.map((w) => ctx.db.get(w.sareeId)));
+    // Resolve the linked AI try-on look (if any) per row. Renderers prefer
+    // the look's imageFileId over the catalog photo so the customer sees
+    // their own try-on render in /c/wardrobe + the kiosk wardrobe screen.
+    const looks = await Promise.all(
+      items.map((w) => (w.lookId ? ctx.db.get(w.lookId) : null)),
+    );
     const uniqueStoreIds = Array.from(
       new Set(sarees.map((s) => s?.storeId).filter((id): id is string => !!id)),
     );
@@ -688,13 +763,23 @@ export const listWardrobeByCustomer = query({
     );
     return items.map((w, i) => {
       const saree = sarees[i];
+      const look = looks[i];
       const store = saree?.storeId ? storeById.get(saree.storeId) : null;
       return {
         ...w,
         storeId: saree?.storeId,
         storeName: store?.name,
         storeCity: store?.city,
-        sareeImageId: saree?.imageIds?.[0],
+        // Look render takes precedence — only surfaces if status is
+        // completed AND imageFileId is set (e.g. a not-yet-finished
+        // queued look returns null and the catalog fallback kicks in).
+        lookImageFileId:
+          look?.status === "completed" ? look.imageFileId ?? undefined : undefined,
+        // Catalog fallback. Slot 3 first (flat-lay, no model — same chain
+        // as the try-on garment input) → slot 0 last resort. Avoids the
+        // model-leak surface area in /c/wardrobe.
+        sareeImageId:
+          saree?.imageIds?.[3] ?? saree?.imageIds?.[2] ?? saree?.imageIds?.[0],
         sareeGrad: saree?.grad,
         sareeEmoji: saree?.emoji,
         sareeFabric: saree?.fabric,
