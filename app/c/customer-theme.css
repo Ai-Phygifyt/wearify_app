@@ -244,14 +244,18 @@ html, body { background: var(--cx-bg); }
   line-height: 1.5;
   color: var(--cx-ink);
   -webkit-font-smoothing: antialiased;
-  overflow: hidden;
+  /* Scroll happens HERE, not on .cx-screen — this is what makes
+     the .cx-bottomnav `position: sticky` actually engage. Sticky
+     attaches to the nearest scrolling ancestor; the nav must be
+     a sibling/child of the scroll container, not isolated below it. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: 100svh;
 }
 
 .cx-shell .cx-screen {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* Tablet+: center the shell with a frame */
@@ -264,9 +268,13 @@ html, body { background: var(--cx-bg); }
   .cx-shell {
     max-width: var(--cx-shell-max);
     min-height: calc(100svh - 48px);
+    max-height: calc(100svh - 48px);
     border-radius: var(--cx-r-xl);
     box-shadow: var(--cx-shadow-frame);
-    overflow: hidden;
+    /* Override the default `overflow-y: auto` from base — scroll is still
+       on .cx-shell, but we re-clip x to keep rounded corners crisp. */
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 }
 
