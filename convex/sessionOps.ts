@@ -402,7 +402,19 @@ export const listBySession = query({
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
       .order("desc")
       .take(200);
-    return looks;
+    // Enrich with saree fields so consumers (e.g. the "From the Same
+    // Session" rail on /c/looks/[id]) can fall back to the catalog photo
+    // when look.imageFileId is empty. Mirrors the listByCustomer shape.
+    const sarees = await Promise.all(looks.map((l) => ctx.db.get(l.sareeId)));
+    return looks.map((l, i) => {
+      const saree = sarees[i];
+      return {
+        ...l,
+        sareeImageId: saree?.imageIds?.[0],
+        sareeGrad: saree?.grad,
+        sareeEmoji: saree?.emoji,
+      };
+    });
   },
 });
 

@@ -495,6 +495,7 @@ export default function LookDetailPage() {
             {similarLooks.map((sl, idx) => {
               const slGrad = sl.grad || ["#71221D", "#D4A843"];
               const delayClass = `cx-d${(idx % 6) + 1}`;
+              const slImageFileId = (sl.imageFileId ?? sl.sareeImageId) as Id<"_storage"> | undefined;
               return (
                 <div
                   key={sl._id}
@@ -507,19 +508,24 @@ export default function LookDetailPage() {
                   }}
                 >
                   <div style={{
-                    height: 100, position: "relative",
+                    height: 130, position: "relative",
                     background: `linear-gradient(135deg, ${slGrad[0]}, ${slGrad[1] || slGrad[0]})`,
                   }}>
-                    <SilkOverlay />
-                    {/* cross-hatch */}
-                    <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.08, pointerEvents: "none" }}>
-                      <defs>
-                        <pattern id={`sl-${sl._id}`} width="10" height="10" patternUnits="userSpaceOnUse">
-                          <path d="M0 10L10 0M-2 2L2 -2M8 12L12 8" stroke="#fff" strokeWidth=".5" />
-                        </pattern>
-                      </defs>
-                      <rect width="100%" height="100%" fill={`url(#sl-${sl._id})`} />
-                    </svg>
+                    {slImageFileId ? (
+                      <StoredImage fileId={slImageFileId} alt={sl.sareeName} />
+                    ) : (
+                      <>
+                        <SilkOverlay />
+                        <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.08, pointerEvents: "none" }}>
+                          <defs>
+                            <pattern id={`sl-${sl._id}`} width="10" height="10" patternUnits="userSpaceOnUse">
+                              <path d="M0 10L10 0M-2 2L2 -2M8 12L12 8" stroke="#fff" strokeWidth=".5" />
+                            </pattern>
+                          </defs>
+                          <rect width="100%" height="100%" fill={`url(#sl-${sl._id})`} />
+                        </svg>
+                      </>
+                    )}
                   </div>
                   <div style={{ padding: "8px 9px 10px" }}>
                     <div style={{
