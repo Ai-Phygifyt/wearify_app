@@ -6,6 +6,8 @@ import { useCustomer } from "../layout";
 import { clearToken, getToken } from "@/lib/phoneAuth";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useConvexUrl } from "@/lib/ConvexImage";
+import { Id } from "@/convex/_generated/dataModel";
 import {
   User,
   Settings,
@@ -49,6 +51,8 @@ export default function MePage() {
 
   const displayName = user?.name || (customer?.name as string) || "Customer";
   const initials = displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const photoFileId = (customer as Record<string, unknown> | undefined)?.photoFileId as Id<"_storage"> | undefined;
+  const photoUrl = useConvexUrl(photoFileId ?? null);
   const maskedPhone = phone ? `${phone.slice(0, 8)} XXXXX` : "";
   const loyaltyTier = (customer?.loyaltyTier as string) || "Regular";
   const loyaltyPoints = (customer?.loyaltyPoints as number) || 0;
@@ -119,9 +123,19 @@ export default function MePage() {
               fontFamily: "Cormorant Garamond, serif",
               fontStyle: "italic",
               flexShrink: 0,
+              overflow: "hidden",
             }}
           >
-            {initials}
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt={displayName}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                loading="lazy"
+              />
+            ) : (
+              initials
+            )}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "var(--cx-on-dark)", fontStyle: "italic", lineHeight: 1.2 }}>
