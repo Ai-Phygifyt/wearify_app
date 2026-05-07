@@ -545,12 +545,16 @@ export const runTryOn = action({
 
     // -----------------------------------------------------------------
     // STEP 7 — saree image present
-    // Prefer imageIds[2] (the 3rd photo) since retailers upload the
-    // full drape / back view at slot 3 — best signal for the try-on
-    // model. Falls back to slot 0 for sarees that have fewer than 3
-    // images (older seeded entries).
+    // Prefer the flat-lay shot (no model = no body/face/hair leak into
+    // the AI render). For Catelog-21 retailer uploads:
+    //   slot 0/1 → model wearing saree (head-to-toe pose)  ← AVOID
+    //   slot 2   → closeup detail (sometimes with hands)   ← OK fallback
+    //   slot 3   → flat-lay top-down, no model              ← PREFERRED
+    // Order: [3] → [2] → [0]. Older seeded sarees with only 1 image
+    // fall back to [0] and accept the leak as a known cost.
     // -----------------------------------------------------------------
-    const garmentFileId = saree.imageIds?.[2] ?? saree.imageIds?.[0];
+    const garmentFileId =
+      saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0];
     if (!garmentFileId) {
       throw new Error("INTERNAL: saree has no image");
     }
@@ -935,10 +939,12 @@ export const retryLook = action({
     if (!personFileId) {
       throw new Error("NO_BODY_SCAN: please complete a body scan first");
     }
-    // Same imageIds[2] preference as the initial runTryOn — when a retry
-    // doesn't have a stored garmentFileId, prefer the 3rd image (full
-    // drape/back view) and fall back to the 1st.
-    const garmentFileId = look.garmentFileId ?? saree.imageIds?.[2] ?? saree.imageIds?.[0];
+    // Same flat-lay preference as the initial runTryOn — when a retry
+    // doesn't have a stored garmentFileId, prefer slot 3 (flat-lay, no
+    // model), then 2 (detail), then 0 (last resort). Retailer convention
+    // documented at the runTryOn call site.
+    const garmentFileId =
+      look.garmentFileId ?? saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0];
     if (!garmentFileId) {
       throw new Error("INTERNAL: saree has no image");
     }
