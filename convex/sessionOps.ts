@@ -819,6 +819,14 @@ export const listWardrobeByCustomer = query({
         // queued look returns null and the catalog fallback kicks in).
         lookImageFileId:
           look?.status === "completed" ? look.imageFileId ?? undefined : undefined,
+        // Bg-removed cutout (kiosk-only consumer; produced client-side
+        // post-completion via @imgly/background-removal). Same gate as
+        // imageFileId — only surfaces when look is completed. /c/wardrobe
+        // does not read this field; the kiosk WardrobeScreen prefers it
+        // over imageFileId so customer sees themselves on the kiosk's
+        // ivory backdrop instead of the RunPod studio bg.
+        lookImageNoBgFileId:
+          look?.status === "completed" ? look.imageNoBgFileId ?? undefined : undefined,
         // Catalog fallback. Slot 3 first (flat-lay, no model — same chain
         // as the try-on garment input) → slot 0 last resort. Avoids the
         // model-leak surface area in /c/wardrobe.

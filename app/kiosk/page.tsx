@@ -605,6 +605,21 @@ export default function KioskPage() {
     }
     return m;
   }, [savedWardrobe]);
+  // Parallel sareeId → bg-removed cutout fileId map. Same shape as
+  // wardrobeLookImages but reads the new `lookImageNoBgFileId` field.
+  // Only the kiosk WardrobeScreen consumes this; the customer PWA
+  // /c/wardrobe deliberately ignores it (keeps showing the AI render
+  // with its original RunPod backdrop).
+  const wardrobeLookCutouts = React.useMemo(() => {
+    const m: Record<string, Id<"_storage">> = {};
+    if (savedWardrobe) {
+      for (const w of savedWardrobe) {
+        const fid = (w as { lookImageNoBgFileId?: Id<"_storage"> }).lookImageNoBgFileId;
+        if (fid) m[w.sareeId] = fid;
+      }
+    }
+    return m;
+  }, [savedWardrobe]);
   const hydratedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!customerId || !storeId || !allSarees) return;
@@ -1190,6 +1205,7 @@ export default function KioskPage() {
           <WardrobeScreen
             items={wardrobeItems}
             lookImages={wardrobeLookImages}
+            lookCutouts={wardrobeLookCutouts}
             cartItemIds={new Set(cartItems.map((c) => c._id))}
             onToggleInCart={(saree) => {
               const inCart = cartItems.some((c) => c._id === saree._id);
@@ -2658,11 +2674,16 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
 // Click handlers, selection badges, and remove buttons stay on the parent wrapper.
 // =========================================================================
 // TrialTile — small card on the trial-room left rail.
-// Lifecycle phases:
-//   1. AI generating  → catalog photo behind a heavy gaussian-blur wave
-//   2. AI done, cutout pending → AI render behind a softer wave (Phase B)
-//   3. Cutout ready   → bg-removed PNG over an ivory backdrop
-//   4. Failed         → catalog photo + error chip + Retry button
+// Render phases:
+//   1. AI generating (queued/processing/no-lookId) → catalog photo
+//      behind a gaussian-blur wave
+//   2. AI completed → plain catalog photo (no wave, no cutout). The
+//      bg-removed cutout still gets enqueued (right-panel preview reads
+//      it), but the small card stays on the catalog so the customer can
+//      glance and recognize the saree without their own face shrunk to
+//      ~120px tall. Also closes a click-blocking bug where the cutout's
+//      z-index 3 covered the checkbox at z-index 2.
+//   3. Failed → catalog + error chip + Retry button
 //
 // Bg removal is enqueued the moment we observe (status === "completed" &&
 // imageFileId set && imageNoBgFileId missing). The queue is sequential
@@ -2688,12 +2709,14 @@ function TrialTile({
   );
   const status = look?.status;
   const resultUrl = useConvexUrl(look?.imageFileId);
-  const cutoutUrl = useConvexUrl(look?.imageNoBgFileId);
 
   const { upload } = useUploadFile();
   const attachBgRemoved = useMutation(api.tryOn.attachBgRemovedImage);
   const deleteOrphan = useMutation(api.tryOn.deleteOrphanCutout);
-  const bgStatus = useBgRemovalStatus(lookId ?? null);
+  // bgStatus is intentionally NOT subscribed here. The small card never
+  // renders the cutout (right-panel does), so this component doesn't
+  // need to react to queue advances. The enqueue effect below still
+  // fires for downstream consumers.
 
   // Enqueue bg-removal when (1) the look is completed, (2) we have a
   // resolvable URL for the source AI image, and (3) no cutout exists yet.
@@ -2725,26 +2748,24 @@ function TrialTile({
     lookId, look, resultUrl, deviceToken, upload, attachBgRemoved, deleteOrphan,
   ]);
 
-  // Phase 3 — cutout ready.
-  if (status === "completed" && cutoutUrl) {
-    return (
-      <div className="k-card k-card-hover" style={{ aspectRatio: "1 / 1.2", overflow: "hidden", position: "relative" }}>
-        <div className="k-trial-tile-cutout is-shown">
-          <img src={cutoutUrl} alt={saree.name} />
-        </div>
-      </div>
-    );
-  }
-
-  // Phase 3b — bg-removal failed but the AI render itself is fine.
-  // Fall back to the raw render with its background. Without this the
-  // tile would sit on the polishing wave forever (status === "completed"
-  // implies isPolishing=true downstream). Mirror of TrialPreviewImage's
-  // explicit failed-fallback.
-  if (status === "completed" && bgStatus.state === "failed" && resultUrl) {
+  // Phase 2 — AI completed. Show the catalog flat-lay; the right-panel
+  // hero is where the customer sees themselves wearing the saree (with
+  // the bg-removed cutout). Decoupling the small thumbnail from the
+  // cutout lifecycle also fixes a click-blocking bug: the cutout's
+  // z-index 3 overlay used to swallow taps on the checkbox + remove
+  // buttons (z-index 2), so "Move to Wardrobe" never appeared once a
+  // tile flipped to completed.
+  if (status === "completed") {
     return (
       <div className="k-card k-card-hover" style={{ aspectRatio: "1 / 1.2", overflow: "hidden" }}>
-        <img src={resultUrl} alt={saree.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <SareeThumb
+          name={saree.name}
+          fileId={saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0]}
+          grad={saree.grad}
+          emoji={saree.emoji}
+          emojiSize={32}
+          gradientAngle={135}
+        />
       </div>
     );
   }
@@ -2785,37 +2806,24 @@ function TrialTile({
     );
   }
 
-  // Phases 1 + 2 — wave animation. Picks the "best available" source for
-  // the blur layer (AI render once we have it, else catalog) and drives
-  // the data-phase attribute so CSS picks the right wave intensity.
-  // Bg-removal "failed" state also lands here — since the user's still
-  // looking at a wave with the AI render under it; the right-panel
-  // preview has its own fallback to the raw AI render.
-  const isPolishing =
-    status === "completed" || bgStatus.state === "queued" || bgStatus.state === "processing";
-  const phase: "generating" | "polishing" = isPolishing ? "polishing" : "generating";
-  const waveSrc = resultUrl ?? null;
-
+  // Wave animation — only reached for queued/processing/no-lookId
+  // (status === "completed" + "failed" branch above). Always the
+  // "generating" phase here; "polishing" was for the small-card cutout
+  // transition which we no longer render.
   return (
     <div className="k-card" style={{ aspectRatio: "1 / 1.2", position: "relative", overflow: "hidden" }}>
-      {/* Underlying photo for blur — falls back to catalog shot when no AI render yet. */}
-      {waveSrc ? (
-        <div className="k-wave-stage" data-phase={phase}>
-          <img className="k-wave-image" src={waveSrc} alt="" aria-hidden />
-          <div className="k-wave-sheen" />
-          <div className="k-wave-grain" />
-          <div className="k-wave-veil" />
+      <div className="k-wave-stage" data-phase="generating">
+        <div className="k-wave-image" style={{ position: "absolute", inset: 0 }}>
+          <SareeThumb
+            name={saree.name}
+            fileId={saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0]}
+            grad={saree.grad}
+          />
         </div>
-      ) : (
-        <div className="k-wave-stage" data-phase={phase}>
-          <div className="k-wave-image" style={{ position: "absolute", inset: 0 }}>
-            <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />
-          </div>
-          <div className="k-wave-sheen" />
-          <div className="k-wave-grain" />
-          <div className="k-wave-veil" />
-        </div>
-      )}
+        <div className="k-wave-sheen" />
+        <div className="k-wave-grain" />
+        <div className="k-wave-veil" />
+      </div>
     </div>
   );
 }
@@ -3228,13 +3236,17 @@ function RetakeConfirmModal({
 }
 
 /* ── WARDROBE ── */
-function WardrobeScreen({ items, lookImages, cartItemIds, onToggleInCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, storeName, storeLogoFileId }: {
+function WardrobeScreen({ items, lookImages, lookCutouts, cartItemIds, onToggleInCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, storeName, storeLogoFileId }: {
   items: SareeItem[];
-  // sareeId → AI try-on render fileId. Built reactively from
-  // listWardrobeByCustomer in the parent. Empty object until the
-  // wardrobe query resolves; per-saree value undefined until that
-  // saree's bound look reaches status="completed".
+  // sareeId → AI try-on render fileId (with original RunPod bg). Built
+  // reactively from listWardrobeByCustomer in the parent. Empty object
+  // until the wardrobe query resolves; per-saree value undefined until
+  // that saree's bound look reaches status="completed".
   lookImages: Record<string, Id<"_storage">>;
+  // sareeId → bg-removed cutout fileId. Kiosk-only — preferred over
+  // lookImages so the customer sees themselves on the kiosk's ivory
+  // backdrop. Falls back to lookImages, then catalog (slot 3 → 2 → 0).
+  lookCutouts: Record<string, Id<"_storage">>;
   // Sareeids currently in the cart. Used to flip per-card button state
   // between "Add to Cart" and "In Cart ✓". Computed reactively in the
   // parent from `cartItems`.
@@ -3275,28 +3287,41 @@ function WardrobeScreen({ items, lookImages, cartItemIds, onToggleInCart, naviga
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, maxWidth: 960, margin: "0 auto" }}>
             {items.map((saree) => {
               const inCart = cartItemIds.has(saree._id);
+              const cutoutFileId = lookCutouts[saree._id];
               const lookFileId = lookImages[saree._id];
+              // Priority chain: bg-removed cutout (kiosk-only, customer
+              // on ivory backdrop) → AI render with bg (customer in
+              // RunPod studio scene) → catalog flat-lay (slot 3 → 2 → 0).
+              // The cutout slot is rendered with object-fit: contain via
+              // CSS so the transparent edges show the kiosk theme behind
+              // it; non-cutout slots render with the SareeThumb default.
+              const thumbFileId =
+                cutoutFileId ??
+                lookFileId ??
+                saree.imageIds?.[3] ??
+                saree.imageIds?.[2] ??
+                saree.imageIds?.[0];
+              const isCutout = !!cutoutFileId;
               return (
                 <div key={saree._id} className="k-product-card k-slideUp" style={{ border: inCart ? "2px solid var(--k-green)" : undefined }}>
-                  <div style={{ position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden" }}>
+                  <div style={{
+                    position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden",
+                    // Cutout PNGs have transparent backgrounds; render them
+                    // against the kiosk's ivory gradient so the silhouette
+                    // pops. Non-cutout slots render their own background.
+                    background: isCutout
+                      ? "linear-gradient(135deg, #FDF6EE 0%, #F5EADC 100%)"
+                      : undefined,
+                  }}>
                     <div style={{ position: "absolute", inset: 0 }}>
-                      {/* AI try-on render takes priority — that's the customer
-                          wearing this saree. SareeThumb's three-tier fallback
-                          (Convex storage URL → gradient + emoji) handles both
-                          cases via its `fileId` prop. Slot 3 (flat-lay) is
-                          preferred over slot 0 (model-leak) when no look. */}
                       <SareeThumb
                         name={saree.name}
-                        fileId={
-                          lookFileId ??
-                          saree.imageIds?.[3] ??
-                          saree.imageIds?.[2] ??
-                          saree.imageIds?.[0]
-                        }
+                        fileId={thumbFileId}
                         grad={saree.grad}
                         emoji={saree.emoji}
                         emojiSize={32}
                         gradientAngle={135}
+                        style={isCutout ? { objectFit: "contain" } : undefined}
                       />
                     </div>
                   </div>

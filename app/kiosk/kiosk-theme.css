@@ -680,6 +680,10 @@
   border-radius: inherit;
   background: linear-gradient(135deg, #FDF6EE 0%, #F5EADC 100%);
   isolation: isolate;
+  /* Decorative only — the wave layers must never swallow clicks
+   * intended for the trial-card buttons (checkbox at top-left, X at
+   * top-right) sitting at z-index 2 on top of the wave. */
+  pointer-events: none;
 }
 .k-wave-stage .k-wave-image {
   position: absolute; inset: 0;
