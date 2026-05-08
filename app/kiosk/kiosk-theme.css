@@ -869,18 +869,19 @@
   z-index: 0;
 }
 
-/* Podium asset — bottom-anchored, capped height so the floor disc
- * stays a believable ~30% of the stage rather than stretching to
- * full-width and ballooning. Centered horizontally with a sensible
- * max width on big screens; uses object-fit: contain so the asset's
- * intrinsic aspect ratio is respected. */
+/* Podium asset — bottom-anchored. Sized a bit larger than v1 (38vh
+ * vs 32vh) and lifted 10px off the floor per design feedback, so the
+ * disc reads as a stage. Centered horizontally with a max-width on
+ * big screens; object-fit: contain preserves the asset's aspect.
+ * The bottom-center anchor of the IMG inside the box means the disc
+ * always lands at the bottom of the container. */
 .k-trial-v2-podium {
   position: absolute;
   left: 50%;
-  bottom: 0;
+  bottom: 10px;
   transform: translateX(-50%);
-  width: min(100%, 1400px);
-  height: 32vh;
+  width: min(100%, 1500px);
+  height: 38vh;
   z-index: 1;
   pointer-events: none;
   user-select: none;
@@ -894,16 +895,17 @@
 }
 
 /* The bg-removed customer cutout sits above the bg, anchored to the
- * top of the podium. Centered horizontally; vertical-align to bottom
- * so the customer "stands" on the podium. The bottom value is tuned
- * to land at the top edge of the podium asset (which is 32vh tall,
- * with the disc taking the upper ~half of that). */
+ * TOP edge of the podium disc so the customer reads as "standing on"
+ * the stage. The bottom value is tuned to where the disc's visual
+ * top falls inside the .k-trial-v2-podium box: at 38vh container
+ * with the disc occupying roughly the upper half + the 10px lift,
+ * the disc top sits ~21vh from the stage bottom. */
 .k-trial-v2-cutout {
   position: absolute;
   left: 50%;
-  bottom: 14vh; /* sits on top of the podium disc */
+  bottom: 21vh;
   transform: translateX(-50%);
-  height: 70%;
+  height: 76%;
   z-index: 2;
   display: flex; align-items: flex-end; justify-content: center;
   pointer-events: none;

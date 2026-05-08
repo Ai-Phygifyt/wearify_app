@@ -2952,22 +2952,29 @@ function TrialHeroCutout({ saree, lookId }: {
   const status = look?.status;
   const resultUrl = useConvexUrl(look?.imageFileId);
   const cutoutUrl = useConvexUrl(look?.imageNoBgFileId);
+  const bgStatus = useBgRemovalStatus(lookId ?? null);
 
-  // Cutout ready — render at full hero height.
+  // Cutout ready — the goal: customer "standing on the pedestal" with
+  // the kiosk's themed background showing through transparent edges.
   if (status === "completed" && cutoutUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={cutoutUrl} alt={saree.name} />;
   }
 
-  // Bg-removal failed but raw AI render is fine — show that.
-  if (status === "completed" && resultUrl) {
+  // Bg-removal explicitly failed — fall back to raw AI render so the
+  // customer isn't stuck on an infinite wave. Defense-in-depth path.
+  // (Previously fell here on "still processing" too — that surfaced
+  // the kitchen-backdrop scene briefly. Now gated on bgStatus.failed.)
+  if (status === "completed" && bgStatus.state === "failed" && resultUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={resultUrl} alt={saree.name} style={{ borderRadius: 24 }} />
     );
   }
 
-  // Still rendering — show the wave overlay sized to the cutout slot.
+  // Otherwise still in flight (RunPod processing OR bg-removal queue).
+  // Wave animation hides the in-progress state; under-image is the AI
+  // render once we have it, else the catalog fallback.
   return (
     <div className="k-trial-v2-cutout-wave">
       <div className="k-wave-stage" data-phase={status === "completed" ? "polishing" : "generating"}>
@@ -3011,9 +3018,14 @@ function TrialCardV2({ saree, active, inCart, onSelect, onShare, onRemove, onAdd
       onClick={onSelect}
     >
       <div className="k-trial-card-v2-img">
+        {/* Trial-rail thumbnail prefers slot 0 (model wearing the saree)
+            so the card visually matches what the customer is trying on,
+            with slots 3/2 only as fallback for older sarees that lack
+            slot 0. Differs from the runTryOn garment-input chain (which
+            wants the flat-lay slot 3) — different intent. */}
         <SareeThumb
           name={saree.name}
-          fileId={saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0]}
+          fileId={saree.imageIds?.[0] ?? saree.imageIds?.[3] ?? saree.imageIds?.[2]}
           grad={saree.grad}
           emoji={saree.emoji}
           emojiSize={28}
