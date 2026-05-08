@@ -345,6 +345,12 @@ export default defineSchema({
     isFav: v.optional(v.boolean()),
     isWished: v.optional(v.boolean()),
     imageFileId: v.optional(v.id("_storage")),
+    // Background-removed copy of imageFileId, produced client-side in the
+    // kiosk via @imgly/background-removal. Used ONLY by the kiosk trial-room
+    // preview; other surfaces (/c/looks, /c/wardrobe, kiosk Wardrobe screen)
+    // continue to use imageFileId. Optional — fall back to imageFileId on
+    // failure or for pre-existing rows.
+    imageNoBgFileId: v.optional(v.id("_storage")),
     grad: v.optional(v.array(v.string())),
     createdAt: v.number(),
 

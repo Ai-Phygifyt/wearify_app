@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useUploadFile } from "@/lib/useUpload";
 import { GUARDS } from "@/lib/uploadGuards";
+import { cancelBgRemoval, enqueueBgRemoval, useBgRemovalStatus } from "@/lib/bgRemovalQueue";
 import { ScanChoiceScreen } from "./screens/ScanChoiceScreen";
 import { ConsentScreen } from "./screens/ConsentScreen";
 import { BodyScanScreen } from "./screens/BodyScanScreen";
@@ -984,6 +985,11 @@ export default function KioskPage() {
             items={trialItems}
             wardrobeItems={wardrobeItems}
             onRemoveItem={(id) => {
+              // Cancel any pending bg-removal job for this saree's look —
+              // saves CPU when the customer rapidly adds/removes. No-op if
+              // already processing or finished.
+              const pendingLookId = sareeLookIds[id];
+              if (pendingLookId) cancelBgRemoval(pendingLookId);
               setTrialItems((prev) => prev.filter((s) => s._id !== id));
             }}
             onAddToWardrobe={(items) => {
@@ -2591,6 +2597,19 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
 // Renders skeleton while waiting for runTryOn to resolve or the job to finish,
 // shows the AI result on completion, and falls back to the saree thumbnail on failure.
 // Click handlers, selection badges, and remove buttons stay on the parent wrapper.
+// =========================================================================
+// TrialTile — small card on the trial-room left rail.
+// Lifecycle phases:
+//   1. AI generating  → catalog photo behind a heavy gaussian-blur wave
+//   2. AI done, cutout pending → AI render behind a softer wave (Phase B)
+//   3. Cutout ready   → bg-removed PNG over an ivory backdrop
+//   4. Failed         → catalog photo + error chip + Retry button
+//
+// Bg removal is enqueued the moment we observe (status === "completed" &&
+// imageFileId set && imageNoBgFileId missing). The queue is sequential
+// (see lib/bgRemovalQueue.ts) so multiple tiles don't all fire at once.
+// =========================================================================
+
 function TrialTile({
   saree,
   lookId,
@@ -2610,44 +2629,53 @@ function TrialTile({
   );
   const status = look?.status;
   const resultUrl = useConvexUrl(look?.imageFileId);
+  const cutoutUrl = useConvexUrl(look?.imageNoBgFileId);
 
-  // Elapsed counter — only ticks while the job is actively processing.
-  const [elapsed, setElapsed] = useState(0);
+  const { upload } = useUploadFile();
+  const attachBgRemoved = useMutation(api.tryOn.attachBgRemovedImage);
+  const bgStatus = useBgRemovalStatus(lookId ?? null);
+
+  // Enqueue bg-removal when (1) the look is completed, (2) we have a
+  // resolvable URL for the source AI image, and (3) no cutout exists yet.
+  // useBgRemovalStatus filters re-fires inside the queue — re-rendering
+  // here is harmless.
   useEffect(() => {
-    if (status !== "processing" || !look?.startedAt) return;
-    const tick = () => setElapsed(Math.floor((Date.now() - look.startedAt!) / 1000));
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [status, look?.startedAt]);
+    if (!lookId || !look) return;
+    if (look.status !== "completed") return;
+    if (!look.imageFileId || !resultUrl) return;
+    if (look.imageNoBgFileId) return;
+    if (!deviceToken) return;
+    const sourceImageFileId = look.imageFileId;
+    enqueueBgRemoval({
+      lookId,
+      sourceImageFileId,
+      srcUrl: resultUrl,
+      deviceToken,
+      upload: (file) => upload(file, GUARDS.lookCutout),
+      attach: (args) =>
+        attachBgRemoved({
+          deviceToken,
+          lookId,
+          sourceImageFileId: args.sourceImageFileId,
+          fileId: args.fileId,
+        }),
+    });
+  }, [
+    lookId, look, resultUrl, deviceToken, upload, attachBgRemoved,
+  ]);
 
-  if (status === "completed" && resultUrl) {
+  // Phase 3 — cutout ready.
+  if (status === "completed" && cutoutUrl) {
     return (
-      <div className="k-card k-card-hover" style={{ aspectRatio: "1 / 1.2", overflow: "hidden" }}>
-        <img src={resultUrl} alt={saree.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      <div className="k-card k-card-hover" style={{ aspectRatio: "1 / 1.2", overflow: "hidden", position: "relative" }}>
+        <div className="k-trial-tile-cutout is-shown">
+          <img src={cutoutUrl} alt={saree.name} />
+        </div>
       </div>
     );
   }
 
-  if (status === "queued" || status === "processing" || !lookId) {
-    const subtitle = !lookId
-      ? "Preparing…"
-      : status === "queued"
-        ? "Preparing…"
-        : `Generating your look… ${elapsed}s`;
-    return (
-      <div className="k-card k-breathe" style={{
-        aspectRatio: "1 / 1.2",
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        background: "var(--k-bg)",
-        gap: 12,
-      }}>
-        <Loader2 size={28} className="k-spin" style={{ color: "var(--k-maroon)" }} />
-        <span className="k-idle-tag">{subtitle}</span>
-      </div>
-    );
-  }
-
+  // Phase 4 — failed.
   if (status === "failed") {
     const errMsg = look?.errorMessage ?? "Something went wrong";
     return (
@@ -2670,13 +2698,9 @@ function TrialTile({
             className="k-btn k-btn-primary k-btn-pill"
             style={{ padding: "8px 14px", fontSize: 13 }}
             onClick={(e) => {
-              // stopPropagation keeps the parent tile-selection onClick from
-              // also firing when the user taps Retry.
               e.stopPropagation();
               if (!lookId) return;
               retryLookMut({ deviceToken, lookId })
-                // NO_BODY_SCAN on retry is unusual (scan deleted between original and retry);
-                // no auto-redirect, so onNoBodyScan is omitted here.
                 .catch((err: Error) => handleTryOnError(err, showToast));
             }}
           >
@@ -2687,8 +2711,128 @@ function TrialTile({
     );
   }
 
-  // Unknown-status fallback — bare thumbnail (e.g. any future status strings).
-  return <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />;
+  // Phases 1 + 2 — wave animation. Picks the "best available" source for
+  // the blur layer (AI render once we have it, else catalog) and drives
+  // the data-phase attribute so CSS picks the right wave intensity.
+  // Bg-removal "failed" state also lands here — since the user's still
+  // looking at a wave with the AI render under it; the right-panel
+  // preview has its own fallback to the raw AI render.
+  const isPolishing =
+    status === "completed" || bgStatus.state === "queued" || bgStatus.state === "processing";
+  const phase: "generating" | "polishing" = isPolishing ? "polishing" : "generating";
+  const waveSrc = resultUrl ?? null;
+
+  return (
+    <div className="k-card" style={{ aspectRatio: "1 / 1.2", position: "relative", overflow: "hidden" }}>
+      {/* Underlying photo for blur — falls back to catalog shot when no AI render yet. */}
+      {waveSrc ? (
+        <div className="k-wave-stage" data-phase={phase}>
+          <img className="k-wave-image" src={waveSrc} alt="" aria-hidden />
+          <div className="k-wave-sheen" />
+          <div className="k-wave-grain" />
+          <div className="k-wave-veil" />
+        </div>
+      ) : (
+        <div className="k-wave-stage" data-phase={phase}>
+          <div className="k-wave-image" style={{ position: "absolute", inset: 0 }}>
+            <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />
+          </div>
+          <div className="k-wave-sheen" />
+          <div className="k-wave-grain" />
+          <div className="k-wave-veil" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =========================================================================
+// TrialPreviewImage — right-panel hero in the trial room.
+//
+// Same lifecycle phases as TrialTile, with two differences:
+//   - Phase A/B captions are visible ("Draping your saree…" / "Polishing
+//     the cutout…" + queue position when 2+ jobs are stacked).
+//   - Phase 3 renders the cutout at ~80% of the panel with a soft drop
+//     shadow and the ivory backdrop showing through.
+//
+// Bg removal itself is not enqueued from here — TrialTile owns the
+// enqueue side-effect, and there's always a tile mounted whenever the
+// preview is mounted, so we just observe.
+// =========================================================================
+
+function TrialPreviewImage({ saree, lookId }: {
+  saree: SareeItem;
+  lookId: Id<"looks"> | undefined;
+}) {
+  const look = useQuery(
+    api.tryOn.getLook,
+    lookId ? { lookId } : "skip",
+  );
+  const status = look?.status;
+  const resultUrl = useConvexUrl(look?.imageFileId);
+  const cutoutUrl = useConvexUrl(look?.imageNoBgFileId);
+  const bgStatus = useBgRemovalStatus(lookId ?? null);
+
+  // No look at all yet — plain catalog photo (e.g. saree just added,
+  // runTryOn in flight but no row inserted yet).
+  if (!lookId) {
+    return (
+      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={160} gradientAngle={135} />
+    );
+  }
+
+  // Phase 3 — cutout ready. Render at ~80% with the ivory wash behind.
+  if (status === "completed" && cutoutUrl) {
+    return (
+      <div className="k-wave-stage is-revealed" style={{ position: "absolute", inset: 0 }}>
+        <div className="k-trial-cutout is-shown">
+          <img src={cutoutUrl} alt={saree.name} />
+        </div>
+      </div>
+    );
+  }
+
+  // Phase A — AI is generating. Heavy blur, catalog photo as the base.
+  // Phase B — AI done but cutout pending. Softer blur, AI render as the base.
+  // Phase "failed" — bg removal bailed. Fall through to plain AI render.
+  if (status === "completed" && bgStatus.state === "failed" && resultUrl) {
+    return (
+      <img src={resultUrl} alt={saree.name} style={{ width: "100%", height: "100%", objectFit: "contain", padding: 14 }} />
+    );
+  }
+
+  const isPolishing =
+    status === "completed" || bgStatus.state === "queued" || bgStatus.state === "processing";
+  const phase: "generating" | "polishing" = isPolishing ? "polishing" : "generating";
+
+  const captionTitle = isPolishing ? "Polishing the cutout…" : "Draping your saree…";
+  const captionSub =
+    bgStatus.state === "queued" && bgStatus.total > 1
+      ? `Next in line · ${bgStatus.position} of ${bgStatus.total}`
+      : bgStatus.state === "processing"
+        ? "Almost ready"
+        : status === "queued" || !status
+          ? "Awaiting render"
+          : "Generating";
+
+  return (
+    <div className="k-wave-stage" data-phase={phase}>
+      {resultUrl ? (
+        <img className="k-wave-image" src={resultUrl} alt="" aria-hidden />
+      ) : (
+        <div className="k-wave-image" style={{ position: "absolute", inset: 0 }}>
+          <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={160} gradientAngle={135} />
+        </div>
+      )}
+      <div className="k-wave-sheen" />
+      <div className="k-wave-grain" />
+      <div className="k-wave-veil" />
+      <div className="k-wave-caption">
+        <span className="k-wave-caption-title">{captionTitle}</span>
+        <span className="k-wave-caption-sub">{captionSub}</span>
+      </div>
+    </div>
+  );
 }
 
 /* ── TRIAL ROOM ── */
@@ -2893,9 +3037,12 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
         }}>
           {current && (
             <div className="k-trial-preview k-slideUp" style={{ flex: 1, height: "100%" }}>
-              {/* Image top */}
+              {/* Image top — bg-removed AI render once the queue produces it,
+                  with the gaussian-blur wave covering the generation +
+                  polishing phases. Falls back to catalog photo when there's
+                  no look at all yet. */}
               <div className="k-trial-preview-img">
-                <SareeThumb name={current.name} fileId={current.imageIds?.[0]} grad={current.grad} emoji={current.emoji} emojiSize={160} gradientAngle={135} />
+                <TrialPreviewImage saree={current} lookId={sareeLookIds[current._id]} />
               </div>
 
               {/* Info bottom — glassmorphism */}

@@ -26,6 +26,7 @@ export const GUARDS = {
   customerPhoto:  { maxBytes: 4 * MB,  accept: ["image/"] as const,                        label: "Profile photo" },
   kycDocument:    { maxBytes: 10 * MB, accept: ["image/", "application/pdf"] as const,     label: "KYC document" },
   bodyScan:       { maxBytes: 10 * MB, accept: ["image/"] as const,                        label: "Body scan photo" },
+  lookCutout:     { maxBytes: 5 * MB,  accept: ["image/png"] as const,                     label: "Cutout image" },
 } as const;
 
 type FileMetadata = {

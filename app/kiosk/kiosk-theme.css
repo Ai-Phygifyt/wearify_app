@@ -634,6 +634,184 @@
   -webkit-backdrop-filter: blur(20px) saturate(1.5);
 }
 
+/* =====================================================================
+ * Bg-removal loading — gaussian blur waving reveal
+ * ---------------------------------------------------------------------
+ * Two phases share the same visual language so the transition between
+ * "AI is generating" and "polishing the cutout" feels continuous:
+ *   .k-wave-stage  — wrapper that crops + positions everything
+ *   .k-wave-image  — the underlying photo (catalog or AI render)
+ *                    blurred + saturated; receives the wave sweep
+ *   .k-wave-sheen  — diagonal maroon→gold gradient sweep
+ *   .k-wave-grain  — subtle noise pulsing in/out
+ *   .k-wave-caption — bottom-centered status text
+ *
+ * When .k-wave-stage is decorated with .is-revealed, the blur unwinds
+ * and the sheen + grain fade to zero — that's the crossfade-to-sharp
+ * moment when the bg-removed image finally lands.
+ * ===================================================================== */
+
+@keyframes k-wave-sheen {
+  0%   { transform: translateX(-110%) skewX(-14deg); opacity: 0; }
+  20%  { opacity: .55; }
+  60%  { opacity: .35; }
+  100% { transform: translateX(110%) skewX(-14deg); opacity: 0; }
+}
+@keyframes k-wave-blur {
+  0%, 100% { filter: blur(22px) saturate(1.18) brightness(1.02); transform: scale(1.06); }
+  50%      { filter: blur(28px) saturate(1.30) brightness(1.06); transform: scale(1.09); }
+}
+@keyframes k-wave-blur-soft {
+  0%, 100% { filter: blur(12px) saturate(1.10) brightness(1.00); transform: scale(1.04); }
+  50%      { filter: blur(16px) saturate(1.18) brightness(1.03); transform: scale(1.06); }
+}
+@keyframes k-wave-grain {
+  0%, 100% { opacity: .08; }
+  50%      { opacity: .22; }
+}
+@keyframes k-wave-caption {
+  0%, 100% { opacity: .65; letter-spacing: .12em; }
+  50%      { opacity: 1;    letter-spacing: .18em; }
+}
+
+.k-wave-stage {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #FDF6EE 0%, #F5EADC 100%);
+  isolation: isolate;
+}
+.k-wave-stage .k-wave-image {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  animation: k-wave-blur 4.6s ease-in-out infinite;
+  will-change: filter, transform;
+}
+/* Phase B — softer blur once we have the AI render in hand. Same wave
+ * cadence, just less smear so the customer can feel it converging. */
+.k-wave-stage[data-phase="polishing"] .k-wave-image {
+  animation: k-wave-blur-soft 3.4s ease-in-out infinite;
+}
+.k-wave-stage .k-wave-sheen {
+  position: absolute; top: -20%; bottom: -20%; left: 0;
+  width: 56%;
+  background: linear-gradient(
+    100deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,.55) 32%,
+    rgba(201,148,26,.42) 50%,
+    rgba(104,38,42,.32) 66%,
+    rgba(255,255,255,0) 100%
+  );
+  filter: blur(8px);
+  animation: k-wave-sheen 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.k-wave-stage[data-phase="polishing"] .k-wave-sheen {
+  animation-duration: 2.4s;
+}
+/* SVG turbulence noise — distorts the underlying image very slightly,
+ * giving the "fabric materializing" sensation. Cheap on GPU because
+ * it's a tiny SVG referenced by url(). */
+.k-wave-stage .k-wave-grain {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 30% 20%, rgba(104,38,42,.10), transparent 55%),
+    radial-gradient(circle at 75% 80%, rgba(201,148,26,.10), transparent 55%);
+  mix-blend-mode: soft-light;
+  animation: k-wave-grain 2.8s ease-in-out infinite;
+}
+.k-wave-stage .k-wave-veil {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, rgba(253,246,238,0) 30%, rgba(253,246,238,.55) 100%);
+}
+.k-wave-stage .k-wave-caption {
+  position: absolute;
+  left: 0; right: 0; bottom: 26px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 2;
+}
+.k-wave-stage .k-wave-caption-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px; font-weight: 600;
+  text-transform: uppercase;
+  color: var(--k-maroon, #68262A);
+  animation: k-wave-caption 2.4s ease-in-out infinite;
+  display: inline-block;
+}
+.k-wave-stage .k-wave-caption-sub {
+  display: block;
+  margin-top: 6px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  color: rgba(34,34,34,.55);
+  letter-spacing: .06em;
+}
+
+/* Reveal — bg-removed image lands, wave gear gets out of the way. */
+.k-wave-stage.is-revealed .k-wave-image,
+.k-wave-stage.is-revealed .k-wave-sheen,
+.k-wave-stage.is-revealed .k-wave-grain,
+.k-wave-stage.is-revealed .k-wave-veil,
+.k-wave-stage.is-revealed .k-wave-caption {
+  opacity: 0;
+  transition: opacity .55s ease, filter .55s ease, transform .55s ease;
+}
+.k-wave-stage.is-revealed .k-wave-image {
+  filter: blur(0) saturate(1) brightness(1);
+  transform: scale(1);
+  animation: none;
+}
+
+/* The bg-removed PNG itself — sits above the wave stage, scaled to
+ * roughly 80% of the panel so the ivory backdrop frames it. The
+ * crossfade-in is timed to start ~120 ms after .is-revealed flips so
+ * the wave starts fading first; visually the image "emerges" from
+ * the blur rather than slamming on top. */
+.k-trial-cutout {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 4%;
+  z-index: 3;
+  opacity: 0;
+  transform: scale(.96);
+  transition: opacity .7s ease .12s, transform .7s ease .12s;
+}
+.k-trial-cutout.is-shown {
+  opacity: 1;
+  transform: scale(1);
+}
+.k-trial-cutout img {
+  max-width: 80%;
+  max-height: 80%;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 32px rgba(34,34,34,.18))
+          drop-shadow(0 4px 10px rgba(104,38,42,.12));
+}
+
+/* TrialTile — small left-side cards. Same wave language at smaller
+ * scale; the cutout sits centered with no padding because the card
+ * is already 1:1.2 cropped. */
+.k-trial-tile-cutout {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity .5s ease;
+  background: linear-gradient(135deg, #FDF6EE 0%, #F5EADC 100%);
+}
+.k-trial-tile-cutout.is-shown { opacity: 1; }
+.k-trial-tile-cutout img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  padding: 6%;
+}
+
 /* Responsive tweaks */
 @media (max-width: 820px) {
   .k-topbar { padding: 12px 14px; }

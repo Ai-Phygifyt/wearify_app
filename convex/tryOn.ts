@@ -18,6 +18,7 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  mutation,
   query,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -32,6 +33,8 @@ import {
   submitRunPodJob,
   DRYRUN_IMAGE_BASE64,
 } from "./runpod";
+import { requireKioskDevice } from "./kioskAuth";
+import { assertFile, GUARDS as FILE_GUARDS } from "./fileValidation";
 
 // =====================================================================
 // Resolve session, customer, saree in one read. The orchestrator
@@ -1050,5 +1053,57 @@ export const getCachedLooksForSarees = query({
     }
 
     return result;
+  },
+});
+
+// =====================================================================
+// Public mutation: attachBgRemovedImage
+// Kiosk-only. Called after the client (browser WASM via
+// @imgly/background-removal) produces a transparent PNG cutout of the
+// completed AI render and uploads it to Convex Storage. Patches the
+// looks row with imageNoBgFileId so the trial-room preview can swap in
+// the cutout.
+//
+// Idempotency:
+//   - skips if look has no imageFileId yet (premature call)
+//   - skips if imageNoBgFileId already set
+//   - skips if look.imageFileId has been replaced since the cutout was
+//     produced (caller passes sourceImageFileId for cache-coherence)
+//
+// Auth: kiosk device token via requireKioskDevice. The device's storeId
+// must match the look's storeId — prevents a paired device from one
+// store patching another store's looks.
+// =====================================================================
+
+export const attachBgRemovedImage = mutation({
+  args: {
+    deviceToken: v.string(),
+    lookId: v.id("looks"),
+    sourceImageFileId: v.id("_storage"),
+    fileId: v.id("_storage"),
+  },
+  handler: async (ctx, args): Promise<{ patched: boolean; reason?: string }> => {
+    const device = await requireKioskDevice(ctx, args.deviceToken);
+
+    const look = await ctx.db.get(args.lookId);
+    if (!look) throw new Error("INTERNAL: look not found");
+    if (look.storeId !== device.storeId) {
+      throw new Error("UNAUTHORIZED: look belongs to a different store");
+    }
+
+    // Premature / stale calls — bail without writing. The client will
+    // re-enqueue if/when it observes a fresh imageFileId.
+    if (!look.imageFileId) return { patched: false, reason: "no_source" };
+    if (look.imageFileId !== args.sourceImageFileId) {
+      return { patched: false, reason: "stale_source" };
+    }
+    if (look.imageNoBgFileId) return { patched: false, reason: "already_set" };
+
+    // Server-side guard mirrors the client guard. Cutouts are PNG-only
+    // so the transparent channel is preserved.
+    await assertFile(ctx, args.fileId, FILE_GUARDS.lookCutout);
+
+    await ctx.db.patch(args.lookId, { imageNoBgFileId: args.fileId });
+    return { patched: true };
   },
 });
