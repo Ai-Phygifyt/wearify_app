@@ -9,10 +9,10 @@ import { SareeThumb } from "@/components/SareeThumb";
 import { SareeImageGallery } from "@/components/SareeImageGallery";
 import { useConvexUrl } from "@/lib/ConvexImage";
 import {
-  ChevronLeft, ChevronRight, ChevronDown,
-  Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
+  ChevronLeft, ChevronRight, ChevronDown, ArrowRight,
+  Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock,
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
-  Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal,
+  Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal, Heart,
 } from "lucide-react";
 import { useUploadFile } from "@/lib/useUpload";
 import { GUARDS } from "@/lib/uploadGuards";
@@ -700,10 +700,8 @@ export default function KioskPage() {
         return (
           <LangScreen
             lang={lang}
-            onSelect={(c) => {
-              setLang(c);
-              navigate("modeSelect");
-            }}
+            onSelect={(c) => setLang(c)}
+            onNext={() => navigate("modeSelect")}
             storeName={storeName}
           />
         );
@@ -720,6 +718,7 @@ export default function KioskPage() {
         return (
           <PhoneAuthScreen
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
             onSubmitPhone={(ph) => {
               setPhone(ph);
               navigate("otp");
@@ -733,6 +732,7 @@ export default function KioskPage() {
             phone={phone}
             storeId={storeId}
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
             onVerified={async (customer) => {
               if (!customer) {
                 // Unknown phone — collect minimal profile (name + DOB) on kiosk
@@ -790,6 +790,7 @@ export default function KioskPage() {
           <NewCustomerScreen
             phone={phone}
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
             onRegistered={async (cId, cName) => {
               setCustomerId(cId);
               setCustomerName(cName);
@@ -826,6 +827,7 @@ export default function KioskPage() {
           <CodeEntryScreen
             storeId={storeId}
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
             onValidCode={(data) => {
               setTrialData(data.trialRoom);
               setSessionId(data.trialRoom.sessionId);
@@ -969,6 +971,8 @@ export default function KioskPage() {
         return (
           <BodyScanScreen
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
+            triggerLogout={triggerLogout}
             stream={cameraStream}
             onCapture={async (blob) => {
               if (!customerId) {
@@ -1156,7 +1160,7 @@ export default function KioskPage() {
                     });
                 }
               }
-              navigate("aiProcessing");
+              navigate("trialRoom");
             }}
             navigate={navigate}
             goHome={goHome}
@@ -1216,6 +1220,8 @@ export default function KioskPage() {
             trialCount={trialItems.length}
             wardrobeCount={wardrobeItems.length}
             cartCount={cartItems.length}
+            storeName={storeData?.name || storeName}
+            storeLogoFileId={storeData?.logoFileId}
           />
         ) : null;
       case "wardrobe":
@@ -1410,303 +1416,202 @@ function KioskToast({ msg, type, onClose }: { msg: string; type: string; onClose
 }
 
 /* ── IDLE ── */
-const IDLE_SLIDES = [
-  {
-    img: "/kiosk/img1.jpg",
-    h: "See Yourself in This Beautiful Saree",
-    s: "Experience our curated collection with virtual try-on",
-  },
-  {
-    img: "/kiosk/img2.webp",
-    h: "New Bridal Collection",
-    s: "Kanjivaram & Banarasi silks, handpicked for your big day",
-  },
-  {
-    img: "/kiosk/img3.webp",
-    h: "Festival Specials",
-    s: "Celebrate every occasion in exclusive weaves",
-  },
-  {
-    img: "/kiosk/img4.jpg",
-    h: "Light. Luxurious. Effortless.",
-    s: "Explore organzas and chiffons for every day",
-  },
-];
-
-function IdleScreen({ storeName, onStart }: { storeName: string; onStart: () => void }) {
-  const [slideIdx, setSlideIdx] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setSlideIdx((i) => (i + 1) % IDLE_SLIDES.length), 5500);
-    return () => clearInterval(t);
-  }, []);
-  const slide = IDLE_SLIDES[slideIdx];
-
+function IdleScreen({ storeName: _storeName, onStart }: { storeName: string; onStart: () => void }) {
   return (
     <div onClick={onStart} className="k-shell k-idle-shell" style={{ cursor: "pointer" }}>
-      {/* Cycling image backdrop */}
+      {/* Background image */}
       <div className="k-idle-stage">
-        {IDLE_SLIDES.map((s, i) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={s.img} src={s.img} alt="" aria-hidden
-            className={`k-idle-img ${i === slideIdx ? "active" : ""}`} />
-        ))}
-        <div className="k-idle-veil" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/kiosk/first-page/background.jpg"
+          alt=""
+          aria-hidden
+          className="k-idle-img active"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/kiosk/ideal-screen-2.svg"
+          alt=""
+          aria-hidden
+          className="k-idle-overlay"
+        />
       </div>
 
       {/* Top bar */}
       <div className="k-idle-top">
-        <div className="k-brand" style={{ fontSize: 20, color: "var(--k-text)" }}>{storeName}</div>
+        <div className="k-idle-brand">PHYGIFYT</div>
         <div className="k-idle-lang" onClick={(e) => { e.stopPropagation(); onStart(); }}>
           <span>Eng</span>
-          <ChevronDown size={14} />
+          <ChevronDown size={16} />
         </div>
       </div>
 
-      {/* Center glassmorphic CTA */}
+      {/* Center touch-to-start button */}
       <div className="k-idle-cta-wrap">
-        <div className="k-idle-cta k-scaleIn">
-          <span className="k-idle-cta-icon">
-            <Hand size={22} strokeWidth={2} />
-          </span>
-          <span className="k-idle-cta-label">Touch to Start</span>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/kiosk/first-page/touch-to-start.svg"
+          alt="Touch to Start"
+          className="k-idle-touch"
+        />
       </div>
 
       {/* Bottom copy */}
-      <div key={slideIdx} className="k-idle-copy">
-        <h1 className="k-display k-slideUp" style={{ fontSize: 28, lineHeight: 1.25, letterSpacing: "0.01em" }}>
-          {slide.h}
-        </h1>
-        <p className="k-slideUp k-d2" style={{
-          fontSize: 14, color: "var(--k-text-mid)", marginTop: 8,
-          letterSpacing: "0.05em", textTransform: "uppercase",
-        }}>
-          {slide.s}
-        </p>
-        <div className="k-slideUp k-d3" style={{ display: "inline-flex", gap: 6, marginTop: 18 }}>
-          {IDLE_SLIDES.map((_, i) => (
-            <span key={i} style={{
-              width: i === slideIdx ? 28 : 8, height: 3, borderRadius: 2,
-              background: i === slideIdx ? "var(--k-maroon)" : "rgba(34,34,34,.25)",
-              transition: "width .4s ease, background .4s ease",
-            }} />
-          ))}
-        </div>
+      <div className="k-idle-copy">
+        <h1 className="k-idle-headline">SEE YOURSELF IN THIS BEAUTIFUL SAREE</h1>
+        <p className="k-idle-subline">EXPERIENCE OUR CURATED COLLECTION WITH VIRTUAL TRY-ON</p>
       </div>
     </div>
   );
 }
 
 /* ── MODE SELECT ── */
-function ModeSelectScreen({ storeName, onStoreCode, onCustomerLogin, onBack }: {
+function ModeSelectScreen({ onStoreCode, onCustomerLogin }: {
   storeName: string; onStoreCode: () => void; onCustomerLogin: () => void; onBack: () => void;
 }) {
+  const [selected, setSelected] = useState<"store" | "phone" | null>(null);
+  const handleNext = () => {
+    if (selected === "store") onStoreCode();
+    else if (selected === "phone") onCustomerLogin();
+  };
+
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-lang-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 20px", gap: 16, maxWidth: 480, margin: "0 auto", width: "100%" }}>
-        <h2 className="k-display k-slideUp" style={{ fontSize: 26, marginBottom: 4 }}>How would you like to start?</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 14, color: "var(--k-text-muted)", marginBottom: 20, textAlign: "center", lineHeight: 1.55 }}>
-          Choose store code if your assistant shared one, or login with your phone number
-        </p>
 
-        <button onClick={onStoreCode} className="k-press k-slideUp k-d2 k-card-hover" style={{
-          width: "100%", padding: "20px 24px", borderRadius: "var(--k-r)",
-          background: "var(--k-card)", border: "1px solid var(--k-border)", boxShadow: "var(--k-shadow)",
-          display: "flex", alignItems: "center", gap: 16, cursor: "pointer", textAlign: "left",
-        }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14, background: "var(--k-maroon)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            color: "#fff", boxShadow: "0 6px 14px rgba(104,38,42,.25)",
-          }}>
-            <Hash size={24} strokeWidth={2.25} />
+      <div className="k-lang-content">
+        <div className="k-lang-top">
+          <div className="k-lang-brand">PHYGIFYT</div>
+          <div className="k-lang-langbtn">
+            <span>Eng</span>
+            <ChevronDown size={16} />
           </div>
-          <div style={{ flex: 1 }}>
-            <div className="k-heading" style={{ fontSize: 17, color: "var(--k-text)" }}>Store Code</div>
-            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 3 }}>Enter 6-digit code from your assistant</div>
-          </div>
-          <ChevronRight size={20} color="var(--k-text-muted)" />
-        </button>
+        </div>
 
-        <button onClick={onCustomerLogin} className="k-press k-slideUp k-d3 k-card-hover" style={{
-          width: "100%", padding: "20px 24px", borderRadius: "var(--k-r)",
-          background: "var(--k-card)", border: "1px solid var(--k-border)", boxShadow: "var(--k-shadow)",
-          display: "flex", alignItems: "center", gap: 16, cursor: "pointer", textAlign: "left",
-        }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14, background: "var(--k-gold)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            color: "#fff", boxShadow: "0 6px 14px rgba(201,148,26,.3)",
-          }}>
-            <Phone size={22} strokeWidth={2.25} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div className="k-heading" style={{ fontSize: 17, color: "var(--k-text)" }}>Phone Login</div>
-            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 3 }}>Login with your mobile number</div>
-          </div>
-          <ChevronRight size={20} color="var(--k-text-muted)" />
-        </button>
+        <div className="k-lang-heading k-slideUp">
+          <h1 className="k-lang-title">How would you like to start?</h1>
+          <p className="k-lang-subtitle">Choose store code if your assistant shared<br />one, or login with your phone number</p>
+        </div>
+
+        <div className="k-mode-grid">
+          <button
+            onClick={() => setSelected("store")}
+            className={`k-mode-card k-press k-slideUp k-d2 ${selected === "store" ? "active" : ""}`}
+          >
+            <div className="k-mode-card-art">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/kiosk/login/store-code.svg" alt="" aria-hidden />
+            </div>
+            <div className="k-mode-card-label">Store Code</div>
+          </button>
+
+          <button
+            onClick={() => setSelected("phone")}
+            className={`k-mode-card k-press k-slideUp k-d3 ${selected === "phone" ? "active" : ""}`}
+          >
+            <div className="k-mode-card-art">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/kiosk/login/phone-login.svg" alt="" aria-hidden />
+            </div>
+            <div className="k-mode-card-label">Phone Login</div>
+          </button>
+        </div>
+
+        <div className="k-lang-next-wrap">
+          <button onClick={handleNext} disabled={!selected} className="k-mode-next">Next</button>
+        </div>
       </div>
     </div>
   );
 }
 
 /* ── PHONE AUTH ── */
-function PhoneAuthScreen({ storeName, onSubmitPhone, onBack }: {
-  storeName: string; onSubmitPhone: (phone: string) => void; onBack: () => void;
+function PhoneAuthScreen({ storeName, storeLogoFileId, onSubmitPhone, onBack }: {
+  storeName: string; storeLogoFileId?: Id<"_storage">;
+  onSubmitPhone: (phone: string) => void; onBack: () => void;
 }) {
   const [inp, setInp] = useState("");
   const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleKey = (k: string) => { setError(""); if (inp.length < 10) setInp((v) => v + k); };
-  const handleDel = () => { setError(""); setInp((v) => v.slice(0, -1)); };
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
+
   const handleSubmit = () => {
     if (inp.length !== 10) { setError("Valid 10-digit number required"); return; }
     if (!["6","7","8","9"].includes(inp[0])) { setError("Valid 10-digit number required"); return; }
     onSubmitPhone(inp);
   };
 
-  const complete = inp.length === 10 && !error;
-  const formattedInp = inp.length > 5 ? `${inp.slice(0, 5)} ${inp.slice(5)}` : inp;
-
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-pair-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div className="k-form-col">
-        {/* Hero badge */}
-        <div className="k-slideUp k-float" style={{
-          width: 64, height: 64, borderRadius: "50%",
-          background: "linear-gradient(135deg, var(--k-maroon) 0%, var(--k-maroon-l) 100%)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "#fff", marginTop: 6, marginBottom: 16,
-          boxShadow: "0 10px 24px rgba(104,38,42,.28), inset 0 1px 0 rgba(255,255,255,.18)",
-        }}>
-          <Phone size={26} strokeWidth={2} />
-        </div>
 
-        <h2 className="k-display k-slideUp k-d1" style={{ fontSize: 24, marginBottom: 6, textAlign: "center" }}>
-          Sign in with your mobile
-        </h2>
-        <div className="k-divider-gold k-slideUp k-d1" style={{ margin: "4px auto 10px" }} />
-        <p className="k-slideUp k-d2" style={{
-          fontSize: 13, color: "var(--k-text-muted)", marginBottom: 22,
-          textAlign: "center", lineHeight: 1.5, maxWidth: 280,
-        }}>
-          We'll send a one-time code to verify your number
-        </p>
-
-        {/* Phone display */}
-        <div className="k-slideUp k-d3" style={{
-          width: "100%", padding: "10px 12px 10px 10px", borderRadius: 14,
-          border: `1.5px solid ${error ? "var(--k-red)" : inp ? "var(--k-maroon)" : "var(--k-border)"}`,
-          background: "var(--k-card)",
-          display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
-          boxShadow: complete
-            ? "0 0 0 4px rgba(104,38,42,.08), 0 10px 24px rgba(104,38,42,.12)"
-            : inp ? "0 0 0 3px rgba(104,38,42,.06)" : "var(--k-shadow-xs)",
-          transition: "all .22s cubic-bezier(.22,1,.36,1)",
-        }}>
-          {/* +91 pill */}
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "8px 11px", borderRadius: 10,
-            background: "var(--k-bg-warm)",
-            border: "1px solid var(--k-border-l)",
-            color: "var(--k-text-mid)", flexShrink: 0,
-          }}>
-            <Phone size={13} strokeWidth={2.25} />
-            <span className="k-mono" style={{ fontSize: 13, fontWeight: 600 }}>+91</span>
-          </div>
-
-          {/* digits */}
-          <span className="k-mono" style={{
-            fontSize: 19, fontWeight: 600, flex: 1,
-            letterSpacing: inp ? "0.14em" : "0.04em",
-            color: "var(--k-text)",
-            whiteSpace: "nowrap", overflow: "hidden",
-          }}>
-            {inp
-              ? formattedInp
-              : <span style={{ color: "var(--k-text-light)", fontWeight: 400 }}>Mobile number</span>}
-          </span>
-
-          {complete && (
-            <div className="k-popIn" style={{
-              width: 24, height: 24, borderRadius: "50%",
-              background: "var(--k-green)", color: "#fff",
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              <Check size={14} strokeWidth={3} />
-            </div>
+      <div className="k-pair-topbar">
+        <div className="k-pair-topbar-logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} />
+          ) : (
+            <span>{initial}</span>
           )}
         </div>
+        <div className="k-pair-topbar-title">{storeName}</div>
+      </div>
 
-        {/* Progress dots */}
-        <div className="k-slideUp k-d3" style={{
-          display: "flex", gap: 5, marginBottom: error ? 10 : 14, alignSelf: "center",
-        }}>
-          {Array.from({ length: 10 }).map((_, i) => (
-            <span key={i} style={{
-              width: i < inp.length ? 16 : 6, height: 3, borderRadius: 2,
-              background: i < inp.length
-                ? (error ? "var(--k-red)" : "var(--k-maroon)")
-                : "rgba(104,38,42,.14)",
-              transition: "all .25s cubic-bezier(.22,1,.36,1)",
-            }} />
-          ))}
+      <div className="k-pair-content">
+        <button onClick={onBack} className="k-pair-back" aria-label="Back">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={48} />
+        </button>
+
+        <h1 className="k-phone-title k-slideUp">Hello!</h1>
+        <p className="k-phone-subtitle k-slideUp k-d1">Sign-in with your mobile</p>
+
+        <div className="k-phone-field k-slideUp k-d2" onClick={() => inputRef.current?.focus()}>
+          <div className="k-phone-prefix">
+            <Phone size={18} strokeWidth={2.25} />
+            <span>+91</span>
+          </div>
+          <input
+            ref={inputRef}
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoFocus
+            value={inp}
+            onChange={(e) => {
+              const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 10);
+              setInp(v);
+              setError("");
+            }}
+            className="k-phone-input"
+            aria-label="Mobile number"
+          />
         </div>
 
-        {error && (
-          <div className="k-slideDown" style={{
-            fontSize: 12, color: "var(--k-red)", fontWeight: 500,
-            marginBottom: 10, textAlign: "center",
-            padding: "6px 12px", borderRadius: 999,
-            background: "var(--k-red-bg)",
-            border: "1px solid rgba(192,57,43,.18)",
-          }}>{error}</div>
-        )}
-
-        <div className="k-numpad k-slideUp k-d4" style={{ width: "100%", marginTop: 4 }}>
-          {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
-            if (k === "") return <div key={i} />;
-            if (k === "del") return (
-              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
-                <Delete size={22} />
-              </button>
-            );
-            return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
-          })}
-        </div>
+        {error && <div className="k-pair-error">{error}</div>}
 
         <button
           onClick={handleSubmit}
-          disabled={!complete}
-          className={`k-btn k-btn-primary k-btn-pill k-slideUp k-d5 ${complete ? "k-silk" : ""}`}
-          style={{ width: "100%", marginTop: 16, fontSize: 16, fontWeight: 600, minHeight: 52 }}
+          disabled={inp.length !== 10}
+          className="k-phone-submit k-slideUp k-d3"
         >
-          Continue
-          <ChevronRight size={18} />
+          Continue <ArrowRight size={22} />
         </button>
 
-        <p className="k-slideUp k-d6" style={{
-          marginTop: 12, fontSize: 11, color: "var(--k-text-light)",
-          textAlign: "center", letterSpacing: "0.02em", lineHeight: 1.5,
-        }}>
-          By continuing you agree to our Terms & Privacy Policy
+        <p className="k-phone-terms k-slideUp k-d4">
+          By Continuing You Agree To Our Terms &amp; Privacy Policy
         </p>
       </div>
     </div>
@@ -1714,15 +1619,21 @@ function PhoneAuthScreen({ storeName, onSubmitPhone, onBack }: {
 }
 
 /* ── OTP SCREEN ── */
-function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
+function OTPScreen({ phone, storeName, storeLogoFileId, onVerified, onBack }: {
   phone: string; storeId: string; storeName: string;
+  storeLogoFileId?: Id<"_storage">;
   onVerified: (customer: { _id: Id<"customers">; name: string; lastBodyScan?: number; bodyScanFileId?: Id<"_storage">; language?: string } | null) => void;
   onBack: () => void;
 }) {
+  const OTP_LENGTH = 6;
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
 
   const verifyOtp = useMutation(api.phoneAuth.verifyOtp);
   const customer = useQuery(
@@ -1736,11 +1647,8 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
     return () => clearTimeout(t);
   }, [timer]);
 
-  const handleKey = (k: string) => { setError(""); if (otp.length < 6) setOtp((v) => v + k); };
-  const handleDel = () => { setError(""); setOtp((v) => v.slice(0, -1)); };
   const handleSubmit = async () => {
-    if (otp.length !== 6) return;
-    // customer is undefined while loading, null if not found
+    if (otp.length !== OTP_LENGTH) return;
     if (customer === undefined) {
       setError("Loading customer data, try again...");
       return;
@@ -1759,74 +1667,95 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
     }
   };
 
-  const maskedPhone = phone ? phone.slice(0, 2) + "****" + phone.slice(-4) : "";
-
-  const activeIdx = otp.length;
+  const maskedPhone = phone ? phone.slice(0, 2) + "*****" + phone.slice(-3) : "";
 
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-pair-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div className="k-form-col">
-        <h2 className="k-display k-slideUp" style={{ fontSize: 22, marginBottom: 4 }}>Enter OTP</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 16 }}>
-          OTP sent to +91 {maskedPhone}
-        </p>
 
-        {/* OTP boxes */}
-        <div className="k-slideUp k-d2" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className={`k-codebox ${otp[i] ? "filled" : ""} ${i === activeIdx ? "active" : ""}`}>
-              {otp[i] || ""}
+      <div className="k-pair-topbar">
+        <div className="k-pair-topbar-logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} />
+          ) : (
+            <span>{initial}</span>
+          )}
+        </div>
+        <div className="k-pair-topbar-title">{storeName}</div>
+      </div>
+
+      <div className="k-pair-content">
+        <button onClick={onBack} className="k-pair-back" aria-label="Back">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={48} />
+        </button>
+
+        <h1 className="k-otp-title k-slideUp">Hello!</h1>
+        <p className="k-otp-subtitle k-slideUp k-d1">Enter a OTP</p>
+        <p className="k-otp-sent k-slideUp k-d2">OTP sent to +91 {maskedPhone}</p>
+
+        <div className="k-otp-boxes k-slideUp k-d3" onClick={() => inputRef.current?.focus()}>
+          {Array.from({ length: OTP_LENGTH }).map((_, i) => (
+            <div key={i} className={`k-otp-box ${otp[i] ? "filled" : ""}`}>
+              {otp[i] || "0"}
             </div>
           ))}
         </div>
 
-        {error && <div style={{ fontSize: 13, color: "var(--k-red)", marginBottom: 8, fontWeight: 500 }}>{error}</div>}
+        <input
+          ref={inputRef}
+          type="tel"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoFocus
+          value={otp}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^0-9]/g, "").slice(0, OTP_LENGTH);
+            setOtp(v);
+            setError("");
+          }}
+          className="k-pair-hidden-input"
+          aria-label="OTP"
+        />
 
-        <div style={{ marginTop: 4, marginBottom: 8 }}>
+        {error && <div className="k-pair-error">{error}</div>}
+
+        <button
+          onClick={handleSubmit}
+          disabled={otp.length !== OTP_LENGTH}
+          className="k-otp-submit k-slideUp k-d4"
+        >
+          Continue <ArrowRight size={22} />
+        </button>
+
+        <div className="k-otp-resend k-slideUp k-d5">
           {canResend ? (
-            <button onClick={() => { setTimer(60); setCanResend(false); setOtp(""); }} style={{
-              fontSize: 13, color: "var(--k-maroon)", fontWeight: 600, cursor: "pointer",
-              background: "none", border: "none", textDecoration: "underline",
-            }}>Resend OTP</button>
+            <button
+              onClick={() => { setTimer(60); setCanResend(false); setOtp(""); }}
+              className="k-otp-resend-btn"
+            >
+              Resend OTP
+            </button>
           ) : (
-            <div style={{ fontSize: 13, color: "var(--k-text-muted)" }}>
-              Resend in <span className="k-mono" style={{ color: "var(--k-maroon)", fontWeight: 600 }}>{timer}s</span>
-            </div>
+            <span>Resend in {timer}s</span>
           )}
         </div>
-
-        <div className="k-numpad k-slideUp k-d3" style={{ width: "100%", marginTop: 4 }}>
-          {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
-            if (k === "") return <div key={i} />;
-            if (k === "del") return (
-              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
-                <Delete size={22} />
-              </button>
-            );
-            return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
-          })}
-        </div>
-
-        <button onClick={handleSubmit} disabled={otp.length !== 6} className="k-btn k-btn-primary k-btn-pill k-slideUp k-d4" style={{ width: "100%", marginTop: 18, fontSize: 16, fontWeight: 600 }}>
-          Continue
-          <ChevronRight size={18} />
-        </button>
       </div>
     </div>
   );
 }
 
 /* ── NEW CUSTOMER (minimal capture: name + DOB) ── */
-function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
+function NewCustomerScreen({ phone, storeName, storeLogoFileId, onRegistered, onBack }: {
   phone: string;
   storeName: string;
+  storeLogoFileId?: Id<"_storage">;
   onRegistered: (customerId: Id<"customers">, customerName: string) => void;
   onBack: () => void;
 }) {
@@ -1835,6 +1764,9 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
   const [dob, setDob] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
 
   const maxDob = (() => {
     const d = new Date();
@@ -1874,66 +1806,72 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
   }
 
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-pair-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
 
-      <div className="k-form-col" style={{ maxWidth: 480 }}>
-        <h2 className="k-display k-slideUp" style={{ fontSize: 24, marginBottom: 4 }}>Welcome to Wearify</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 14, color: "var(--k-text-muted)", marginBottom: 28, textAlign: "center" }}>
-          Quick setup — complete the rest later on the Wearify app.
+      <div className="k-pair-topbar">
+        <div className="k-pair-topbar-logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} />
+          ) : (
+            <span>{initial}</span>
+          )}
+        </div>
+        <div className="k-pair-topbar-title">{storeName}</div>
+      </div>
+
+      <div className="k-pair-content">
+        <button onClick={onBack} className="k-pair-back" aria-label="Back">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={48} />
+        </button>
+
+        <h1 className="k-welcome-title k-slideUp">Welcome to Wearify</h1>
+        <p className="k-welcome-subtitle k-slideUp k-d1">
+          Quick setup-complete the rest later on the<br />Wearify app.
         </p>
 
-        <div className="k-slideUp k-d2" style={{ width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--k-text)", marginBottom: 6 }}>
-              Full Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setError(""); }}
-              placeholder="e.g. Ananya Mehta"
-              className="k-input"
-            />
-          </div>
-
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--k-text)", marginBottom: 6 }}>
-              Date of Birth
-            </label>
-            <input
-              type="date"
-              value={dob}
-              max={maxDob}
-              onChange={(e) => { setDob(e.target.value); setError(""); }}
-              className="k-input"
-            />
-          </div>
+        <div className="k-welcome-field k-slideUp k-d2">
+          <label className="k-welcome-label">Full Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(""); }}
+            placeholder="e.g. Ananya Mehta"
+            className="k-welcome-input"
+          />
         </div>
 
-        {error && (
-          <div style={{ fontSize: 13, color: "var(--k-red)", marginTop: 12, fontWeight: 500 }}>
-            {error}
-          </div>
-        )}
+        <div className="k-welcome-field k-slideUp k-d3">
+          <label className="k-welcome-label">Date of Birth</label>
+          <input
+            type="date"
+            value={dob}
+            max={maxDob}
+            onChange={(e) => { setDob(e.target.value); setError(""); }}
+            placeholder="dd-mm-yyyy"
+            className="k-welcome-input k-welcome-input-date"
+          />
+        </div>
+
+        {error && <div className="k-pair-error">{error}</div>}
 
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="k-btn k-btn-primary k-btn-pill k-slideUp k-d3"
-          style={{ width: "100%", marginTop: 24, fontSize: 16, fontWeight: 600 }}
+          className="k-welcome-submit k-slideUp k-d4"
         >
-          {saving ? (<><Loader2 size={18} className="k-spin" /> Creating…</>) : (<>Continue <ChevronRight size={18} /></>)}
+          {saving ? (<><Loader2 size={20} className="k-spin" /> Creating…</>) : (<>Continue <ArrowRight size={22} /></>)}
         </button>
 
-        <p className="k-slideUp k-d4" style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 18, textAlign: "center" }}>
-          Your try-on history and wardrobe will be saved to your phone number.
+        <p className="k-welcome-note k-slideUp k-d5">
+          Your try-on history and wardrobe will be saved to your<br />phone number.
         </p>
       </div>
     </div>
@@ -1944,24 +1882,26 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
 
 /* ── CODE ENTRY ── */
 function CodeEntryScreen({
-  storeId, storeName, onValidCode, onBack,
+  storeId, storeName, storeLogoFileId, onValidCode, onBack,
 }: {
   storeId: string;
   storeName: string;
+  storeLogoFileId?: Id<"_storage">;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onValidCode: (data: any) => void;
   onBack: () => void;
 }) {
   const [code, setCode] = useState("");
+  const [deviceLabel, setDeviceLabel] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
-  // validateCode is a mutation now (rate-limited — can't be a query).
-  // We call it on Continue press, not reactively on typing.
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
+
   const validateCodeMut = useMutation(api.trialRoom.validateCode);
 
-  const handleKey = (k: string) => { setError(""); if (code.length < 6) setCode((v) => v + k); };
-  const handleDel = () => { setError(""); setCode((v) => v.slice(0, -1)); };
   const handleSubmit = async () => {
     if (code.length !== 6 || loading) return;
     setLoading(true);
@@ -1981,75 +1921,135 @@ function CodeEntryScreen({
     }
   };
 
-  const activeIdx = code.length;
-
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-pair-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div className="k-form-col">
-        <h2 className="k-display k-slideUp" style={{ fontSize: 22, marginBottom: 4 }}>Enter Trial Room Code</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 16 }}>
-          6-digit code from your store assistant
-        </p>
-        <div className="k-slideUp k-d2" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className={`k-codebox ${code[i] ? "filled" : ""} ${i === activeIdx ? "active" : ""}`}>
-              {code[i] || ""}
-            </div>
-          ))}
+
+      <div className="k-pair-topbar">
+        <div className="k-pair-topbar-logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} />
+          ) : (
+            <span>{initial}</span>
+          )}
         </div>
-        {error && <div style={{ fontSize: 13, color: "var(--k-red)", marginBottom: 8, fontWeight: 500 }}>{error}</div>}
-        <div className="k-numpad k-slideUp k-d3" style={{ width: "100%", marginTop: 8 }}>
-          {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
-            if (k === "") return <div key={i} />;
-            if (k === "del") return (
-              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
-                <Delete size={22} />
-              </button>
-            );
-            return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
-          })}
-        </div>
-        <button onClick={handleSubmit} disabled={code.length !== 6 || loading} className="k-btn k-btn-primary k-btn-pill k-slideUp k-d4" style={{ width: "100%", marginTop: 18, fontSize: 16, fontWeight: 600 }}>
-          {loading ? (<><Loader2 size={18} className="k-spin" /> Verifying…</>) : (<>Continue <ChevronRight size={18} /></>)}
+        <div className="k-pair-topbar-title">{storeName}</div>
+      </div>
+
+      <div className="k-pair-content">
+        <button onClick={onBack} className="k-pair-back" aria-label="Back">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={48} />
         </button>
+
+        <h1 className="k-pair-title k-slideUp">Pair this kiosk</h1>
+        <p className="k-pair-subtitle k-slideUp k-d1">
+          Ask the store owner or admin for a 6-digit<br />pairing code
+        </p>
+
+        <div className="k-pair-field k-slideUp k-d2">
+          <div className="k-pair-label">PAIRING CODE</div>
+          <div className="k-pair-codes" onClick={() => codeInputRef.current?.focus()}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className={`k-pair-codebox ${code[i] ? "filled" : ""}`}>
+                {code[i] || "0"}
+              </div>
+            ))}
+          </div>
+          <input
+            ref={codeInputRef}
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoFocus
+            value={code}
+            onChange={(e) => {
+              const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+              setCode(v);
+              setError("");
+            }}
+            className="k-pair-hidden-input"
+            aria-label="Pairing code"
+          />
+        </div>
+
+        <div className="k-pair-field k-slideUp k-d3">
+          <div className="k-pair-label">DEVICE LABLE (OPTIONAL)</div>
+          <input
+            type="text"
+            value={deviceLabel}
+            onChange={(e) => setDeviceLabel(e.target.value)}
+            placeholder="e.g.Front mirror, Trial room 2"
+            className="k-pair-input"
+          />
+        </div>
+
+        {error && <div className="k-pair-error">{error}</div>}
+
+        <button
+          onClick={handleSubmit}
+          disabled={code.length !== 6 || loading}
+          className="k-pair-submit k-slideUp k-d4"
+        >
+          {loading ? (<><Loader2 size={20} className="k-spin" /> Verifying…</>) : "Pair Kiosk"}
+        </button>
+
+        <div className="k-pair-helpers k-slideUp k-d5">
+          <p>Secure pairing between this device &amp; your account</p>
+          <p>Ask the store owner to generate a fresh code if pairing<br />has expired</p>
+        </div>
       </div>
     </div>
   );
 }
 
 /* ── LANGUAGE ── */
-function LangScreen({ lang, onSelect, storeName }: { lang: string; onSelect: (c: string) => void; storeName: string }) {
+function LangScreen({ lang, onSelect, onNext }: { lang: string; onSelect: (c: string) => void; onNext: () => void; storeName: string }) {
   return (
-    <div className="k-shell" style={{ alignItems: "center", padding: "0 20px" }}>
-      <div className="k-slideUp" style={{ marginTop: 56, textAlign: "center" }}>
-        <div className="k-brand" style={{ fontSize: 22, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div className="k-divider-gold" />
-        <h2 className="k-display" style={{ fontSize: 22, marginTop: 12 }}>Select Your Language</h2>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Choose your preferred language</p>
+    <div className="k-lang-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, padding: "28px 0", width: "100%", maxWidth: 560, marginTop: 8 }}>
-        {LANGS.map((l, i) => (
-          <button key={l.c} onClick={() => onSelect(l.c)} className={`k-press k-slideUp k-d${Math.min((i % 8) + 1, 8)}`} style={{
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "18px 8px", borderRadius: 14,
-            background: lang === l.c ? "var(--k-maroon)" : "var(--k-card)",
-            color: lang === l.c ? "#fff" : "var(--k-text)",
-            border: `1px solid ${lang === l.c ? "var(--k-maroon)" : "var(--k-border)"}`,
-            boxShadow: lang === l.c ? "0 6px 16px rgba(104,38,42,.22)" : "var(--k-shadow-xs)",
-            cursor: "pointer", minHeight: 72,
-            transition: "all .2s ease",
-          }}>
-            <span className="k-heading" style={{ fontSize: 18 }}>{l.v}</span>
-            <span style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>{l.n}</span>
-          </button>
-        ))}
+
+      <div className="k-lang-content">
+        <div className="k-lang-top">
+          <div className="k-lang-brand">PHYGIFYT</div>
+          <div className="k-lang-langbtn">
+            <span>Eng</span>
+            <ChevronDown size={16} />
+          </div>
+        </div>
+
+        <div className="k-lang-heading k-slideUp">
+          <h1 className="k-lang-title">Select your language</h1>
+          <p className="k-lang-subtitle">Choose your preferred language</p>
+        </div>
+
+        <div className="k-lang-grid">
+          {LANGS.map((l, i) => (
+            <button
+              key={l.c}
+              onClick={() => onSelect(l.c)}
+              className={`k-lang-card k-press k-slideUp k-d${Math.min((i % 8) + 1, 8)} ${lang === l.c ? "active" : ""}`}
+            >
+              <span className="k-lang-card-native">{l.v}</span>
+              <span className="k-lang-card-name">{l.n}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="k-lang-next-wrap">
+          <button onClick={onNext} className="k-lang-next">Next</button>
+        </div>
       </div>
     </div>
   );
@@ -2110,7 +2110,7 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "14px 24px", background: "var(--k-card)",
+      padding: "22px 24px", background: "var(--k-card)",
       borderBottom: "1px solid var(--k-border-l)", flexShrink: 0, zIndex: 40,
     }}>
       {onBack ? (
@@ -2143,7 +2143,17 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, shortlistedItems, onPro
 }) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
+
+  const toggleLike = (id: string) => {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   // Price band: null = any. Stored as [min, max | null] in rupees.
   const [priceBand, setPriceBand] = useState<[number, number | null] | null>(null);
   // Multi-select tags (Premium / Trending / Fast Moving / New — whatever the store curates)
@@ -2212,11 +2222,77 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, shortlistedItems, onPro
   // Group by occasion for categories
   const occasions = [...new Set(sarees.map((s) => s.occasion))];
 
+  const favourites = shortlistedItems.length > 0
+    ? shortlistedItems
+    : wardrobeItems.length > 0
+      ? wardrobeItems
+      : sarees.slice(0, 8);
+
   return (
     <div className="k-shell">
       <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
 
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 100 }}>
+        {!filtered ? (
+          <div className="k-home-content">
+            <div className="k-home-search-row">
+              <div className="k-home-search">
+                <Search size={22} color="var(--k-text-muted)" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search saree..."
+                />
+                {query && (
+                  <button onClick={() => setQuery("")} aria-label="Clear" className="k-home-search-clear">
+                    <X size={20} />
+                  </button>
+                )}
+              </div>
+              <button onClick={() => navigate("consent")} className="k-home-scan-btn" aria-label="Scan">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/kiosk/home/scan.svg" alt="" aria-hidden width={28} />
+              </button>
+            </div>
+
+            <HomeRail title="My Favourites">
+              {favourites.map((s) => (
+                <FavouriteCard
+                  key={s._id}
+                  saree={s}
+                  onTap={() => onProductTap(s)}
+                  onAddToTrial={() => {
+                    if (isInTrial(s._id) || isInWardrobe(s._id)) return;
+                    if (trialItems.length >= maxTrial) {
+                      showToast(`Max ${maxTrial} sarees per trial`, "warning");
+                      return;
+                    }
+                    onSendToTrial([s]);
+                  }}
+                  liked={likedIds.has(s._id)}
+                  onToggleLike={() => toggleLike(s._id)}
+                  inTrial={isInTrial(s._id)}
+                  inWardrobe={isInWardrobe(s._id)}
+                />
+              ))}
+            </HomeRail>
+
+            <HomeRail title="Trending Now">
+              {trending.map((s) => (
+                <TrendingCard key={s._id} saree={s} onTap={() => onProductTap(s)} />
+              ))}
+            </HomeRail>
+
+            <HomeRail title="New Arrivals">
+              {newArrivals.map((s) => (
+                <NewArrivalCard key={s._id} saree={s} onTap={() => onProductTap(s)} />
+              ))}
+            </HomeRail>
+          </div>
+        ) : null}
+
+        <div style={{ display: filtered ? "block" : "none" }}>
         {/* Search bar + filter */}
         <div style={{ padding: "16px 24px 8px", display: "flex", gap: 10, position: "relative" }}>
           <div style={{
@@ -2453,7 +2529,91 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, shortlistedItems, onPro
             </div>
           </>
         )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function HomeRail({ title, children }: { title: string; children: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  return (
+    <div className="k-home-section">
+      <div className="k-home-section-head">
+        <h2 className="k-home-section-title">{title}</h2>
+        <div className="k-home-nav">
+          <button onClick={() => scrollRef.current?.scrollBy({ left: -360, behavior: "smooth" })} className="k-home-nav-btn" aria-label="Scroll left">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kiosk/home/backward.svg" alt="" aria-hidden width={40} />
+          </button>
+          <button onClick={() => scrollRef.current?.scrollBy({ left: 360, behavior: "smooth" })} className="k-home-nav-btn" aria-label="Scroll right">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kiosk/home/forward.svg" alt="" aria-hidden width={40} />
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="k-home-rail k-no-scroll">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FavouriteCard({ saree, onTap, onAddToTrial, liked, onToggleLike, inTrial, inWardrobe }: {
+  saree: SareeItem; onTap: () => void; onAddToTrial: () => void;
+  liked: boolean; onToggleLike: () => void;
+  inTrial: boolean; inWardrobe: boolean;
+}) {
+  const disabled = inTrial || inWardrobe;
+  return (
+    <div className="k-fav-card">
+      <div className="k-fav-card-img" onClick={onTap}>
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={36} />
+        <button
+          type="button"
+          className={`k-fav-heart ${liked ? "is-liked" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onToggleLike(); }}
+          aria-label={liked ? "Unlike" : "Like"}
+          aria-pressed={liked}
+        >
+          <Heart size={18} fill={liked ? "#dc2626" : "transparent"} color={liked ? "#dc2626" : "#9ca3af"} strokeWidth={2.25} />
+        </button>
+      </div>
+      <div className="k-fav-card-info">
+        <div className="k-fav-tag">{saree.occasion}</div>
+        <div className="k-fav-name">{saree.name}</div>
+        <div className="k-fav-meta">{saree.fabric} • 6.3 meters</div>
+        <div className="k-fav-price">₹{fmtPrice(saree.price)}</div>
+        <button
+          className="k-fav-add-btn"
+          onClick={(e) => { e.stopPropagation(); onAddToTrial(); }}
+          disabled={disabled}
+        >
+          {inWardrobe ? "In Wardrobe" : inTrial ? "In Trial Room" : "Add To Trial Room"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TrendingCard({ saree, onTap }: { saree: SareeItem; onTap: () => void }) {
+  return (
+    <div className="k-trend-card" onClick={onTap}>
+      <div className="k-trend-card-img">
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={48} />
+      </div>
+      <div className="k-trend-card-label">{saree.occasion || saree.name}</div>
+    </div>
+  );
+}
+
+function NewArrivalCard({ saree, onTap }: { saree: SareeItem; onTap: () => void }) {
+  return (
+    <div className="k-arrival-card" onClick={onTap}>
+      <div className="k-arrival-card-img">
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={48} />
+      </div>
+      <div className="k-arrival-card-name">{saree.fabric || saree.name}</div>
     </div>
   );
 }
@@ -2568,6 +2728,7 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
   onAddToTrial: () => void; onBack: () => void; onProductTap: (p: SareeItem) => void;
   navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number;
+  storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [selColor, setSelColor] = useState(0);
   const disc = product.mrp && product.mrp > product.price ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
@@ -3294,6 +3455,9 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
       </div>
     </div>
   );
+
+  const similar = items.filter((s) => s._id !== current?._id).slice(0, 3);
+  const colors = ["#a3c8ad", "#cb9d7a", "#c44141", "#f0d96b", "#3878b6"];
 
   return (
     <div className="k-trial-v2-shell">
