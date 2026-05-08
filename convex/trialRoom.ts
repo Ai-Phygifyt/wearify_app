@@ -167,9 +167,10 @@ export const validateCode = mutation({
       .take(100);
     const mirrorItems = shortlistItems.filter((item) => item.sentToMirror);
 
-    // Narrow customer projection — the kiosk only reads _id/name/phone/lastBodyScan/language.
-    // Don't return full row (password hash, email, body measurements, preferences, etc.)
-    // so a guessed code can't exfiltrate PII.
+    // Narrow customer projection — the kiosk only reads _id/name/phone/lastBodyScan/language
+    // + the body-scan presence boolean used by the eager body-scan gate. Don't return
+    // full row (password hash, email, body measurements, preferences, etc.) or the raw
+    // bodyScanFileId so a guessed code can't exfiltrate PII / file references.
     let customer = null;
     if (entry.customerId) {
       const row = await ctx.db.get(entry.customerId);
@@ -179,6 +180,9 @@ export const validateCode = mutation({
           name: row.name,
           phone: row.phone,
           lastBodyScan: row.lastBodyScan,
+          // Boolean only — the kiosk's eager gate just needs to know IF a scan exists.
+          // The actual file id never crosses the wire on this query.
+          hasBodyScanFile: row.bodyScanFileId !== undefined,
           language: row.language,
         };
       }

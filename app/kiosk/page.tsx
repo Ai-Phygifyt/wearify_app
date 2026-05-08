@@ -747,13 +747,19 @@ export default function KioskPage() {
                 lang: customer.language ?? "en",
                 hasBodyScan: hasScan,
               });
-              // Land directly on home after phone login. Body scan is no longer
-              // an upfront gate — if the customer needs one, the runTryOn catch
-              // at the home/product-detail call sites redirects to consent →
-              // bodyScan on first send-to-trial. This applies to phoneAuth /
-              // OTP only; the codeEntry (store-code) flow keeps its own
-              // scanChoice / consent gating.
-              navigate("home");
+              // Eager body-scan gate: customers with NO scan on file ever go to
+              // consent first, so the trial-room flow can't throw NO_BODY_SCAN:
+              // server-side. Stale-scan customers (lastBodyScan present but >6
+              // months old) still go to home — the server only enforces presence
+              // of bodyScanFileId, not staleness, so they won't trip the error.
+              // Customers can still tap Skip on consent to land on home in
+              // browse-only mode; subsequent send-to-trial attempts are
+              // pre-checked client-side and re-route to consent (no server hit).
+              if (!customer.bodyScanFileId) {
+                navigate("consent");
+              } else {
+                navigate("home");
+              }
             }}
             onBack={goBack}
           />
@@ -785,10 +791,11 @@ export default function KioskPage() {
                 lang,
                 hasBodyScan: false,
               });
-              // Land directly on home — same rationale as the OTP returning-
-              // customer branch. Body scan is triggered lazily on first
-              // send-to-trial via the NO_BODY_SCAN: catch path.
-              navigate("home");
+              // A newly-registered customer never has a scan on file. Eager
+              // gate sends them straight to consent — same rationale as the
+              // OTP no-scan branch. Skip on consent still lands them on home
+              // in browse-only mode.
+              navigate("consent");
             }}
             onBack={() => navigate("otp")}
           />
@@ -849,7 +856,15 @@ export default function KioskPage() {
               // Auto-trial the first 2 (oldest by addedAt). Remaining items
               // sit in the Shortlisted home rail until the customer self-adds
               // them. Replaces the previous bulk-dump-into-trialRoom behavior.
+              //
+              // Body-scan gate: when the customer has no scan on file, we
+              // populate trialItems but DON'T fire runTryOn — that would
+              // throw NO_BODY_SCAN: server-side. Once the customer completes
+              // the body scan via the consent flow below, the reconciliation
+              // effect (search "Reconciliation effect") sees bodyScanInfo
+              // flip and fires runTryOn for the queued items.
               const firstTwo = resolved.slice(0, 2);
+              const customerHasScan = data.customer?.hasBodyScanFile === true;
               if (firstTwo.length > 0) {
                 setTrialItems((prev) => {
                   const existingIds = new Set(prev.map((s) => s._id));
@@ -859,7 +874,7 @@ export default function KioskPage() {
                   }
                   return merged;
                 });
-                if (data.customer) {
+                if (data.customer && customerHasScan) {
                   for (const item of firstTwo) {
                     runTryOn({
                       deviceToken: deviceToken!,
@@ -870,9 +885,9 @@ export default function KioskPage() {
                         setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
                       })
                       .catch((err: Error) => {
-                        // NO_BODY_SCAN: → consent → bodyScan; reconciliation
-                        // effect re-fires runTryOn for the queued items once
-                        // the scan is recorded.
+                        // Defense-in-depth: scan was deleted between login
+                        // and this call. The eager gate above should have
+                        // caught the no-scan case — landing here is rare.
                         handleTryOnError(err, showToast, () => navigate("consent"));
                       });
                   }
@@ -885,11 +900,17 @@ export default function KioskPage() {
               });
               // Mark code as used
               markCodeUsed({ code: data.trialRoom.code, storeId });
-              // Always land on home — the Shortlisted rail renders the curated
-              // items above Trending; the first 2 are already in the trial room
-              // (chip-indicated). Body scan triggers lazily via the NO_BODY_SCAN:
-              // catch above when the customer has no scan on file.
-              navigate("home");
+              // Eager body-scan gate (matches phoneAuth / newCustomer paths):
+              // route no-scan customers through consent → bodyScan first.
+              // Auto-trial fires deferred via the reconciliation effect once
+              // the scan is recorded. Customers with a scan land directly on
+              // home with the Shortlisted rail and the first-2 already
+              // rendering against the AI.
+              if (data.customer && !customerHasScan) {
+                navigate("consent");
+              } else {
+                navigate("home");
+              }
             }}
             onBack={() => setScreen("idle")}
           />
@@ -1058,7 +1079,17 @@ export default function KioskPage() {
             onProductTap={(p) => navigate("productDetail", p)}
             onSendToTrial={(items) => {
               setTrialItems((prev) => [...prev, ...items]);
-              if (customerId) {
+              // Client-side body-scan pre-check: if the customer has no scan
+              // on file, do NOT fire runTryOn — it would throw NO_BODY_SCAN:
+              // server-side and surface as a red Convex error in the console.
+              // Items still land in trialItems; the reconciliation effect
+              // re-fires runTryOn after recordBodyScan flips bodyScanInfo.
+              if (customerId && bodyScanInfo?.hasFileId === false) {
+                showToast("Body scan needed to try sarees on", "warning");
+                navigate("consent");
+                return;
+              }
+              if (customerId && bodyScanInfo?.hasFileId === true) {
                 for (const item of items) {
                   runTryOn({
                     deviceToken: deviceToken!,
@@ -1069,9 +1100,7 @@ export default function KioskPage() {
                       setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
                     })
                     .catch((err: Error) => {
-                      // NO_BODY_SCAN: → consent → bodyScan. Items already sit in
-                      // trialItems; the reconciliation effect re-fires runTryOn
-                      // for them once the scan is recorded.
+                      // Defense-in-depth — scan deleted mid-session, etc.
                       handleTryOnError(err, showToast, () => navigate("consent"));
                     });
                 }
@@ -1103,7 +1132,15 @@ export default function KioskPage() {
                 return;
               }
               setTrialItems((prev) => [...prev, selectedProduct]);
-              if (customerId) {
+              // Body-scan pre-check, same shape as HomeScreen.onSendToTrial.
+              // No-scan customers route to consent without firing runTryOn,
+              // so the Convex server log stays clean.
+              if (customerId && bodyScanInfo?.hasFileId === false) {
+                showToast("Body scan needed to try sarees on", "warning");
+                navigate("consent");
+                return;
+              }
+              if (customerId && bodyScanInfo?.hasFileId === true) {
                 runTryOn({
                   deviceToken: deviceToken!,
                   sessionId,
@@ -1113,8 +1150,7 @@ export default function KioskPage() {
                     setSareeLookIds((prev) => ({ ...prev, [selectedProduct._id]: res.lookId }));
                   })
                   .catch((err: Error) => {
-                    // NO_BODY_SCAN: → consent → bodyScan; reconciliation effect
-                    // re-fires runTryOn after the scan is recorded.
+                    // Defense-in-depth — scan deleted mid-session, etc.
                     handleTryOnError(err, showToast, () => navigate("consent"));
                   });
               }
