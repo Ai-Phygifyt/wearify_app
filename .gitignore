@@ -64,3 +64,4 @@ public/swe-worker-*.js
 public/workbox-*.js
 public/workbox-*.js.map
 Catelog-21
+.gstack/
