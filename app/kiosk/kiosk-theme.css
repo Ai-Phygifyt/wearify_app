@@ -828,3 +828,394 @@
   .k-iconbtn { width: 40px; height: 40px; }
   .k-codebox { width: 38px; height: 46px; font-size: 20px; }
 }
+
+/* =====================================================================
+ * Trial Room v2 — full-bleed showcase layout
+ * ---------------------------------------------------------------------
+ * Hero: full-viewport background image + bottom-anchored podium asset.
+ * Customer cutout sits centered, anchored to the podium. Left rail
+ * (Selected Sarees) and right rail (saree detail) float on top as
+ * translucent dark glass plates. Bottom dock holds the two CTAs.
+ * ===================================================================== */
+
+.k-trial-v2-shell {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: #FBF6EC;
+}
+
+/* Full-bleed backdrop — uses the supplied trialroom_bg.jpg */
+.k-trial-v2-bg {
+  position: absolute; inset: 0;
+  background-image: url('/trialroom_bg.jpg');
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+
+/* Podium asset anchored at viewport bottom, full-width. The .png is
+ * pre-cropped to the floor moment so we don't need to fiddle with
+ * masks here. */
+.k-trial-v2-podium {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  width: 100%;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+}
+.k-trial-v2-podium img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The bg-removed customer cutout sits above the bg, anchored to the
+ * top of the podium. Centered horizontally; vertical-align to bottom
+ * so the customer "stands" on the podium. */
+.k-trial-v2-cutout {
+  position: absolute;
+  left: 50%;
+  bottom: 22%; /* sits on top of the podium asset */
+  transform: translateX(-50%);
+  height: 72%;
+  z-index: 2;
+  display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: none;
+}
+.k-trial-v2-cutout img {
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 24px 36px rgba(34, 17, 8, .22))
+          drop-shadow(0 6px 14px rgba(104, 38, 42, .12));
+}
+
+/* Subhead row (back / Trial Room pill / home). Sits below the page
+ * header; doesn't compete with the rails. */
+.k-trial-v2-subhead {
+  position: absolute;
+  top: 84px; left: 0; right: 0;
+  z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px;
+  pointer-events: none; /* let children re-enable */
+}
+.k-trial-v2-subhead > * { pointer-events: auto; }
+.k-trial-v2-subhead-center {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.k-trial-v2-pill {
+  background: rgba(255, 255, 255, .85);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  border-radius: 100px;
+  padding: 10px 28px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--k-maroon, #68262A);
+  box-shadow: 0 4px 14px rgba(34, 17, 8, .08);
+}
+.k-trial-v2-timer {
+  background: rgba(255, 255, 255, .85);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  border-radius: 100px;
+  padding: 6px 22px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--k-text, #222);
+  box-shadow: 0 3px 10px rgba(34, 17, 8, .06);
+  min-width: 80px;
+  text-align: center;
+}
+.k-trial-v2-iconbtn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid rgba(255, 255, 255, .8);
+  box-shadow: 0 4px 12px rgba(34, 17, 8, .1);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--k-maroon, #68262A);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.k-trial-v2-iconbtn:active { transform: scale(.94); }
+
+/* Left rail — Selected Sarees */
+.k-trial-v2-left {
+  position: absolute;
+  top: 170px; left: 28px;
+  width: 184px;
+  max-height: calc(100vh - 250px);
+  z-index: 4;
+  display: flex; flex-direction: column;
+  background: rgba(34, 17, 8, .42);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  border-radius: 22px;
+  padding: 16px 12px 14px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 14px 40px rgba(34, 17, 8, .25);
+}
+.k-trial-v2-left-header {
+  background: rgba(255, 255, 255, .94);
+  border-radius: 100px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--k-text, #222);
+  text-align: center;
+  margin-bottom: 14px;
+  align-self: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+}
+.k-trial-v2-left-stack {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; gap: 12px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+.k-trial-v2-left-stack::-webkit-scrollbar { width: 4px; }
+.k-trial-v2-left-stack::-webkit-scrollbar-track { background: transparent; }
+.k-trial-v2-left-stack::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .25);
+  border-radius: 2px;
+}
+.k-trial-v2-add-more {
+  margin-top: 12px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  background: var(--k-maroon, #68262A);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter .15s ease, transform .15s ease;
+}
+.k-trial-v2-add-more:hover { filter: brightness(1.08); }
+.k-trial-v2-add-more:active { transform: scale(.97); }
+
+/* New trial-card variant: catalog photo + WhatsApp + X + Add to Cart */
+.k-trial-card-v2 {
+  position: relative;
+  background: rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color .18s ease, transform .18s ease;
+}
+.k-trial-card-v2.is-active {
+  border-color: var(--k-gold, #C9941A);
+  transform: scale(1.02);
+}
+.k-trial-card-v2-img {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1.15;
+  overflow: hidden;
+}
+.k-trial-card-v2-corner-btn {
+  position: absolute;
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, .96);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+  transition: transform .15s ease;
+}
+.k-trial-card-v2-corner-btn:active { transform: scale(.9); }
+.k-trial-card-v2-corner-btn.is-wa { top: 6px; left: 6px; color: #25D366; }
+.k-trial-card-v2-corner-btn.is-x  { top: 6px; right: 6px; color: var(--k-red, #B00020); }
+
+.k-trial-card-v2-cta {
+  width: 100%;
+  padding: 9px 8px;
+  border: none;
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background .15s ease;
+  border-top: 1px solid rgba(255, 255, 255, .18);
+}
+.k-trial-card-v2-cta:hover { background: rgba(255, 255, 255, .22); }
+.k-trial-card-v2-cta.in-cart {
+  background: var(--k-green, #2D8544);
+  color: #fff;
+}
+
+/* Right rail — saree detail */
+.k-trial-v2-right {
+  position: absolute;
+  top: 170px; right: 28px;
+  width: 240px;
+  max-height: calc(100vh - 250px);
+  z-index: 4;
+  background: rgba(34, 17, 8, .42);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  border-radius: 22px;
+  padding: 18px 16px 16px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 14px 40px rgba(34, 17, 8, .25);
+  color: #fff;
+  overflow-y: auto;
+}
+.k-trial-v2-right-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+}
+.k-trial-v2-right-desc {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, .8);
+  line-height: 1.45;
+}
+.k-trial-v2-right-price {
+  margin-top: 10px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+.k-trial-v2-right-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, .15);
+  margin: 14px 0;
+}
+.k-trial-v2-right-section-h {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+  letter-spacing: .02em;
+}
+.k-trial-v2-right-section-h .arrow {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .9);
+  color: var(--k-maroon, #68262A);
+  display: flex; align-items: center; justify-content: center;
+}
+.k-trial-v2-similar {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.k-trial-v2-similar-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .15);
+  transition: transform .15s ease, border-color .15s ease;
+}
+.k-trial-v2-similar-thumb:active {
+  transform: scale(.95);
+  border-color: var(--k-gold, #C9941A);
+}
+.k-trial-v2-colors {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 4px;
+}
+.k-trial-v2-color-dot {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .2);
+}
+
+/* Bottom dock — two stacked CTAs centered above the podium */
+.k-trial-v2-dock {
+  position: absolute;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex; flex-direction: column; gap: 10px;
+  align-items: center;
+}
+.k-trial-v2-dock-pill {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  padding: 14px 56px 14px 36px;
+  border-radius: 100px;
+  border: none;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  min-width: 280px;
+  box-shadow: 0 8px 24px rgba(34, 17, 8, .18);
+  transition: transform .12s ease, filter .12s ease;
+}
+.k-trial-v2-dock-pill:active { transform: scale(.98); }
+.k-trial-v2-dock-pill:hover { filter: brightness(1.04); }
+.k-trial-v2-dock-pill.is-light {
+  background: rgba(255, 255, 255, .96);
+  color: var(--k-text, #222);
+}
+.k-trial-v2-dock-pill.is-dark {
+  background: var(--k-maroon, #68262A);
+  color: #fff;
+}
+.k-trial-v2-dock-pill .badge {
+  position: absolute;
+  right: 8px; top: 50%;
+  transform: translateY(-50%);
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--k-maroon, #68262A);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+.k-trial-v2-dock-pill .arrow {
+  position: absolute;
+  right: 8px; top: 50%;
+  transform: translateY(-50%);
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .92);
+  color: var(--k-maroon, #68262A);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* While the cutout is still being generated, show the wave inside the
+ * cutout slot at the same dimensions. */
+.k-trial-v2-cutout-wave {
+  position: relative;
+  height: 100%;
+  width: 320px;
+  border-radius: 24px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Responsive — narrower viewports tighten the rails so they don't
+ * eat the hero. */
+@media (max-width: 1100px) {
+  .k-trial-v2-left { width: 168px; left: 16px; }
+  .k-trial-v2-right { width: 220px; right: 16px; }
+  .k-trial-v2-dock-pill { min-width: 240px; padding: 12px 50px 12px 28px; font-size: 14px; }
+}

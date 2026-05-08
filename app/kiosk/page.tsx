@@ -1038,6 +1038,24 @@ export default function KioskPage() {
           <TrialRoomScreen
             items={trialItems}
             wardrobeItems={wardrobeItems}
+            cartItemIds={new Set(cartItems.map((c) => c._id))}
+            customerName={customerName}
+            phone={phone}
+            onAddToCart={(saree) => {
+              // Trial-room "Add to Cart": item stays in the trial rail
+              // (parallel intents — trying-on + buying). Skip if already
+              // in cart. Mirrors the WardrobeScreen.onToggleInCart add
+              // path but never removes.
+              if (cartItems.some((c) => c._id === saree._id)) {
+                showToast("Already in cart", "info");
+                return;
+              }
+              if (customerId) {
+                addCartItem({ customerId, storeId, sareeId: saree._id, qty: 1 });
+              }
+              setCartItems((prev) => [...prev, { ...saree, qty: 1 }]);
+              showToast("Added to cart", "success");
+            }}
             onRemoveItem={(id) => {
               // Cancel any pending bg-removal job for this saree's look —
               // saves CPU when the customer rapidly adds/removes. No-op if
@@ -2069,7 +2087,7 @@ function StoreBrand({ storeName, logoFileId }: { storeName: string; logoFileId?:
 function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogout, navigate, onBack, storeName, storeLogoFileId }: {
   trialCount: number; wardrobeCount: number; cartCount: number;
   goHome: () => void; triggerLogout: () => void;
-  navigate: (s: Screen) => void; onBack?: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; onBack?: () => void;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const iconBtn = (
@@ -2118,7 +2136,7 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, shortlistedItems, onPro
   sarees: SareeItem[]; trialItems: SareeItem[]; wardrobeItems: SareeItem[];
   shortlistedItems: SareeItem[];
   onProductTap: (p: SareeItem) => void; onSendToTrial: (items: SareeItem[]) => void;
-  navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxTrial: number;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
@@ -2548,7 +2566,7 @@ function SareeCard({ saree, onTap, onCheck, isSelected, isInTrial, isInWardrobe 
 function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAddToTrial, onBack, onProductTap, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount }: {
   product: SareeItem; allSarees: SareeItem[]; isInTrial: boolean; isInWardrobe: boolean;
   onAddToTrial: () => void; onBack: () => void; onProductTap: (p: SareeItem) => void;
-  navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number;
 }) {
   const [selColor, setSelColor] = useState(0);
@@ -2917,15 +2935,224 @@ function TrialPreviewImage({ saree, lookId }: {
   );
 }
 
+// =========================================================================
+// TrialHeroCutout — the centerpiece of the v2 trial room.
+//
+// Renders the bg-removed AI cutout of the active saree, anchored to the
+// podium. Falls back to a wave (with the catalog photo or AI-with-bg as
+// the under-image) while the look is still queued/processing/has-no-cutout.
+// On bg-removal failure, falls through to the raw AI render.
+// =========================================================================
+
+function TrialHeroCutout({ saree, lookId }: {
+  saree: SareeItem;
+  lookId: Id<"looks"> | undefined;
+}) {
+  const look = useQuery(api.tryOn.getLook, lookId ? { lookId } : "skip");
+  const status = look?.status;
+  const resultUrl = useConvexUrl(look?.imageFileId);
+  const cutoutUrl = useConvexUrl(look?.imageNoBgFileId);
+
+  // Cutout ready — render at full hero height.
+  if (status === "completed" && cutoutUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={cutoutUrl} alt={saree.name} />;
+  }
+
+  // Bg-removal failed but raw AI render is fine — show that.
+  if (status === "completed" && resultUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={resultUrl} alt={saree.name} style={{ borderRadius: 24 }} />
+    );
+  }
+
+  // Still rendering — show the wave overlay sized to the cutout slot.
+  return (
+    <div className="k-trial-v2-cutout-wave">
+      <div className="k-wave-stage" data-phase={status === "completed" ? "polishing" : "generating"}>
+        {resultUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="k-wave-image" src={resultUrl} alt="" aria-hidden />
+        ) : (
+          <div className="k-wave-image" style={{ position: "absolute", inset: 0 }}>
+            <SareeThumb
+              name={saree.name}
+              fileId={saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0]}
+              grad={saree.grad}
+            />
+          </div>
+        )}
+        <div className="k-wave-sheen" />
+        <div className="k-wave-grain" />
+        <div className="k-wave-veil" />
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// TrialCardV2 — left-rail card with WhatsApp share + X remove + Add to
+// Cart (or "In Cart"). Catalog photo top, action strip bottom.
+// =========================================================================
+
+function TrialCardV2({ saree, active, inCart, onSelect, onShare, onRemove, onAddToCart }: {
+  saree: SareeItem;
+  active: boolean;
+  inCart: boolean;
+  onSelect: () => void;
+  onShare: () => void;
+  onRemove: () => void;
+  onAddToCart: () => void;
+}) {
+  return (
+    <div
+      className={`k-trial-card-v2${active ? " is-active" : ""}`}
+      onClick={onSelect}
+    >
+      <div className="k-trial-card-v2-img">
+        <SareeThumb
+          name={saree.name}
+          fileId={saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0]}
+          grad={saree.grad}
+          emoji={saree.emoji}
+          emojiSize={28}
+          gradientAngle={135}
+        />
+        <button
+          className="k-trial-card-v2-corner-btn is-wa"
+          onClick={(e) => { e.stopPropagation(); onShare(); }}
+          aria-label="Share on WhatsApp"
+        >
+          {/* Inline WhatsApp glyph — keeping the green color via parent class */}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.59 1.38 5.07L2 22l5.07-1.38A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.07 14.07c-.21.6-1.21 1.16-1.7 1.21-.42.04-.96.06-1.55-.1-.36-.1-.82-.25-1.41-.5-2.49-1.07-4.12-3.58-4.24-3.74-.12-.16-1.01-1.34-1.01-2.56s.64-1.82.87-2.07c.23-.25.5-.31.66-.31s.33 0 .47.01c.15.01.36-.06.56.43.21.51.71 1.77.77 1.9.06.13.1.28.02.45-.08.17-.12.27-.24.42-.12.15-.25.34-.36.45-.12.12-.24.25-.1.49.13.24.6.99 1.29 1.6.88.79 1.62 1.04 1.86 1.16.24.12.38.1.52-.06.14-.16.6-.7.76-.94.16-.24.32-.2.54-.12.22.08 1.4.66 1.64.78.24.12.4.18.46.28.05.1.05.6-.16 1.18z"/>
+          </svg>
+        </button>
+        <button
+          className="k-trial-card-v2-corner-btn is-x"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          aria-label="Remove from trial"
+        >
+          <X size={14} strokeWidth={2.5} />
+        </button>
+      </div>
+      <button
+        className={`k-trial-card-v2-cta${inCart ? " in-cart" : ""}`}
+        onClick={(e) => { e.stopPropagation(); onAddToCart(); }}
+      >
+        {inCart ? <><Check size={12} strokeWidth={3} /> In Cart</> : "Add to Cart"}
+      </button>
+    </div>
+  );
+}
+
+// =========================================================================
+// SareeDetailPanel — right-rail card showing the active saree's name,
+// description, price, similar-categories carousel, and color swatches.
+// =========================================================================
+
+function SareeDetailPanel({ saree, onSelectSimilar }: {
+  saree: SareeItem;
+  onSelectSimilar: (s: { _id: Id<"sarees">; name: string; price: number; imageIds?: Id<"_storage">[]; grad?: string[]; emoji?: string }) => void;
+}) {
+  const similar = useQuery(api.sarees.listSimilar, { sareeId: saree._id, limit: 3 });
+
+  // Color swatch palette — saree.colors[] are color names like "Pink",
+  // "Blue", "Mustard". Map to a small named-color palette so the dots
+  // render. Unknown names fall back to a neutral.
+  const COLOR_MAP: Record<string, string> = {
+    pink: "#E8959F", red: "#B53A48", maroon: "#7B1D1D", blue: "#3A6FB5",
+    navy: "#1F3A6E", teal: "#1F827E", green: "#3F8A4D", olive: "#717C32",
+    yellow: "#E8C84A", mustard: "#C9941A", gold: "#C9941A", orange: "#D6803C",
+    purple: "#6B3A87", lavender: "#B8A3D6", black: "#1A1A1A", white: "#F5F0E6",
+    cream: "#EFE3CF", beige: "#D9C9A8", brown: "#7C5A3C", grey: "#999",
+    gray: "#999", silver: "#C8C8CC",
+  };
+  const swatches = (saree.colors ?? []).slice(0, 5).map((c) => {
+    const key = c.toLowerCase().trim();
+    return COLOR_MAP[key] ?? "#9C8878";
+  });
+
+  return (
+    <div className="k-trial-v2-right">
+      <div className="k-trial-v2-right-name">{saree.name}</div>
+      {saree.description && (
+        <div className="k-trial-v2-right-desc">{saree.description.slice(0, 80)}{saree.description.length > 80 ? "…" : ""}</div>
+      )}
+      <div className="k-trial-v2-right-price">₹{fmtPrice(saree.price)}</div>
+      <div className="k-trial-v2-right-divider" />
+
+      <div className="k-trial-v2-right-section-h">
+        <span>Similar Categories</span>
+        <span className="arrow"><ChevronRight size={14} /></span>
+      </div>
+      <div className="k-trial-v2-similar">
+        {similar === undefined ? (
+          <>
+            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
+            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
+            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
+          </>
+        ) : (
+          similar.map((s) => (
+            <div
+              key={s._id}
+              className="k-trial-v2-similar-thumb"
+              onClick={() => onSelectSimilar(s)}
+              role="button"
+              aria-label={`View ${s.name}`}
+            >
+              <SareeThumb
+                name={s.name}
+                fileId={s.imageIds?.[3] ?? s.imageIds?.[2] ?? s.imageIds?.[0]}
+                grad={s.grad}
+                emoji={s.emoji}
+                emojiSize={20}
+              />
+            </div>
+          ))
+        )}
+      </div>
+
+      {swatches.length > 0 && (
+        <>
+          <div className="k-trial-v2-right-divider" />
+          <div className="k-trial-v2-right-section-h">
+            <span>Select Color</span>
+          </div>
+          <div className="k-trial-v2-colors">
+            {swatches.map((color, i) => (
+              <div
+                key={i}
+                className="k-trial-v2-color-dot"
+                style={{ background: color }}
+                aria-label={saree.colors?.[i]}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ── TRIAL ROOM ── */
-function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken, navigate, setPendingFanOut, cartCount, storeName, storeLogoFileId }: {
+function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phone, onAddToCart, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken, navigate, setPendingFanOut, cartCount, storeName, storeLogoFileId }: {
   items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
+  // Sareeids currently in the cart — for showing "In Cart" state on trial cards.
+  cartItemIds: Set<string>;
+  customerName: string;
+  phone: string;
+  // One-tap add to cart from the trial-room card. Parent fires the
+  // mutation + updates local cart + emits a toast. Saree stays in trial.
+  onAddToCart: (saree: SareeItem) => void;
   onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
   sareeLookIds: Record<string, Id<"looks">>;
   retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
   deviceToken: string;
-  navigate: (s: Screen) => void;
+  navigate: (s: Screen, product?: SareeItem) => void;
   setPendingFanOut: (v: boolean) => void;
   cartCount: number;
   storeName?: string;
@@ -2933,7 +3160,6 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
 }) {
   const [timer, setTimer] = useState(tryOnSec);
   const [selIdx, setSelIdx] = useState(0);
-  const [selForWard, setSelForWard] = useState<Set<string>>(new Set());
   const [showEnd, setShowEnd] = useState(false);
   const [endCountdown, setEndCountdown] = useState(CFG.trialEndAutoLogoutSec);
   const [retakeOpen, setRetakeOpen] = useState(false);
@@ -2964,15 +3190,27 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
   // sit above the Time's Up dialog due to render order.
   useEffect(() => { if (showEnd && retakeOpen) setRetakeOpen(false); }, [showEnd, retakeOpen]);
 
-  const toggleWard = (id: string) => { setSelForWard((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
-  const moveToWardrobe = () => {
-    const sel = items.filter((s) => selForWard.has(s._id));
-    if (sel.length === 0) { showToast("Select sarees first", "warning"); return; }
-    onAddToWardrobe(sel);
-    setSelForWard(new Set());
+  // Clamp selIdx as items list shrinks (X-out of the active card etc.).
+  const safeSelIdx = Math.min(selIdx, Math.max(0, items.length - 1));
+  const current = items[safeSelIdx] || items[0];
+
+  // WhatsApp share for a single saree — opens wa.me with prefilled text.
+  // Mirrors /c/looks/[id] handleShare. Customer name personalizes if known.
+  const handleShareSaree = (saree: SareeItem) => {
+    const greet = customerName ? `${customerName}, check out` : "Check out";
+    const msg = encodeURIComponent(
+      `${greet} this beautiful ${saree.name} saree at ${storeName ?? "Wearify"}! ₹${fmtPrice(saree.price)}`,
+    );
+    window.open(`https://wa.me/${phone ? phone.replace(/[^\d]/g, "") : ""}?text=${msg}`, "_blank");
   };
 
-  const current = items[selIdx] || items[0];
+  // Add the currently-active (right-panel-visible) saree to wardrobe.
+  // Single-item add — count is always 1 unless extended later.
+  const addActiveToWardrobe = () => {
+    if (!current) return;
+    onAddToWardrobe([current]);
+    showToast("Added to wardrobe", "success");
+  };
 
   if (items.length === 0) return (
     <div className="k-shell">
@@ -3005,159 +3243,120 @@ function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, 
   );
 
   return (
-    <div className="k-shell" style={{ position: "relative", overflow: "hidden" }}>
-      {/* Top bar */}
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "16px 24px",
-        background: "linear-gradient(180deg, rgba(245,240,234,.95), transparent)",
-      }}>
-        <button onClick={onGoHome} className="k-press" aria-label="Home" style={{
-          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
-          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
-        }}><Home size={20} /></button>
-        <div className="k-timer" style={{ padding: "10px 22px", fontSize: 20, fontWeight: 700 }}>
-          <span style={{ color: timer <= 30 ? "var(--k-red)" : "var(--k-text)" }}>
-            {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
-          </span>
-        </div>
-        {/* Right cluster: retake affordance + logout */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button
-            className="k-btn k-btn-ghost k-btn-pill"
-            style={{ fontSize: 12, padding: "6px 12px" }}
-            onClick={() => setRetakeOpen(true)}
-          >
-            <Camera size={14} />
-            Retake body scan
-          </button>
-          <button onClick={onLogout} className="k-press" aria-label="Logout" style={{
-            width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
-            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
-          }}><LogOut size={20} /></button>
-        </div>
+    <div className="k-trial-v2-shell">
+      {/* Page-level header (logo + name + 4 action icons) */}
+      <KioskHeader
+        trialCount={items.length}
+        wardrobeCount={wardrobeItems.length}
+        cartCount={cartCount}
+        goHome={onGoHome}
+        triggerLogout={onLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+
+      {/* Full-bleed background image */}
+      <div className="k-trial-v2-bg" />
+
+      {/* Decorative podium asset anchored at the floor */}
+      <div className="k-trial-v2-podium">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/poduim.png" alt="" aria-hidden />
       </div>
 
-      <div style={{ display: "flex", width: "100%", height: "100vh", paddingTop: 72 }}>
-        {/* LEFT panel — saree grid */}
-        <div style={{
-          width: "28%", minWidth: 280, height: "100%", overflowY: "auto",
-          padding: "12px 10px", paddingBottom: 80,
-          background: "rgba(0,0,0,.03)", borderRight: "1px solid var(--k-border)",
-        }}>
-          <div style={{ fontSize: 16, fontWeight: 700, padding: "6px 8px", marginBottom: 10 }}>
-            Trial Room ({items.length}/{maxTrial})
-          </div>
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(108px, 1fr))", gap: 10,
-          }}>
-            {items.map((saree, idx) => {
-              const active = idx === selIdx;
-              const selW = selForWard.has(saree._id);
-              return (
-                <div key={saree._id} onClick={() => setSelIdx(idx)}
-                  className={`k-trial-card k-press k-slideUp${active ? " is-active" : ""}`}
-                >
-                  <div className="k-trial-card-img">
-                    <div>
-                      <TrialTile saree={saree} lookId={sareeLookIds[saree._id]} retryLookMut={retryLookMut} deviceToken={deviceToken} showToast={showToast} />
-                    </div>
-                    <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
-                      position: "absolute", top: 6, left: 6, zIndex: 2,
-                      width: 28, height: 28, borderRadius: 7,
-                      border: `2px solid ${selW ? "var(--k-green)" : "rgba(255,255,255,.85)"}`,
-                      background: selW ? "var(--k-green)" : "rgba(255,255,255,.55)",
-                      backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                      display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                      color: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,.15)",
-                    }}>
-                      {selW && <Check size={15} strokeWidth={3} />}
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); onRemoveItem(saree._id); }} aria-label="Remove" style={{
-                      position: "absolute", top: 6, right: 6, zIndex: 2,
-                      width: 28, height: 28, borderRadius: "50%", cursor: "pointer", border: "none",
-                      background: "rgba(255,255,255,.85)",
-                      backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "var(--k-red)", boxShadow: "0 2px 8px rgba(0,0,0,.15)",
-                    }}><X size={14} strokeWidth={2.5} /></button>
-                  </div>
-                  <div className="k-trial-card-info">
-                    <div className="k-trial-card-name">{saree.name}</div>
-                    <div className="k-trial-card-price">₹{fmtPrice(saree.price)}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {selForWard.size > 0 && (
-            <button onClick={moveToWardrobe} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp" style={{
-              width: "100%", marginTop: 12, fontSize: 15, fontWeight: 600,
-            }}>
-              <ShoppingBag size={18} /> Add to Wardrobe ({selForWard.size})
-            </button>
-          )}
-          <button onClick={onGoToWardrobe} className="k-btn k-btn-pill k-press" style={{
-            width: "100%", marginTop: 10, fontSize: 14, fontWeight: 600,
-            background: "rgba(255,255,255,.6)",
-            backdropFilter: "blur(14px)",
-            WebkitBackdropFilter: "blur(14px)",
-            border: "1.5px solid var(--k-maroon)", color: "var(--k-maroon)",
-          }}>
-            <ShoppingBag size={16} /> Go to Wardrobe ({wardrobeItems.length})
-            <ChevronRight size={16} />
-          </button>
+      {/* Customer cutout — bg-removed AI render of the active saree */}
+      {current && (
+        <div className="k-trial-v2-cutout">
+          <TrialHeroCutout saree={current} lookId={sareeLookIds[current._id]} />
         </div>
+      )}
 
-        {/* RIGHT panel — preview card */}
-        <div style={{
-          flex: 1, display: "flex",
-          padding: "20px 28px 32px",
-        }}>
-          {current && (
-            <div className="k-trial-preview k-slideUp" style={{ flex: 1, height: "100%" }}>
-              {/* Image top — bg-removed AI render once the queue produces it,
-                  with the gaussian-blur wave covering the generation +
-                  polishing phases. Falls back to catalog photo when there's
-                  no look at all yet. */}
-              <div className="k-trial-preview-img">
-                <TrialPreviewImage saree={current} lookId={sareeLookIds[current._id]} />
-              </div>
-
-              {/* Info bottom — glassmorphism */}
-              <div className="k-trial-preview-info">
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="k-display" style={{ fontSize: 26 }}>{current.name}</div>
-                    {current.description && (
-                      <div style={{ fontSize: 14, color: "var(--k-text-mid)", marginTop: 6, lineHeight: 1.5 }}>
-                        {current.description}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
-                      {current.fabric && <span className="k-chip k-chip-maroon" style={{ fontSize: 11 }}>{current.fabric}</span>}
-                      {current.occasion && <span className="k-chip k-chip-gold" style={{ fontSize: 11 }}>{current.occasion}</span>}
-                      {current.region && <span className="k-chip" style={{ fontSize: 11 }}>{current.region}</span>}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div className="k-mono" style={{ fontSize: 26, fontWeight: 700, color: "var(--k-maroon)", lineHeight: 1 }}>
-                      ₹{fmtPrice(current.price)}
-                    </div>
-                    {current.mrp && current.mrp > current.price && (
-                      <div className="k-mono" style={{ fontSize: 13, color: "var(--k-text-light)", textDecoration: "line-through", marginTop: 4 }}>
-                        ₹{fmtPrice(current.mrp)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+      {/* Subhead — back / Trial Room pill + timer / home */}
+      <div className="k-trial-v2-subhead">
+        <button
+          onClick={onGoHome}
+          aria-label="Back"
+          className="k-trial-v2-iconbtn"
+        >
+          <ChevronLeft size={20} />
+        </button>
+        <div className="k-trial-v2-subhead-center">
+          <div className="k-trial-v2-pill">Trial Room</div>
+          <div className="k-trial-v2-timer" style={{ color: timer <= 30 ? "var(--k-red)" : undefined }}>
+            {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
+          </div>
         </div>
+        <button
+          onClick={() => setRetakeOpen(true)}
+          aria-label="Retake body scan"
+          className="k-trial-v2-iconbtn"
+          title="Retake body scan"
+        >
+          <Camera size={20} />
+        </button>
+      </div>
+
+      {/* Left rail — Selected Sarees */}
+      <div className="k-trial-v2-left">
+        <div className="k-trial-v2-left-header">Selected Sarees</div>
+        <div className="k-trial-v2-left-stack">
+          {items.map((saree, idx) => (
+            <TrialCardV2
+              key={saree._id}
+              saree={saree}
+              active={idx === safeSelIdx}
+              inCart={cartItemIds.has(saree._id)}
+              onSelect={() => setSelIdx(idx)}
+              onShare={() => handleShareSaree(saree)}
+              onRemove={() => onRemoveItem(saree._id)}
+              onAddToCart={() => onAddToCart(saree)}
+            />
+          ))}
+        </div>
+        <button className="k-trial-v2-add-more" onClick={onGoHome}>
+          Add More
+        </button>
+      </div>
+
+      {/* Right rail — saree detail */}
+      {current && (
+        <SareeDetailPanel
+          saree={current}
+          onSelectSimilar={(s) => {
+            // Tapping a similar-categories thumb: if the saree is already
+            // in the trial rail, switch the active preview to it. If not,
+            // jump to its product detail page so the customer can add it.
+            const idx = items.findIndex((i) => i._id === s._id);
+            if (idx >= 0) {
+              setSelIdx(idx);
+            } else {
+              navigate("productDetail", s as SareeItem);
+            }
+          }}
+        />
+      )}
+
+      {/* Bottom dock — two stacked CTAs centered above the podium */}
+      <div className="k-trial-v2-dock">
+        <button
+          className="k-trial-v2-dock-pill is-light"
+          onClick={addActiveToWardrobe}
+          disabled={!current}
+        >
+          <ShoppingBag size={18} style={{ marginRight: 10 }} />
+          Add to Wardrobe
+          <span className="badge">1</span>
+        </button>
+        <button
+          className="k-trial-v2-dock-pill is-dark"
+          onClick={onGoToWardrobe}
+        >
+          Go to Wardrobe
+          <span className="arrow">
+            <ChevronRight size={18} />
+          </span>
+        </button>
       </div>
 
       {/* Time's up dialog */}
@@ -3255,7 +3454,7 @@ function WardrobeScreen({ items, lookImages, lookCutouts, cartItemIds, onToggleI
   // mutation + updates local cart state + shows a toast — the screen
   // just emits the intent.
   onToggleInCart: (saree: SareeItem) => void;
-  navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxWardrobe: number;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
