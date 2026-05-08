@@ -842,8 +842,21 @@
   position: relative;
   width: 100%;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: #FBF6EC;
+}
+
+/* Immersive stage fills everything below the page header. All
+ * absolute-positioned elements (bg, podium, cutout, rails, dock,
+ * subhead) live INSIDE this container so they stack only over the
+ * stage area — never cover the header. */
+.k-trial-v2-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Full-bleed backdrop — uses the supplied trialroom_bg.jpg */
@@ -851,18 +864,23 @@
   position: absolute; inset: 0;
   background-image: url('/trialroom_bg.jpg');
   background-size: cover;
-  background-position: center top;
+  background-position: center center;
   background-repeat: no-repeat;
   z-index: 0;
 }
 
-/* Podium asset anchored at viewport bottom, full-width. The .png is
- * pre-cropped to the floor moment so we don't need to fiddle with
- * masks here. */
+/* Podium asset — bottom-anchored, capped height so the floor disc
+ * stays a believable ~30% of the stage rather than stretching to
+ * full-width and ballooning. Centered horizontally with a sensible
+ * max width on big screens; uses object-fit: contain so the asset's
+ * intrinsic aspect ratio is respected. */
 .k-trial-v2-podium {
   position: absolute;
-  bottom: 0; left: 0; right: 0;
-  width: 100%;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(100%, 1400px);
+  height: 32vh;
   z-index: 1;
   pointer-events: none;
   user-select: none;
@@ -870,18 +888,22 @@
 .k-trial-v2-podium img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom center;
 }
 
 /* The bg-removed customer cutout sits above the bg, anchored to the
  * top of the podium. Centered horizontally; vertical-align to bottom
- * so the customer "stands" on the podium. */
+ * so the customer "stands" on the podium. The bottom value is tuned
+ * to land at the top edge of the podium asset (which is 32vh tall,
+ * with the disc taking the upper ~half of that). */
 .k-trial-v2-cutout {
   position: absolute;
   left: 50%;
-  bottom: 22%; /* sits on top of the podium asset */
+  bottom: 14vh; /* sits on top of the podium disc */
   transform: translateX(-50%);
-  height: 72%;
+  height: 70%;
   z-index: 2;
   display: flex; align-items: flex-end; justify-content: center;
   pointer-events: none;
@@ -894,13 +916,14 @@
           drop-shadow(0 6px 14px rgba(104, 38, 42, .12));
 }
 
-/* Subhead row (back / Trial Room pill / home). Sits below the page
- * header; doesn't compete with the rails. */
+/* Subhead row — back-arrow on the left, "Trial Room" pill + timer
+ * stacked centrally, retake-camera on the right. Lives inside the
+ * stage container, so top:0 means immediately under the page header. */
 .k-trial-v2-subhead {
   position: absolute;
-  top: 84px; left: 0; right: 0;
+  top: 18px; left: 0; right: 0;
   z-index: 5;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: flex-start; justify-content: space-between;
   padding: 0 28px;
   pointer-events: none; /* let children re-enable */
 }
@@ -950,9 +973,9 @@
 /* Left rail — Selected Sarees */
 .k-trial-v2-left {
   position: absolute;
-  top: 170px; left: 28px;
+  top: 110px; left: 28px;
   width: 184px;
-  max-height: calc(100vh - 250px);
+  max-height: calc(100% - 200px);
   z-index: 4;
   display: flex; flex-direction: column;
   background: rgba(34, 17, 8, .42);
@@ -1062,9 +1085,9 @@
 /* Right rail — saree detail */
 .k-trial-v2-right {
   position: absolute;
-  top: 170px; right: 28px;
+  top: 110px; right: 28px;
   width: 240px;
-  max-height: calc(100vh - 250px);
+  max-height: calc(100% - 200px);
   z-index: 4;
   background: rgba(34, 17, 8, .42);
   backdrop-filter: blur(20px) saturate(1.3);
@@ -1144,10 +1167,12 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, .2);
 }
 
-/* Bottom dock — two stacked CTAs centered above the podium */
+/* Bottom dock — two stacked CTAs centered above the podium. Lives
+ * inside the stage container; bottom is relative to the stage's
+ * bottom edge, sitting just above the podium disc. */
 .k-trial-v2-dock {
   position: absolute;
-  bottom: 18%;
+  bottom: 16vh;
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;

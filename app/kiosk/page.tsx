@@ -3244,7 +3244,9 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
 
   return (
     <div className="k-trial-v2-shell">
-      {/* Page-level header (logo + name + 4 action icons) */}
+      {/* Page-level header (logo + name + 4 action icons) — kept as the
+          existing KioskHeader. Sits at top in normal flow; the
+          immersive stage below fills the remaining viewport. */}
       <KioskHeader
         trialCount={items.length}
         wardrobeCount={wardrobeItems.length}
@@ -3256,6 +3258,8 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
         storeLogoFileId={storeLogoFileId}
       />
 
+      {/* Immersive stage — everything from here lives below the header */}
+      <div className="k-trial-v2-stage">
       {/* Full-bleed background image */}
       <div className="k-trial-v2-bg" />
 
@@ -3272,7 +3276,7 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
         </div>
       )}
 
-      {/* Subhead — back / Trial Room pill + timer / home */}
+      {/* Subhead — back-arrow / Trial Room pill + timer / retake camera */}
       <div className="k-trial-v2-subhead">
         <button
           onClick={onGoHome}
@@ -3358,6 +3362,7 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
           </span>
         </button>
       </div>
+      </div>{/* /.k-trial-v2-stage */}
 
       {/* Time's up dialog */}
       {showEnd && (
