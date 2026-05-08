@@ -60,6 +60,12 @@ type Job = {
    * Caller-supplied uploader. Same dependency-injection rationale.
    */
   upload: (file: File) => Promise<Id<"_storage">>;
+  /**
+   * Caller-supplied orphan cleanup. Called when `attach()` returns
+   * { patched: false } so the uploaded PNG doesn't accumulate as dead
+   * bytes in Convex Storage. Best-effort — errors are swallowed.
+   */
+  cleanup?: (fileId: Id<"_storage">) => Promise<void>;
 };
 
 type Listener = () => void;
@@ -130,8 +136,20 @@ async function runOne(job: Job): Promise<void> {
   });
   const fileId = await job.upload(cutoutFile);
 
-  // 5. Patch the looks row.
-  await job.attach({ sourceImageFileId: job.sourceImageFileId, fileId });
+  // 5. Patch the looks row. If the mutation rejects (stale_source,
+  // already_set, no_source), the uploaded PNG is now an orphan in
+  // Convex Storage — best-effort cleanup keeps the storage tidy. We
+  // also throw so the caller flips state to "failed" rather than "done"
+  // (TrialTile's fallback path keys on bgStatus.state === "failed").
+  const result = await job.attach({ sourceImageFileId: job.sourceImageFileId, fileId });
+  if (!result.patched) {
+    if (job.cleanup) {
+      job.cleanup(fileId).catch((err) => {
+        console.warn("[bgRemovalQueue] orphan cleanup failed", job.lookId, err);
+      });
+    }
+    throw new Error(`attach rejected: ${result.reason ?? "unknown"}`);
+  }
 }
 
 async function pump(): Promise<void> {
@@ -201,6 +219,22 @@ export function cancelBgRemoval(lookId: Id<"looks">): void {
     recomputePositions();
     notify();
   }
+}
+
+/**
+ * Reset the queue's per-customer state. Call from kiosk logout
+ * (handleWipe) so a long-running tab serving multiple customers
+ * doesn't accumulate stale `done` entries indefinitely. The model
+ * itself (removeBgFn) is intentionally NOT reset — it stays warm
+ * across customers. Any in-flight `pending` job for the previous
+ * customer is dropped; the in-progress one (if any) finishes naturally
+ * and its result lands on the now-orphaned looks row (harmless — the
+ * trial room of a logged-out customer is gone).
+ */
+export function clearBgRemovalState(): void {
+  pending.length = 0;
+  states.clear();
+  notify();
 }
 
 function subscribe(listener: Listener): () => void {

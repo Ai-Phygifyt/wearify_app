@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useUploadFile } from "@/lib/useUpload";
 import { GUARDS } from "@/lib/uploadGuards";
-import { cancelBgRemoval, enqueueBgRemoval, useBgRemovalStatus } from "@/lib/bgRemovalQueue";
+import { cancelBgRemoval, clearBgRemovalState, enqueueBgRemoval, useBgRemovalStatus } from "@/lib/bgRemovalQueue";
 import { ScanChoiceScreen } from "./screens/ScanChoiceScreen";
 import { ConsentScreen } from "./screens/ConsentScreen";
 import { BodyScanScreen } from "./screens/BodyScanScreen";
@@ -552,6 +552,12 @@ export default function KioskPage() {
     setPendingFanOut(false);
     previousScanTs.current = null;
     inFlightTryOnRef.current.clear();
+    // Drop any pending bg-removal jobs and stale per-look statuses from
+    // the queue's module-level state. Long-running kiosk tabs serve many
+    // customers; without this the `states` map grows unboundedly across
+    // the day. The WASM model itself stays warm — only the bookkeeping
+    // resets.
+    clearBgRemovalState();
     stopCamera();
     try { localStorage.removeItem("wearify_kiosk_session"); } catch { /* ignore */ }
     try { localStorage.removeItem("wearify_kiosk_shortlisted"); } catch { /* ignore */ }
@@ -2681,6 +2687,7 @@ function TrialTile({
 
   const { upload } = useUploadFile();
   const attachBgRemoved = useMutation(api.tryOn.attachBgRemovedImage);
+  const deleteOrphan = useMutation(api.tryOn.deleteOrphanCutout);
   const bgStatus = useBgRemovalStatus(lookId ?? null);
 
   // Enqueue bg-removal when (1) the look is completed, (2) we have a
@@ -2707,9 +2714,10 @@ function TrialTile({
           sourceImageFileId: args.sourceImageFileId,
           fileId: args.fileId,
         }),
+      cleanup: (fileId) => deleteOrphan({ deviceToken, fileId }).then(() => undefined),
     });
   }, [
-    lookId, look, resultUrl, deviceToken, upload, attachBgRemoved,
+    lookId, look, resultUrl, deviceToken, upload, attachBgRemoved, deleteOrphan,
   ]);
 
   // Phase 3 — cutout ready.
@@ -2719,6 +2727,19 @@ function TrialTile({
         <div className="k-trial-tile-cutout is-shown">
           <img src={cutoutUrl} alt={saree.name} />
         </div>
+      </div>
+    );
+  }
+
+  // Phase 3b — bg-removal failed but the AI render itself is fine.
+  // Fall back to the raw render with its background. Without this the
+  // tile would sit on the polishing wave forever (status === "completed"
+  // implies isPolishing=true downstream). Mirror of TrialPreviewImage's
+  // explicit failed-fallback.
+  if (status === "completed" && bgStatus.state === "failed" && resultUrl) {
+    return (
+      <div className="k-card k-card-hover" style={{ aspectRatio: "1 / 1.2", overflow: "hidden" }}>
+        <img src={resultUrl} alt={saree.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </div>
     );
   }

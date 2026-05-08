@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Sparkles, ShieldCheck } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -59,19 +59,42 @@ export function AIProcessingScreen({
   // here is honest.
   const pct = total > 0 ? Math.round(((completed + failed) / total) * 100) : 0;
 
-  // Auto-advance on first completion. The trial room handles remaining
-  // in-flight items with per-tile wave animations.
+  // onDone is typically an inline arrow at the parent, so its identity
+  // changes on every parent re-render. Pin the callback in a ref so the
+  // safety-timer effect below can run mount-only (otherwise reactive
+  // query updates would reset the 60s timer indefinitely and the safety
+  // path would never fire). Sync via an effect-after-render rather than
+  // assigning during render (linter prefers it; behaviorally equivalent
+  // for our use because the ref is read inside other effects/timeouts,
+  // never during render).
+  const onDoneRef = useRef(onDone);
   useEffect(() => {
-    if (completed >= 1) onDone();
-  }, [completed, onDone]);
+    onDoneRef.current = onDone;
+  });
+
+  // Auto-advance when ANY look reaches a terminal state (completed or
+  // failed) AND the total work is done — covers the "all failed" case
+  // (caption used to read "Finishing up" forever and the customer was
+  // trapped). For partial completion, advance on the first success;
+  // the trial room handles remaining in-flight items with per-tile
+  // wave animations.
+  useEffect(() => {
+    if (total === 0) return;
+    if (completed + failed >= total) {
+      onDoneRef.current();
+      return;
+    }
+    if (completed >= 1) onDoneRef.current();
+  }, [completed, failed, total]);
 
   // Safety timeout — never trap the customer. 60s is generous enough to
-  // cover a typical RunPod cold start (~30-60s) without feeling like
-  // an actual deadlock.
+  // cover a typical RunPod cold start (~30-60s). Mount-only effect
+  // (empty deps) so the timer measures real wall-clock time, not the
+  // distance from the most recent reactive query update.
   useEffect(() => {
-    const t = setTimeout(onDone, 60_000);
+    const t = setTimeout(() => onDoneRef.current(), 60_000);
     return () => clearTimeout(t);
-  }, [onDone]);
+  }, []);
 
   return (
     <div className="k-shell" style={{ alignItems: "center", justifyContent: "center", padding: "0 20px" }}>

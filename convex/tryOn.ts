@@ -1134,3 +1134,33 @@ export const attachBgRemovedImage = mutation({
     return { patched: true };
   },
 });
+
+// =====================================================================
+// Public mutation: deleteOrphanCutout
+// Kiosk-only. Called by the bg-removal queue when attachBgRemovedImage
+// rejects (stale_source / already_set / no_source). The cutout PNG was
+// uploaded to Convex Storage but no looks row references it — without
+// this cleanup it'd accumulate as dead bytes over time.
+//
+// Auth: kiosk device token (same as attachBgRemovedImage). The fileId
+// is verified as the lookCutout shape via assertFile so a malicious
+// caller can't be redirected at non-cutout files.
+//
+// Fire-and-forget from the client; failures are logged but never block
+// the UI. Best-effort cleanup.
+// =====================================================================
+
+export const deleteOrphanCutout = mutation({
+  args: {
+    deviceToken: v.string(),
+    fileId: v.id("_storage"),
+  },
+  handler: async (ctx, args): Promise<{ deleted: boolean }> => {
+    await requireKioskDevice(ctx, args.deviceToken);
+    // Verify the file is the right shape before deletion — defense
+    // against a malicious client trying to nuke arbitrary _storage rows.
+    await assertFile(ctx, args.fileId, FILE_GUARDS.lookCutout);
+    await ctx.storage.delete(args.fileId);
+    return { deleted: true };
+  },
+});
