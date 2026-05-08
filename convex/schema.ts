@@ -345,6 +345,7 @@ export default defineSchema({
     isFav: v.optional(v.boolean()),
     isWished: v.optional(v.boolean()),
     imageFileId: v.optional(v.id("_storage")),
+    imageNoBgFileId: v.optional(v.id("_storage")),
     grad: v.optional(v.array(v.string())),
     createdAt: v.number(),
 
