@@ -973,7 +973,17 @@ export default function KioskPage() {
                 scanEligibleRef.current = true;
                 persistKioskSession({ hasBodyScan: true });
                 stopCamera();
-                navigate("aiProcessing");
+                // Skip the AI processing screen when there's nothing queued
+                // to process — common on the eager-gate path where a customer
+                // completes their first scan with an empty trial room. Goes
+                // straight to home. With queued items (codeEntry deferred
+                // auto-trial path), aiProcessing shows real per-look progress
+                // and auto-advances on first completion.
+                if (trialItems.length > 0) {
+                  navigate("aiProcessing");
+                } else {
+                  navigate("home");
+                }
               } catch (err) {
                 console.error(err);
                 stopCamera();
@@ -994,6 +1004,8 @@ export default function KioskPage() {
       case "aiProcessing":
         return (
           <AIProcessingScreen
+            trialItems={trialItems}
+            sareeLookIds={sareeLookIds}
             onDone={() => {
               if (trialItems.length > 0) setScreen("trialRoom");
               else setScreen("home");

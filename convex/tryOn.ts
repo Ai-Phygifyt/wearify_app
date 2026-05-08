@@ -1005,6 +1005,33 @@ export const getLook = query({
 });
 
 // =====================================================================
+// Public query: getLooksByIds
+// Reactive batch read for the AIProcessingScreen — subscribes to a set
+// of in-flight looks so the screen can show real "X of Y ready" progress
+// and auto-advance when the first one completes. Narrow projection: just
+// the lifecycle fields (status / imageFileId), not the full row.
+// =====================================================================
+
+export const getLooksByIds = query({
+  args: { lookIds: v.array(v.id("looks")) },
+  handler: async (ctx, args): Promise<Array<{
+    _id: Id<"looks">;
+    status?: string;
+    imageFileId?: Id<"_storage">;
+  }>> => {
+    if (args.lookIds.length === 0) return [];
+    const rows = await Promise.all(args.lookIds.map((id) => ctx.db.get(id)));
+    return rows
+      .filter((r): r is Doc<"looks"> => r !== null)
+      .map((r) => ({
+        _id: r._id,
+        status: r.status,
+        imageFileId: r.imageFileId,
+      }));
+  },
+});
+
+// =====================================================================
 // Public query: getCachedLooksForSarees
 // Returns a map sareeId → lookId for the most recent COMPLETED look
 // per requested saree, scoped to one customer. Used by the kiosk on
