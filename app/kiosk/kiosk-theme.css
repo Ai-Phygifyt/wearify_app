@@ -878,10 +878,10 @@
 .k-trial-v2-podium {
   position: absolute;
   left: 50%;
-  bottom: 10px;
+  bottom: 20px;
   transform: translateX(-50%);
-  width: min(100%, 1500px);
-  height: 38vh;
+  width: min(100%, 1600px);
+  height: 46vh;
   z-index: 1;
   pointer-events: none;
   user-select: none;
@@ -903,9 +903,9 @@
 .k-trial-v2-cutout {
   position: absolute;
   left: 50%;
-  bottom: 21vh;
+  bottom: 25vh; /* tracks the new podium top edge (46vh / 2 + 20px ≈ 24vh) */
   transform: translateX(-50%);
-  height: 76%;
+  height: 80%;
   z-index: 2;
   display: flex; align-items: flex-end; justify-content: center;
   pointer-events: none;
@@ -1174,7 +1174,7 @@
  * bottom edge, sitting just above the podium disc. */
 .k-trial-v2-dock {
   position: absolute;
-  bottom: 16vh;
+  bottom: 20vh;
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;

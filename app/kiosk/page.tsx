@@ -3003,8 +3003,15 @@ function TrialHeroCutout({ saree, lookId }: {
 // Cart (or "In Cart"). Catalog photo top, action strip bottom.
 // =========================================================================
 
-function TrialCardV2({ saree, active, inCart, onSelect, onShare, onRemove, onAddToCart }: {
+function TrialCardV2({ saree, lookId, deviceToken, active, inCart, onSelect, onShare, onRemove, onAddToCart }: {
   saree: SareeItem;
+  // The completed look's id (or undefined). Drives the bg-removal
+  // enqueue effect below so the hero cutout actually appears for
+  // each saree in trial. Must be threaded from the parent — without
+  // it, no one calls enqueueBgRemoval and the hero stays on the wave
+  // forever (regression from the v1 → v2 layout refactor).
+  lookId: Id<"looks"> | undefined;
+  deviceToken: string;
   active: boolean;
   inCart: boolean;
   onSelect: () => void;
@@ -3012,6 +3019,40 @@ function TrialCardV2({ saree, active, inCart, onSelect, onShare, onRemove, onAdd
   onRemove: () => void;
   onAddToCart: () => void;
 }) {
+  // Subscribe to the look so we can decide when to enqueue bg-removal.
+  // This subscription is per-card (one per trial item) — same shape as
+  // commit 81ef8c9's TrialTile owned. Cheap: Convex dedups identical
+  // useQuery calls within a tab.
+  const look = useQuery(api.tryOn.getLook, lookId ? { lookId } : "skip");
+  const resultUrl = useConvexUrl(look?.imageFileId);
+  const { upload } = useUploadFile();
+  const attachBgRemoved = useMutation(api.tryOn.attachBgRemovedImage);
+  const deleteOrphan = useMutation(api.tryOn.deleteOrphanCutout);
+
+  useEffect(() => {
+    if (!lookId || !look) return;
+    if (look.status !== "completed") return;
+    if (!look.imageFileId || !resultUrl) return;
+    if (look.imageNoBgFileId) return;
+    if (!deviceToken) return;
+    const sourceImageFileId = look.imageFileId;
+    enqueueBgRemoval({
+      lookId,
+      sourceImageFileId,
+      srcUrl: resultUrl,
+      deviceToken,
+      upload: (file) => upload(file, GUARDS.lookCutout),
+      attach: (args) =>
+        attachBgRemoved({
+          deviceToken,
+          lookId,
+          sourceImageFileId: args.sourceImageFileId,
+          fileId: args.fileId,
+        }),
+      cleanup: (fileId) => deleteOrphan({ deviceToken, fileId }).then(() => undefined),
+    });
+  }, [lookId, look, resultUrl, deviceToken, upload, attachBgRemoved, deleteOrphan]);
+
   return (
     <div
       className={`k-trial-card-v2${active ? " is-active" : ""}`}
@@ -3321,6 +3362,8 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
             <TrialCardV2
               key={saree._id}
               saree={saree}
+              lookId={sareeLookIds[saree._id]}
+              deviceToken={deviceToken}
               active={idx === safeSelIdx}
               inCart={cartItemIds.has(saree._id)}
               onSelect={() => setSelIdx(idx)}
