@@ -138,6 +138,13 @@ const WhatsAppIcon = () => (
   </svg>
 );
 
+const TrashIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 /* silk shimmer overlay */
 const SilkOverlay = () => (
   <div style={{
@@ -169,8 +176,11 @@ export default function LookDetailPage() {
   );
   const addToWishlist = useMutation(api.customers.addToWishlist);
   const removeFromWishlist = useMutation(api.customers.removeFromWishlist);
+  const deleteLookMut = useMutation(api.sessionOps.deleteLook);
 
   const [toast, setToast] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const showToast = React.useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 2000);
@@ -260,6 +270,21 @@ export default function LookDetailPage() {
     window.open(`https://wa.me/?text=${shareMessage}`, "_blank");
     setShared(true);
     setTimeout(() => setShared(false), 2000);
+  }
+
+  async function handleDelete() {
+    if (!customerId || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteLookMut({ lookId: lookRow._id, customerId });
+      // Replace, not push: prevents Back from landing on a now-404 detail page.
+      router.replace("/c/looks");
+    } catch (err) {
+      console.error(err);
+      showToast("Couldn't delete — try again");
+      setDeleting(false);
+      setDeleteConfirmOpen(false);
+    }
   }
 
   return (
@@ -479,6 +504,28 @@ export default function LookDetailPage() {
         </button>
       </div>
 
+      {/* Delete this look — destructive, ghost-styled so it doesn't fight
+          for attention with the wishlist/share/tailor CTAs above. Confirms
+          via modal because the storage delete is irreversible. */}
+      <div style={{ padding: "10px 20px 0" }}>
+        <button
+          onClick={() => setDeleteConfirmOpen(true)}
+          className="cx-press"
+          style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+            padding: "11px 10px", borderRadius: P.r,
+            border: `1px solid ${P.error}40`,
+            background: "transparent",
+            color: P.error,
+            fontSize: 12, fontWeight: 600, cursor: "pointer",
+            transition: "all .2s",
+          }}
+        >
+          <TrashIcon />
+          Delete this look
+        </button>
+      </div>
+
       {/* ── Zari divider ────────────────────────────────────────── */}
       <div className="cx-zari" style={{ margin: "20px 20px 0" }} />
 
@@ -632,6 +679,73 @@ export default function LookDetailPage() {
           alt={look.sareeName}
           onClose={() => setLightboxOpen(false)}
         />
+      )}
+
+      {/* Delete confirm modal — backdrop dismiss, explicit Cancel + Delete.
+          The destructive action requires an explicit second tap because
+          the storage blobs are irrecoverable after deletion. */}
+      {deleteConfirmOpen && (
+        <div
+          onClick={() => !deleting && setDeleteConfirmOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 999,
+            background: "rgba(28, 17, 8, .55)",
+            backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+            animation: "cx-fadeIn .18s ease",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 340,
+              background: P.white, borderRadius: 18,
+              padding: "22px 22px 18px",
+              boxShadow: P.shadowMd,
+            }}
+          >
+            <div className="cx-serif" style={{
+              fontSize: 19, fontWeight: 600, fontStyle: "italic", color: P.text,
+              marginBottom: 6,
+            }}>
+              Delete this look?
+            </div>
+            <div style={{ fontSize: 13, color: P.textMid, lineHeight: 1.5, marginBottom: 18 }}>
+              The AI render will be removed from your history. This can&apos;t be undone.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                disabled={deleting}
+                className="cx-press"
+                style={{
+                  flex: 1, padding: "11px 10px", borderRadius: P.r,
+                  border: `1.5px solid ${P.plumGhost}`,
+                  background: P.white, color: P.text,
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="cx-press"
+                style={{
+                  flex: 1, padding: "11px 10px", borderRadius: P.r,
+                  border: "none",
+                  background: P.error, color: P.white,
+                  fontSize: 13, fontWeight: 700, cursor: deleting ? "wait" : "pointer",
+                  opacity: deleting ? 0.7 : 1,
+                  transition: "opacity .2s",
+                }}
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

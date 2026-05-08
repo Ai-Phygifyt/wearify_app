@@ -459,6 +459,50 @@ export const toggleWish = mutation({
   },
 });
 
+// =====================================================================
+// deleteLook — customer removes a look from their /c/looks history.
+//
+// Auth: customer ownership check (look.customerId === args.customerId).
+// Idempotent: silently no-ops on a missing row so a double-tap from the
+// UI doesn't surface a "Look not found" error.
+//
+// Side effects on storage:
+//   - imageFileId (the AI try-on render — unique to this look) is deleted
+//   - imageNoBgFileId (the bg-removed cutout — unique to this look) is deleted
+// We do NOT delete personFileId (customer's body scan, shared across all
+// looks for the customer) or garmentFileId (saree image owned by the
+// store, shared across customers). Those are reused.
+//
+// Wardrobe rows that reference this look via wardrobe.lookId become
+// orphaned; listWardrobeByCustomer already tolerates a missing look
+// (falls through to the catalog fallback chain), so no cascade.
+// =====================================================================
+
+export const deleteLook = mutation({
+  args: {
+    lookId: v.id("looks"),
+    customerId: v.id("customers"),
+  },
+  handler: async (ctx, args): Promise<{ deleted: boolean }> => {
+    const look = await ctx.db.get(args.lookId);
+    if (!look) return { deleted: false };
+    if (look.customerId !== args.customerId) {
+      throw new Error("UNAUTHORIZED: not your look");
+    }
+    // Best-effort storage cleanup — failures are silent so a stuck
+    // storage call doesn't block the row deletion. Orphan blobs are
+    // harmless; orphan look rows would clutter the customer's history.
+    if (look.imageFileId) {
+      try { await ctx.storage.delete(look.imageFileId); } catch { /* ignore */ }
+    }
+    if (look.imageNoBgFileId) {
+      try { await ctx.storage.delete(look.imageNoBgFileId); } catch { /* ignore */ }
+    }
+    await ctx.db.delete(args.lookId);
+    return { deleted: true };
+  },
+});
+
 // ============================================================
 // SHORTLIST
 // ============================================================
