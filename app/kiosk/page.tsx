@@ -1190,18 +1190,24 @@ export default function KioskPage() {
           <WardrobeScreen
             items={wardrobeItems}
             lookImages={wardrobeLookImages}
-            onMoveToCart={(items) => {
-              setCartItems((prev) => {
-                const have = new Set(prev.map((s) => s._id));
-                const fresh = items.filter((i) => !have.has(i._id));
+            cartItemIds={new Set(cartItems.map((c) => c._id))}
+            onToggleInCart={(saree) => {
+              const inCart = cartItems.some((c) => c._id === saree._id);
+              if (inCart) {
+                // Remove from cart — both server (if customer) and local.
                 if (customerId) {
-                  for (const i of fresh) {
-                    addCartItem({ customerId, storeId, sareeId: i._id, qty: 1 });
-                  }
+                  removeCartItemMut({ customerId, storeId, sareeId: saree._id });
                 }
-                return [...prev, ...fresh.map((i) => ({ ...i, qty: 1 }))];
-              });
-              navigate("order");
+                setCartItems((prev) => prev.filter((c) => c._id !== saree._id));
+                showToast("Removed from cart", "info");
+              } else {
+                // Add to cart — both server (if customer) and local.
+                if (customerId) {
+                  addCartItem({ customerId, storeId, sareeId: saree._id, qty: 1 });
+                }
+                setCartItems((prev) => [...prev, { ...saree, qty: 1 }]);
+                showToast("Added to cart", "success");
+              }
             }}
             navigate={navigate}
             goHome={goHome}
@@ -1210,7 +1216,6 @@ export default function KioskPage() {
             wardrobeCount={wardrobeItems.length}
             cartCount={cartItems.length}
             maxWardrobe={CFG.maxWardrobe}
-            showToast={showToast}
             storeName={storeData?.name || storeName}
             storeLogoFileId={storeData?.logoFileId}
           />
@@ -3223,22 +3228,25 @@ function RetakeConfirmModal({
 }
 
 /* ── WARDROBE ── */
-function WardrobeScreen({ items, lookImages, onMoveToCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, showToast, storeName, storeLogoFileId }: {
+function WardrobeScreen({ items, lookImages, cartItemIds, onToggleInCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, storeName, storeLogoFileId }: {
   items: SareeItem[];
   // sareeId → AI try-on render fileId. Built reactively from
   // listWardrobeByCustomer in the parent. Empty object until the
   // wardrobe query resolves; per-saree value undefined until that
   // saree's bound look reaches status="completed".
   lookImages: Record<string, Id<"_storage">>;
-  onMoveToCart: (items: SareeItem[]) => void;
+  // Sareeids currently in the cart. Used to flip per-card button state
+  // between "Add to Cart" and "In Cart ✓". Computed reactively in the
+  // parent from `cartItems`.
+  cartItemIds: Set<string>;
+  // One-tap add/remove. Parent fires the addCartItem / removeCartItem
+  // mutation + updates local cart state + shows a toast — the screen
+  // just emits the intent.
+  onToggleInCart: (saree: SareeItem) => void;
   navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxWardrobe: number;
-  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
-  const [selForCart, setSelForCart] = useState<Set<string>>(new Set());
-  const toggleSel = (id: string) => { setSelForCart((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
-  const moveToCart = () => { const sel = items.filter((s) => selForCart.has(s._id)); if (sel.length === 0) { showToast("Select sarees first", "warning"); return; } onMoveToCart(sel); setSelForCart(new Set()); };
   return (
     <div className="k-shell">
       <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
@@ -3266,10 +3274,10 @@ function WardrobeScreen({ items, lookImages, onMoveToCart, navigate, goHome, tri
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, maxWidth: 960, margin: "0 auto" }}>
             {items.map((saree) => {
-              const selC = selForCart.has(saree._id);
+              const inCart = cartItemIds.has(saree._id);
               const lookFileId = lookImages[saree._id];
               return (
-                <div key={saree._id} className="k-product-card k-slideUp" style={{ border: selC ? "2px solid var(--k-green)" : undefined }}>
+                <div key={saree._id} className="k-product-card k-slideUp" style={{ border: inCart ? "2px solid var(--k-green)" : undefined }}>
                   <div style={{ position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden" }}>
                     <div style={{ position: "absolute", inset: 0 }}>
                       {/* AI try-on render takes priority — that's the customer
@@ -3295,15 +3303,21 @@ function WardrobeScreen({ items, lookImages, onMoveToCart, navigate, goHome, tri
                   <div style={{ padding: "10px 12px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{saree.name}</div>
                     <div className="k-mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(saree.price)}</div>
-                    <button onClick={() => toggleSel(saree._id)} className="k-press" style={{
+                    {/* One-tap add/remove. Parent owns the actual mutation +
+                        local cart state; this just emits intent. The button
+                        flips between "Add to Cart" and "In Cart ✓" reactively
+                        based on cartItemIds. Toggle pattern matches the
+                        wishlist-on-detail-page UX. */}
+                    <button onClick={() => onToggleInCart(saree)} className="k-press" aria-pressed={inCart} style={{
                       width: "100%", marginTop: 8, padding: "8px", borderRadius: 10,
                       fontSize: 11, fontWeight: 600, cursor: "pointer",
-                      background: selC ? "var(--k-green)" : "transparent",
-                      color: selC ? "#fff" : "var(--k-text)",
-                      border: `1px solid ${selC ? "var(--k-green)" : "var(--k-border)"}`,
+                      background: inCart ? "var(--k-green)" : "transparent",
+                      color: inCart ? "#fff" : "var(--k-text)",
+                      border: `1px solid ${inCart ? "var(--k-green)" : "var(--k-border)"}`,
                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      transition: "background .18s ease, color .18s ease, border-color .18s ease",
                     }}>
-                      {selC ? (<><Check size={14} strokeWidth={3} /> Selected</>) : "Add to Cart"}
+                      {inCart ? (<><Check size={14} strokeWidth={3} /> In Cart</>) : (<><ShoppingCart size={13} /> Add to Cart</>)}
                     </button>
                   </div>
                 </div>
@@ -3312,15 +3326,6 @@ function WardrobeScreen({ items, lookImages, onMoveToCart, navigate, goHome, tri
           </div>
         )}
       </div>
-      {selForCart.size > 0 && (
-        <div className="k-slideUp" style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 50 }}>
-          <button onClick={moveToCart} className="k-btn k-btn-primary k-btn-pill k-press" style={{
-            padding: "14px 32px", fontSize: 14, fontWeight: 600, boxShadow: "var(--k-shadow-lg)",
-          }}>
-            <ShoppingCart size={16} /> Move to Cart ({selForCart.size})
-          </button>
-        </div>
-      )}
     </div>
   );
 }
