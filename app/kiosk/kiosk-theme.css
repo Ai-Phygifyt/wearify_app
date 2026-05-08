@@ -876,22 +876,27 @@
  * The bottom-center anchor of the IMG inside the box means the disc
  * always lands at the bottom of the container. */
 .k-trial-v2-podium {
+  /* Asset is 433x577 (portrait-ish). With the previous 46vh container
+   * + object-fit: contain, height-fit was producing a small image
+   * (~290px tall on iPad) — disc looked tiny relative to the customer.
+   * Bumped to 70vh; height-anchored image rendering means the disc
+   * scales up proportionally and the visible band fills more of the
+   * floor. Lifted +10px more (20px → 30px) per design feedback. */
   position: absolute;
   left: 50%;
-  bottom: 20px;
+  bottom: 30px;
   transform: translateX(-50%);
-  width: min(100%, 1600px);
-  height: 46vh;
+  width: 100%;
+  height: 70vh;
   z-index: 1;
   pointer-events: none;
   user-select: none;
 }
 .k-trial-v2-podium img {
   display: block;
-  width: 100%;
+  width: auto;
   height: 100%;
-  object-fit: contain;
-  object-position: bottom center;
+  margin: 0 auto;
 }
 
 /* The bg-removed customer cutout sits above the bg, anchored to the
@@ -901,11 +906,17 @@
  * with the disc occupying roughly the upper half + the 10px lift,
  * the disc top sits ~21vh from the stage bottom. */
 .k-trial-v2-cutout {
+  /* Feet anchor to the disc TOP. Podium asset's disc occupies roughly
+   * the bottom ~30% of its 433x577 frame; with the podium container at
+   * 70vh tall + height-anchored image, the disc top sits ~21vh from
+   * the floor. The +30px lift on the podium pushes that another ~2vh
+   * up, hence 23vh here. Tune this and the podium height together if
+   * the asset is ever swapped. */
   position: absolute;
   left: 50%;
-  bottom: 25vh; /* tracks the new podium top edge (46vh / 2 + 20px ≈ 24vh) */
+  bottom: 23vh;
   transform: translateX(-50%);
-  height: 80%;
+  height: 78%;
   z-index: 2;
   display: flex; align-items: flex-end; justify-content: center;
   pointer-events: none;
@@ -1174,7 +1185,7 @@
  * bottom edge, sitting just above the podium disc. */
 .k-trial-v2-dock {
   position: absolute;
-  bottom: 20vh;
+  bottom: 24vh;
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;
