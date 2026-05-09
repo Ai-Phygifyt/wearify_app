@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Home } from "lucide-react";
+import { LogOut, Home, SwitchCamera } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -10,6 +10,8 @@ export function BodyScanScreen({
   storeName,
   storeLogoFileId,
   stream,
+  cameraFacing,
+  onSwitchCamera,
   onCapture,
   onBack,
   onHome,
@@ -18,6 +20,8 @@ export function BodyScanScreen({
   storeName: string;
   storeLogoFileId?: Id<"_storage">;
   stream: MediaStream | null;
+  cameraFacing?: "user" | "environment";
+  onSwitchCamera?: () => void;
   onCapture: (blob: Blob) => void;
   onBack: () => void;
   onHome: () => void;
@@ -154,6 +158,17 @@ export function BodyScanScreen({
             <div className="k-scan-line" />
             <div className="k-scan-countdown">{countdown}s</div>
           </>
+        )}
+
+        {!capturing && onSwitchCamera && (
+          <button
+            onClick={onSwitchCamera}
+            className="k-scan-flip"
+            aria-label={cameraFacing === "user" ? "Switch to back camera" : "Switch to front camera"}
+            title={cameraFacing === "user" ? "Switch to back camera" : "Switch to front camera"}
+          >
+            <SwitchCamera size={18} strokeWidth={2.25} />
+          </button>
         )}
 
         {!capturing && (

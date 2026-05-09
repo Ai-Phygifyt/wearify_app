@@ -9,10 +9,11 @@ import { SareeThumb } from "@/components/SareeThumb";
 import { SareeImageGallery } from "@/components/SareeImageGallery";
 import { useConvexUrl } from "@/lib/ConvexImage";
 import {
-  ChevronLeft, ChevronRight, ChevronDown, ArrowRight,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight,
   Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock,
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
-  Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal, Heart,
+  Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal, Heart, Trash2, Upload,
+  Users, MapPin,
 } from "lucide-react";
 import { useUploadFile } from "@/lib/useUpload";
 import { GUARDS } from "@/lib/uploadGuards";
@@ -68,8 +69,6 @@ type Screen =
   | "order"
   | "tailors"
   | "tailorDetail"
-  | "feedback"
-  | "dataSave"
   | "sessionEnd";
 
 interface SareeItem {
@@ -166,6 +165,10 @@ export default function KioskPage() {
   // (on Allow) and BodyScanScreen can consume it, and so cleanup is
   // owned in one place — stopped on capture, Skip, wipe, or unmount.
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  // Front ("user") or back ("environment") camera. Persists across the
+  // switch so the same direction is requested when the consent flow
+  // re-opens the camera in a future session.
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
 
   // Language
   const [lang, setLang] = useState("en");
@@ -513,7 +516,7 @@ export default function KioskPage() {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: cameraFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
       setCameraStream(stream);
@@ -527,7 +530,37 @@ export default function KioskPage() {
       showToast(msg, "error");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showToast]);
+  }, [showToast, cameraFacing]);
+
+  // Swap front/back camera mid-session. Stops the current stream first
+  // so the OS releases the device, then re-acquires with the opposite
+  // facingMode. Falls back to the original direction if the new one
+  // isn't available (e.g. kiosk display with only one camera).
+  const handleSwitchCamera = useCallback(async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
+    const next: "user" | "environment" = cameraFacing === "user" ? "environment" : "user";
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: next, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      setCameraStream(stream);
+      setCameraFacing(next);
+    } catch {
+      // Re-acquire the previous direction so the user isn't left with no preview.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: cameraFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        setCameraStream(stream);
+      } catch { /* nothing else to try */ }
+      showToast("Other camera is not available on this device.", "warning");
+    }
+  }, [cameraFacing, cameraStream, showToast]);
 
   const handleWipe = useCallback(() => {
     setTrialData(null);
@@ -564,9 +597,11 @@ export default function KioskPage() {
     setScreen("sessionEnd");
   }, [stopCamera]);
 
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const triggerLogout = useCallback(() => {
-    navigate("dataSave");
-  }, [navigate]);
+    setShowSavePrompt(true);
+  }, []);
 
   // Fetch all sarees for this store
   const allSarees = useQuery(
@@ -974,6 +1009,8 @@ export default function KioskPage() {
             storeLogoFileId={storeData?.logoFileId}
             triggerLogout={triggerLogout}
             stream={cameraStream}
+            cameraFacing={cameraFacing}
+            onSwitchCamera={handleSwitchCamera}
             onCapture={async (blob) => {
               if (!customerId) {
                 stopCamera();
@@ -1230,6 +1267,7 @@ export default function KioskPage() {
             items={wardrobeItems}
             lookImages={wardrobeLookImages}
             lookCutouts={wardrobeLookCutouts}
+            sareeLookIds={sareeLookIds}
             cartItemIds={new Set(cartItems.map((c) => c._id))}
             onToggleInCart={(saree) => {
               const inCart = cartItems.some((c) => c._id === saree._id);
@@ -1248,6 +1286,16 @@ export default function KioskPage() {
                 setCartItems((prev) => [...prev, { ...saree, qty: 1 }]);
                 showToast("Added to cart", "success");
               }
+            }}
+            onRemoveFromWardrobe={(saree) => {
+              if (customerId && savedWardrobe) {
+                const row = savedWardrobe.find((w) => w.sareeId === saree._id);
+                if (row) {
+                  removeFromWardrobeMut({ wardrobeId: row._id, customerId }).catch(() => {});
+                }
+              }
+              setWardrobeItems((prev) => prev.filter((w) => w._id !== saree._id));
+              showToast("Removed from wardrobe", "info");
             }}
             navigate={navigate}
             goHome={goHome}
@@ -1324,7 +1372,17 @@ export default function KioskPage() {
               }
             }}
             onFindTailor={() => navigate("tailors")}
+            onProductTap={(p) => navigate("productDetail", p)}
             onBack={goBack}
+            navigate={navigate}
+            goHome={goHome}
+            triggerLogout={triggerLogout}
+            trialCount={trialItems.length}
+            wardrobeCount={wardrobeItems.length}
+            cartCount={cartItems.length}
+            storeName={storeData?.name || storeName}
+            storeLogoFileId={storeData?.logoFileId}
+            recentlyViewed={(allSarees ?? []).slice(0, 12)}
           />
         );
       case "tailors":
@@ -1332,49 +1390,20 @@ export default function KioskPage() {
           <TailorScreen
             storeCity={storeData?.city || ""}
             storeId={storeId}
-            storeName={storeName}
+            storeName={storeData?.name || storeName}
             customerId={customerId}
             customerName={customerName}
             customerPhone={phone ? `+91${phone}` : ""}
             onBack={goBack}
             showToast={showToast}
-          />
-        );
-      case "feedback":
-        return (
-          <FeedbackScreen
-            onSubmit={async (rating) => {
-              if (sessionId) {
-                try {
-                  await updateSessionMut({
-                    sessionId,
-                    rating,
-                    sareesTriedOn: wardrobeItems.length,
-                    sareesBrowsed: trialItems.length + wardrobeItems.length,
-                  });
-                  await endSessionMut({ sessionId, deviceToken });
-                } catch { /* ignore */ }
-              }
-              handleWipe();
-            }}
-            onHome={goHome}
-            onLogout={handleWipe}
-          />
-        );
-      case "dataSave":
-        return (
-          <DataSaveScreen
-            onSave={() => {
-              showToast("Saved to profile", "success");
-              navigate("feedback");
-            }}
-            onDelete={() => {
-              setWardrobeItems([]);
-              setTrialItems([]);
-              setCartItems([]);
-              showToast("Data deleted", "info");
-              navigate("feedback");
-            }}
+            navigate={navigate}
+            goHome={goHome}
+            triggerLogout={triggerLogout}
+            trialCount={trialItems.length}
+            wardrobeCount={wardrobeItems.length}
+            cartCount={cartItems.length}
+            storeLogoFileId={storeData?.logoFileId}
+            allSarees={allSarees ?? []}
           />
         );
       case "sessionEnd":
@@ -1387,6 +1416,51 @@ export default function KioskPage() {
   return (
     <div style={{ width: "100%", height: "100vh", overflow: "hidden", position: "relative" }}>
       {renderScreen()}
+      {showSavePrompt && (
+        <DataSaveScreen
+          onSave={() => {
+            setShowSavePrompt(false);
+            showToast("Saved to profile", "success");
+            setShowFeedback(true);
+          }}
+          onDelete={() => {
+            setShowSavePrompt(false);
+            setWardrobeItems([]);
+            setTrialItems([]);
+            setCartItems([]);
+            showToast("Data deleted", "info");
+            setShowFeedback(true);
+          }}
+        />
+      )}
+      {showFeedback && (
+        <FeedbackScreen
+          onSubmit={async (rating, comment) => {
+            if (sessionId) {
+              try {
+                await updateSessionMut({
+                  sessionId,
+                  rating,
+                  ratingComment: comment || undefined,
+                  sareesTriedOn: wardrobeItems.length,
+                  sareesBrowsed: trialItems.length + wardrobeItems.length,
+                });
+                await endSessionMut({ sessionId, deviceToken });
+              } catch { /* ignore */ }
+            }
+            setShowFeedback(false);
+            handleWipe();
+          }}
+          onHome={() => {
+            setShowFeedback(false);
+            goHome();
+          }}
+          onLogout={() => {
+            setShowFeedback(false);
+            handleWipe();
+          }}
+        />
+      )}
       {toastVisible && (
         <KioskToast msg={toastMsg} type={toastType} onClose={() => setToastVisible(false)} />
       )}
@@ -2723,7 +2797,7 @@ function SareeCard({ saree, onTap, onCheck, isSelected, isInTrial, isInWardrobe 
 }
 
 /* ── PRODUCT DETAIL ── */
-function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAddToTrial, onBack, onProductTap, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount }: {
+function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAddToTrial, onBack, onProductTap, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, storeName, storeLogoFileId }: {
   product: SareeItem; allSarees: SareeItem[]; isInTrial: boolean; isInWardrobe: boolean;
   onAddToTrial: () => void; onBack: () => void; onProductTap: (p: SareeItem) => void;
   navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
@@ -2731,116 +2805,184 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [selColor, setSelColor] = useState(0);
-  const disc = product.mrp && product.mrp > product.price ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
-  const similar = allSarees.filter((s) => s.occasion === product.occasion && s._id !== product._id).slice(0, 6);
+  const [liked, setLiked] = useState(true);
+  const railRef = useRef<HTMLDivElement>(null);
+  const similar = allSarees.filter((s) => s.occasion === product.occasion && s._id !== product._id).slice(0, 8);
+
+  const subtitle = [product.fabric, "Handwoven", product.region].filter(Boolean).join(" · ");
+  const handwovenLabel = product.region ? `Handwoven In ${product.region}` : "Handwoven";
 
   return (
     <div className="k-shell">
-      <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} onBack={onBack} />
+      <KioskHeader
+        trialCount={trialCount}
+        wardrobeCount={wardrobeCount}
+        cartCount={cartCount}
+        goHome={goHome}
+        triggerLogout={triggerLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
 
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 24 }}>
-        {/* Hero section — image left, details right */}
-        <div style={{ display: "flex", padding: "24px", gap: 28, minHeight: 320 }}>
-          {/* Left: product image */}
-          <div style={{
-            width: "38%", maxWidth: 360, position: "relative", borderRadius: "var(--k-r-lg)",
-            overflow: "hidden", boxShadow: "var(--k-shadow-md)", flexShrink: 0, aspectRatio: "3/4",
-          }}>
-            <div style={{ position: "absolute", inset: 0 }}>
-              <SareeImageGallery name={product.name} imageIds={product.imageIds} grad={product.grad} emoji={product.emoji} emojiSize={72} />
+      <div className="k-detail-content">
+        {/* Back / Home row */}
+        <div className="k-detail-actions">
+          <button onClick={onBack} className="k-detail-action-btn k-detail-home-btn k-press" aria-label="Back">
+            <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
+          </button>
+          <button onClick={goHome} className="k-detail-action-btn k-detail-home-btn k-press" aria-label="Home">
+            <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+          </button>
+        </div>
+
+        {/* Hero — image + info */}
+        <div className="k-detail-hero">
+          <div className="k-detail-img">
+            <SareeImageGallery name={product.name} imageIds={product.imageIds} grad={product.grad} emoji={product.emoji} emojiSize={72} />
+            <div className="k-detail-rating">
+              <Star size={13} fill="var(--k-gold)" color="var(--k-gold)" strokeWidth={0} />
+              <span>4.5</span>
             </div>
-            {/* Tag */}
-            {product.tag && (
-              <div style={{
-                position: "absolute", top: 14, left: 14,
-                padding: "4px 14px", borderRadius: "var(--k-r-pill)",
-                background: product.tag === "Premium" ? "var(--k-maroon)" : "var(--k-gold)",
-                color: "#fff", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px",
-              }}>{product.tag}</div>
-            )}
-            {disc > 0 && (
-              <div style={{
-                position: "absolute", bottom: 14, left: 14,
-                padding: "4px 12px", borderRadius: "var(--k-r-pill)",
-                background: "var(--k-green)", color: "#fff", fontSize: 13, fontWeight: 700,
-              }}>-{disc}% OFF</div>
-            )}
+            <button
+              onClick={() => setLiked((v) => !v)}
+              className={`k-detail-heart${liked ? " is-liked" : ""}`}
+              aria-label={liked ? "Unlike" : "Like"}
+            >
+              <Heart size={20} fill={liked ? "#E53935" : "transparent"} color={liked ? "#E53935" : "var(--k-text-mid)"} strokeWidth={2} />
+            </button>
           </div>
 
-          {/* Right: details */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            {/* Breadcrumb */}
-            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 6 }}>
-              {product.occasion} · {product.fabric}{product.region ? ` · ${product.region}` : ""}
-            </div>
+          <div className="k-detail-info">
+            <h2 className="k-detail-title">{product.name}</h2>
+            <div className="k-detail-subtitle">{subtitle}</div>
 
-            {/* Name */}
-            <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, marginBottom: 8 }}>{product.name}</h2>
-
-            {/* Description */}
-            {product.description && (
-              <p style={{ fontSize: 15, color: "var(--k-text-mid)", lineHeight: 1.6, marginBottom: 16 }}>{product.description}</p>
-            )}
-
-            {/* Price */}
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
-              <span className="k-mono" style={{ fontSize: 28, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(product.price)}</span>
+            <div className="k-detail-price-row">
+              <span className="k-detail-price">₹ {fmtPrice(product.price)}</span>
               {product.mrp && product.mrp > product.price && (
-                <span className="k-mono" style={{ fontSize: 16, color: "var(--k-text-light)", textDecoration: "line-through" }}>₹{fmtPrice(product.mrp)}</span>
-              )}
-              {disc > 0 && (
-                <span style={{ padding: "2px 10px", borderRadius: "var(--k-r-pill)", background: "var(--k-green-bg)", color: "var(--k-green)", fontSize: 13, fontWeight: 600 }}>Save ₹{fmtPrice(product.mrp! - product.price)}</span>
+                <span className="k-detail-mrp">₹ {fmtPrice(product.mrp)}</span>
               )}
             </div>
 
-            {/* Colors */}
-            {product.colors.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Available Colors</div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  {product.colors.map((c, i) => (
-                    <div key={i} onClick={() => setSelColor(i)} style={{
-                      width: 32, height: 32, borderRadius: "50%", background: c, cursor: "pointer",
-                      border: i === selColor ? "3px solid var(--k-maroon)" : "2px solid var(--k-border)",
-                      boxShadow: i === selColor ? "0 0 0 2px rgba(107,26,26,.2)" : "none",
-                      transition: "all .15s",
-                    }} />
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="k-detail-divider" />
 
-            {/* Details chips */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-              {[product.fabric, product.occasion, product.type, product.region].filter(Boolean).map((tag, i) => (
-                <span key={i} style={{
-                  padding: "6px 14px", borderRadius: "var(--k-r-pill)",
-                  background: "var(--k-bg-warm)", fontSize: 12, fontWeight: 500, color: "var(--k-text-mid)",
-                }}>{tag}</span>
+            <div className="k-detail-colors-head">Colors</div>
+            <div className="k-detail-colors">
+              {product.colors.slice(0, 6).map((c, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelColor(i)}
+                  className={`k-detail-color${i === selColor ? " is-active" : ""}`}
+                  style={{ background: c }}
+                  aria-label={`Color ${i + 1}`}
+                />
               ))}
             </div>
 
-            {/* CTA */}
-            <button onClick={onAddToTrial} disabled={isInTrial || isInWardrobe} className="k-btn k-btn-primary k-btn-pill k-press" style={{
-              width: "100%", maxWidth: 360, padding: "18px 24px", fontSize: 17, fontWeight: 600,
-            }}>
-              {isInWardrobe ? <ShoppingBag size={20} /> : isInTrial ? <Shirt size={20} /> : <Sparkles size={20} />}
-              {isInWardrobe ? "Already in Wardrobe" : isInTrial ? "Already in Trial Room" : "Add to Trial Room"}
+            <div className="k-detail-divider k-detail-section-divider" />
+
+            <div className="k-detail-features">
+              <div className="k-detail-feature">
+                <div className="k-detail-feature-icon">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/kiosk/detail/pure-silk.svg" alt="" aria-hidden />
+                </div>
+                <span className="k-detail-feature-label">100% {product.fabric || "Pure Silk"}</span>
+              </div>
+              <div className="k-detail-feature">
+                <div className="k-detail-feature-icon">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/kiosk/detail/hand-woven.svg" alt="" aria-hidden />
+                </div>
+                <span className="k-detail-feature-label">{handwovenLabel}</span>
+              </div>
+              <div className="k-detail-feature">
+                <div className="k-detail-feature-icon">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/kiosk/detail/premium.svg" alt="" aria-hidden />
+                </div>
+                <span className="k-detail-feature-label">Premium Quality</span>
+              </div>
+              <div className="k-detail-feature">
+                <div className="k-detail-feature-icon">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/kiosk/detail/easy-return.svg" alt="" aria-hidden />
+                </div>
+                <span className="k-detail-feature-label">Easy Return</span>
+              </div>
+            </div>
+
+            <button
+              onClick={onAddToTrial}
+              disabled={isInTrial || isInWardrobe}
+              className="k-detail-tryon k-press"
+            >
+              {isInWardrobe ? "ALREADY IN WARDROBE" : isInTrial ? "ALREADY IN TRIAL ROOM" : "TRY-ON"}
             </button>
           </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: "var(--k-border-l)", margin: "8px 24px 16px" }} />
-
-        {/* Similar sarees */}
+        {/* Similar Categories */}
         {similar.length > 0 && (
-          <ScrollSection title="You May Also Like">
-            {similar.map((s) => (
-              <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} isSelected={false} isInTrial={false} isInWardrobe={false} />
-            ))}
-          </ScrollSection>
+          <>
+            <div className="k-detail-divider k-detail-section-divider" />
+            <div className="k-detail-similar">
+              <div className="k-detail-similar-head">
+                <h3 className="k-detail-similar-title">Similar Categories</h3>
+                <div className="k-detail-similar-nav">
+                  <button
+                    className="k-detail-nav-btn"
+                    onClick={() => railRef.current?.scrollBy({ left: -260, behavior: "smooth" })}
+                    aria-label="Previous"
+                  >
+                    <ChevronLeft size={18} color="var(--k-text)" strokeWidth={2.25} />
+                  </button>
+                  <button
+                    className="k-detail-nav-btn"
+                    onClick={() => railRef.current?.scrollBy({ left: 260, behavior: "smooth" })}
+                    aria-label="Next"
+                  >
+                    <ChevronRight size={18} color="var(--k-text)" strokeWidth={2.25} />
+                  </button>
+                </div>
+              </div>
+              <div ref={railRef} className="k-detail-similar-rail k-no-scroll">
+                {similar.map((s) => (
+                  <div key={s._id} className="k-detail-sim-card" onClick={() => onProductTap(s)}>
+                    <div className="k-detail-sim-img">
+                      <SareeThumb name={s.name} fileId={s.imageIds?.[0]} grad={s.grad} emoji={s.emoji} emojiSize={36} />
+                      <button
+                        className="k-detail-heart is-liked"
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label="Like"
+                      >
+                        <Heart size={18} fill="#E53935" color="#E53935" strokeWidth={2} />
+                      </button>
+                    </div>
+                    <div className="k-detail-sim-info">
+                      <div className="k-detail-sim-name">{s.name}</div>
+                      <div className="k-detail-sim-row">
+                        <span className="k-detail-sim-meta">{[s.fabric, "Handwoven"].filter(Boolean).join(" · ")}</span>
+                        <span className="k-detail-sim-price">₹{fmtPrice(s.price)}</span>
+                      </div>
+                      {s.colors.length > 0 && (
+                        <div className="k-detail-sim-colors">
+                          {s.colors.slice(0, 5).map((c, i) => (
+                            <span key={i} className="k-detail-sim-swatch" style={{ background: c }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
+      </div>
+
+      <div className="k-detail-footer">
+        © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
       </div>
     </div>
   );
@@ -3659,249 +3801,433 @@ function RetakeConfirmModal({
 }
 
 /* ── WARDROBE ── */
-function WardrobeScreen({ items, lookImages, lookCutouts, cartItemIds, onToggleInCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, storeName, storeLogoFileId }: {
+// Per-saree thumbnail that subscribes to the bound look (if any) and shows
+// the AI try-on render once the look completes. Mirrors TrialTile's pattern
+// so wardrobe cards stay reactive to in-flight try-on jobs.
+function WardrobeCardImg({ saree, lookId, serverLookFileId, serverCutoutFileId }: {
+  saree: SareeItem;
+  lookId?: Id<"looks">;
+  serverLookFileId?: Id<"_storage">;
+  serverCutoutFileId?: Id<"_storage">;
+}) {
+  const look = useQuery(api.tryOn.getLook, lookId ? { lookId } : "skip");
+  const liveCutout = look?.status === "completed" ? look.imageNoBgFileId ?? undefined : undefined;
+  const liveRender = look?.status === "completed" ? look.imageFileId ?? undefined : undefined;
+  // Priority: live cutout (best — transparent bg) → server cutout → live render → server render → catalog
+  const fileId =
+    liveCutout ??
+    serverCutoutFileId ??
+    liveRender ??
+    serverLookFileId ??
+    saree.imageIds?.[3] ??
+    saree.imageIds?.[2] ??
+    saree.imageIds?.[0];
+  return (
+    <SareeThumb
+      name={saree.name}
+      fileId={fileId}
+      grad={saree.grad}
+      emoji={saree.emoji}
+      emojiSize={24}
+      gradientAngle={135}
+    />
+  );
+}
+
+function WardrobeScreen({ items, lookImages, lookCutouts, sareeLookIds, cartItemIds, onToggleInCart, onRemoveFromWardrobe, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, storeName, storeLogoFileId }: {
   items: SareeItem[];
-  // sareeId → AI try-on render fileId (with original RunPod bg). Built
-  // reactively from listWardrobeByCustomer in the parent. Empty object
-  // until the wardrobe query resolves; per-saree value undefined until
-  // that saree's bound look reaches status="completed".
   lookImages: Record<string, Id<"_storage">>;
-  // sareeId → bg-removed cutout fileId. Kiosk-only — preferred over
-  // lookImages so the customer sees themselves on the kiosk's ivory
-  // backdrop. Falls back to lookImages, then catalog (slot 3 → 2 → 0).
   lookCutouts: Record<string, Id<"_storage">>;
-  // Sareeids currently in the cart. Used to flip per-card button state
-  // between "Add to Cart" and "In Cart ✓". Computed reactively in the
-  // parent from `cartItems`.
+  sareeLookIds: Record<string, Id<"looks">>;
   cartItemIds: Set<string>;
-  // One-tap add/remove. Parent fires the addCartItem / removeCartItem
-  // mutation + updates local cart state + shows a toast — the screen
-  // just emits the intent.
   onToggleInCart: (saree: SareeItem) => void;
+  onRemoveFromWardrobe: (saree: SareeItem) => void;
   navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxWardrobe: number;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
+  const [selIdx, setSelIdx] = useState(0);
+  const shelfRef = useRef<HTMLDivElement>(null);
+  const safeIdx = Math.min(selIdx, Math.max(0, items.length - 1));
+  const active = items[safeIdx];
+
+  // Live look subscription for the showcase — mirrors WardrobeCardImg so the
+  // center model picks up the AI render the moment the look completes, even
+  // if the server-persisted wardrobe row hasn't been re-fetched yet.
+  const activeLookId = active ? sareeLookIds[active._id] : undefined;
+  const activeLook = useQuery(api.tryOn.getLook, activeLookId ? { lookId: activeLookId } : "skip");
+  const activeLiveCutout = activeLook?.status === "completed" ? activeLook.imageNoBgFileId ?? undefined : undefined;
+  const activeLiveRender = activeLook?.status === "completed" ? activeLook.imageFileId ?? undefined : undefined;
+  const activeShowcaseFileId = active
+    ? activeLiveCutout
+      ?? lookCutouts[active._id]
+      ?? activeLiveRender
+      ?? lookImages[active._id]
+      ?? active.imageIds?.[3]
+      ?? active.imageIds?.[2]
+      ?? active.imageIds?.[0]
+    : undefined;
+
   return (
-    <div className="k-shell">
-      <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
-      <div style={{ textAlign: "center", padding: "12px 0 6px" }}>
-        <div className="k-chip k-chip-maroon k-slideDown" style={{ background: "var(--k-maroon)", color: "#fff", borderColor: "var(--k-maroon)", padding: "7px 18px", fontSize: 14, fontWeight: 600 }}>
-          <ShoppingBag size={14} /> My Wardrobe ({items.length}/{maxWardrobe})
+    <div className="k-ward-shell">
+      <KioskHeader
+        trialCount={trialCount}
+        wardrobeCount={wardrobeCount}
+        cartCount={cartCount}
+        goHome={goHome}
+        triggerLogout={triggerLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+
+      <div className="k-ward-actions">
+        <button onClick={goHome} className="k-ward-back k-press" aria-label="Back">
+          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
+        </button>
+        <div className="k-ward-pill">
+          My Wardrobe <Heart size={20} fill="var(--k-maroon)" color="var(--k-maroon)" />
         </div>
+        <button onClick={goHome} className="k-ward-home k-press" aria-label="Home">
+          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+        </button>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px", paddingBottom: 100 }}>
-        {items.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "64px 0", color: "var(--k-text-muted)" }}>
-            <div className="k-popIn" style={{
-              width: 96, height: 96, margin: "0 auto",
-              borderRadius: "50%", background: "rgba(104,38,42,.08)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "var(--k-maroon)",
-            }}>
-              <ShoppingBag size={42} strokeWidth={1.6} />
+
+      <div className="k-ward-stage">
+        {/* Full-bleed wardrobe background — covers the whole stage */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/wardrobe.svg" alt="" aria-hidden className="k-ward-bg" />
+
+        <div className="k-ward-content">
+          {/* Left — small saree cards stacked on the wardrobe shelves */}
+          <div className="k-ward-left">
+            <button
+              className="k-ward-scroll-btn"
+              onClick={() => shelfRef.current?.scrollBy({ top: -200, behavior: "smooth" })}
+              aria-label="Scroll up"
+            >
+              <ChevronUp size={18} strokeWidth={2.25} />
+            </button>
+            <div ref={shelfRef} className="k-ward-shelf k-no-scroll">
+              {items.length === 0 ? (
+                <div style={{ padding: "20px 12px", textAlign: "center", color: "var(--k-text-muted)", fontSize: 12 }}>
+                  No sarees in wardrobe yet
+                </div>
+              ) : (
+                items.map((saree, i) => {
+                  const inCart = cartItemIds.has(saree._id);
+                  return (
+                    <div
+                      key={saree._id}
+                      className={`k-ward-card${i === safeIdx ? " is-active" : ""}`}
+                      onClick={() => setSelIdx(i)}
+                    >
+                      <div className="k-ward-card-img">
+                        <WardrobeCardImg
+                          saree={saree}
+                          lookId={sareeLookIds[saree._id]}
+                          serverLookFileId={lookImages[saree._id]}
+                          serverCutoutFileId={lookCutouts[saree._id]}
+                        />
+                      </div>
+                      <div className="k-ward-card-info">
+                        <div className="k-ward-card-name">{saree.name}</div>
+                        <div className="k-ward-card-price">₹{fmtPrice(saree.price)}</div>
+                        <div className="k-ward-card-actions">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onToggleInCart(saree); }}
+                            className={`k-ward-card-btn k-ward-card-btn-cart k-press${inCart ? " is-in-cart" : ""}`}
+                          >
+                            {inCart ? <Check size={9} strokeWidth={3} /> : <ShoppingBag size={9} strokeWidth={2.5} />}
+                            {inCart ? "In Cart" : "Add To Cart"}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onRemoveFromWardrobe(saree); }}
+                            className="k-ward-card-btn k-ward-card-btn-remove k-press"
+                          >
+                            <Trash2 size={9} strokeWidth={2.25} /> Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-            <div className="k-slideUp k-d2" style={{ marginTop: 16, fontSize: 15 }}>Your wardrobe is empty</div>
-            <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp k-d3" style={{ marginTop: 18, fontSize: 14 }}>
-              Browse Sarees <ChevronRight size={16} />
+            <button
+              className="k-ward-scroll-btn"
+              onClick={() => shelfRef.current?.scrollBy({ top: 200, behavior: "smooth" })}
+              aria-label="Scroll down"
+            >
+              <ChevronDown size={18} strokeWidth={2.25} />
             </button>
           </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, maxWidth: 960, margin: "0 auto" }}>
-            {items.map((saree) => {
-              const inCart = cartItemIds.has(saree._id);
-              const cutoutFileId = lookCutouts[saree._id];
-              const lookFileId = lookImages[saree._id];
-              // Priority chain: bg-removed cutout (kiosk-only, customer
-              // on ivory backdrop) → AI render with bg (customer in
-              // RunPod studio scene) → catalog flat-lay (slot 3 → 2 → 0).
-              // The cutout slot is rendered with object-fit: contain via
-              // CSS so the transparent edges show the kiosk theme behind
-              // it; non-cutout slots render with the SareeThumb default.
-              const thumbFileId =
-                cutoutFileId ??
-                lookFileId ??
-                saree.imageIds?.[3] ??
-                saree.imageIds?.[2] ??
-                saree.imageIds?.[0];
-              const isCutout = !!cutoutFileId;
-              return (
-                <div key={saree._id} className="k-product-card k-slideUp" style={{ border: inCart ? "2px solid var(--k-green)" : undefined }}>
-                  <div style={{
-                    position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden",
-                    // Cutout PNGs have transparent backgrounds; render them
-                    // against the kiosk's ivory gradient so the silhouette
-                    // pops. Non-cutout slots render their own background.
-                    background: isCutout
-                      ? "linear-gradient(135deg, #FDF6EE 0%, #F5EADC 100%)"
-                      : undefined,
-                  }}>
-                    <div style={{ position: "absolute", inset: 0 }}>
-                      <SareeThumb
-                        name={saree.name}
-                        fileId={thumbFileId}
-                        grad={saree.grad}
-                        emoji={saree.emoji}
-                        emojiSize={32}
-                        gradientAngle={135}
-                        style={isCutout ? { objectFit: "contain" } : undefined}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ padding: "10px 12px" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{saree.name}</div>
-                    <div className="k-mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(saree.price)}</div>
-                    {/* One-tap add/remove. Parent owns the actual mutation +
-                        local cart state; this just emits intent. The button
-                        flips between "Add to Cart" and "In Cart ✓" reactively
-                        based on cartItemIds. Toggle pattern matches the
-                        wishlist-on-detail-page UX. */}
-                    <button onClick={() => onToggleInCart(saree)} className="k-press" aria-pressed={inCart} style={{
-                      width: "100%", marginTop: 8, padding: "8px", borderRadius: 10,
-                      fontSize: 11, fontWeight: 600, cursor: "pointer",
-                      background: inCart ? "var(--k-green)" : "transparent",
-                      color: inCart ? "#fff" : "var(--k-text)",
-                      border: `1px solid ${inCart ? "var(--k-green)" : "var(--k-border)"}`,
-                      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      transition: "background .18s ease, color .18s ease, border-color .18s ease",
-                    }}>
-                      {inCart ? (<><Check size={14} strokeWidth={3} /> In Cart</>) : (<><ShoppingCart size={13} /> Add to Cart</>)}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+
+          {/* Center — model standing on the wardrobe podium */}
+          <div className="k-ward-center">
+            {active ? (
+              <div className="k-ward-look">
+                <SareeThumb
+                  name={active.name}
+                  fileId={activeShowcaseFileId}
+                  grad={active.grad}
+                  emoji={active.emoji}
+                  emojiSize={64}
+                  gradientAngle={135}
+                  style={{ objectFit: "contain", objectPosition: "center bottom" }}
+                />
+              </div>
+            ) : (
+              <div className="k-ward-empty">
+                <Heart size={48} strokeWidth={1.6} color="var(--k-maroon)" />
+                <div style={{ fontSize: 16, color: "var(--k-text)", fontWeight: 600 }}>Your wardrobe is empty</div>
+                <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press" style={{ marginTop: 6 }}>
+                  Browse Sarees <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Floating CTA — Move to Cart pill */}
+        {active && (
+          <div className="k-ward-cta-wrap">
+            <button
+              onClick={() => onToggleInCart(active)}
+              className="k-ward-cta k-press"
+              disabled={cartItemIds.has(active._id)}
+            >
+              <span className="k-ward-cta-icon">
+                <ShoppingBag size={16} color="#fff" strokeWidth={2.25} />
+              </span>
+              {cartItemIds.has(active._id) ? "In Cart" : "Move to Cart"}
+            </button>
           </div>
         )}
+      </div>
+
+      <div className="k-detail-footer">
+        © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
       </div>
     </div>
   );
 }
 
 /* ── ORDER ── */
-function OrderScreen({ cart, onUpdateQty, onRemoveItem, onCheckout, onFindTailor, onBack }: {
+function OrderScreen({ cart, recentlyViewed, onUpdateQty, onRemoveItem, onCheckout, onFindTailor, onProductTap, onBack, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, storeName, storeLogoFileId }: {
   cart: Array<SareeItem & { qty: number }>;
+  recentlyViewed: SareeItem[];
   onUpdateQty: (idx: number, delta: number) => void;
   onRemoveItem: (idx: number) => void;
-  onCheckout: () => Promise<void>; onFindTailor: () => void; onBack: () => void;
+  onCheckout: () => Promise<void>; onFindTailor: () => void;
+  onProductTap: (saree: SareeItem) => void; onBack: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
+  trialCount: number; wardrobeCount: number; cartCount: number;
+  storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [showQR, setShowQR] = useState(false);
   const [qrExp, setQrExp] = useState(600);
+  const recentRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (!showQR || qrExp <= 0) return; const t = setTimeout(() => setQrExp((v) => v - 1), 1000); return () => clearTimeout(t); }, [showQR, qrExp]);
-  const updateQty = onUpdateQty;
-  const removeItem = onRemoveItem;
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const gst = cart.reduce((s, i) => s + i.price * i.qty * (i.price < 1000 ? 0.05 : 0.12), 0);
+  const totalQty = cart.reduce((s, i) => s + i.qty, 0);
+
   return (
-    <div className="k-shell">
-      {/* Header */}
-      <div className="k-topbar" style={{ padding: "16px 24px" }}>
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={22} />
+    <div className="k-cart-shell">
+      <KioskHeader
+        trialCount={trialCount}
+        wardrobeCount={wardrobeCount}
+        cartCount={cartCount}
+        goHome={goHome}
+        triggerLogout={triggerLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+
+      <div className="k-cart-actions">
+        <button onClick={onBack} className="k-cart-back k-press" aria-label="Back">
+          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
         </button>
-        <div className="k-display" style={{ fontSize: 22 }}>Your Cart</div>
-        <div className="k-chip" style={{ fontSize: 12 }}>
-          <ShoppingCart size={12} /> {cart.length} {cart.length === 1 ? "item" : "items"}
+        <div className="k-cart-title-wrap">
+          <div className="k-cart-title">Your Cart</div>
+          <div className="k-cart-subtitle">
+            {cart.length === 0
+              ? "Cart is empty"
+              : `${cart.length} ${cart.length === 1 ? "Item" : "Items"} In Your Cart`}
+          </div>
         </div>
+        <button onClick={goHome} className="k-cart-home k-press" aria-label="Home">
+          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+        </button>
       </div>
 
-      {/* Content — centered column layout */}
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 24px", paddingBottom: 24 }}>
-        <div style={{ width: "100%", maxWidth: 640 }}>
-          {/* Cart items */}
-          {cart.map((item, idx) => {
-            return (
-              <div key={idx} className="k-slideUp" style={{
-                display: "flex", gap: 16, padding: "16px", background: "var(--k-card)",
-                borderRadius: "var(--k-r)", boxShadow: "var(--k-shadow)", marginBottom: 12, alignItems: "center",
-                border: "1px solid var(--k-border-l)",
-              }}>
-                {/* Thumbnail */}
-                <div style={{
-                  width: 64, height: 64, borderRadius: "var(--k-r-sm)", flexShrink: 0, overflow: "hidden",
-                }}>
-                  <SareeThumb name={item.name} fileId={item.imageIds?.[0]} grad={item.grad} emoji={item.emoji} emojiSize={28} gradientAngle={135} />
-                </div>
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>{item.name}</div>
-                  <div style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 2 }}>{item.fabric} · {item.occasion}</div>
-                  <div className="k-mono" style={{ fontSize: 16, color: "var(--k-maroon)", fontWeight: 700, marginTop: 4 }}>₹{fmtPrice(item.price)}</div>
-                </div>
-                {/* Qty controls */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => updateQty(idx, -1)} className="k-iconbtn k-press" aria-label="Decrease" style={{ width: 36, height: 36 }}>
-                    <Minus size={16} />
-                  </button>
-                  <span className="k-mono" style={{ fontSize: 18, fontWeight: 700, minWidth: 28, textAlign: "center" }}>{item.qty}</span>
-                  <button onClick={() => updateQty(idx, 1)} className="k-iconbtn k-press" aria-label="Increase" style={{ width: 36, height: 36 }}>
-                    <Plus size={16} />
-                  </button>
-                </div>
-                {/* Remove */}
-                <button onClick={() => removeItem(idx)} className="k-press" aria-label="Remove" style={{
-                  width: 36, height: 36, borderRadius: "50%", cursor: "pointer",
-                  background: "var(--k-red-bg)", border: "none",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--k-red)",
-                }}><X size={16} strokeWidth={2.5} /></button>
-              </div>
-            );
-          })}
-
-          {/* Receipt */}
-          <div style={{
-            background: "var(--k-card)", borderRadius: "var(--k-r-lg)",
-            padding: "24px", marginTop: 8, boxShadow: "var(--k-shadow-md)",
-            border: "1px solid var(--k-border-l)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, marginBottom: 8 }}>
-              <span style={{ color: "var(--k-text-muted)" }}>Subtotal</span>
-              <span className="k-mono" style={{ fontWeight: 600 }}>₹{fmtPrice(subtotal)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, marginBottom: 12 }}>
-              <span style={{ color: "var(--k-text-muted)" }}>GST</span>
-              <span className="k-mono" style={{ fontWeight: 600 }}>₹{fmtPrice(Math.round(gst))}</span>
-            </div>
-            <div style={{ height: 1, background: "var(--k-border)", marginBottom: 12 }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 22, fontWeight: 700, color: "var(--k-maroon)" }}>
-              <span>Total</span>
-              <span className="k-mono">₹{fmtPrice(Math.round(subtotal + gst))}</span>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--k-text-muted)", fontStyle: "italic", marginTop: 6 }}>Prices indicative. Final at counter.</div>
+      <div className="k-cart-content">
+        {cart.length === 0 ? (
+          <div className="k-cart-empty">
+            <ShoppingCart size={48} strokeWidth={1.6} color="var(--k-maroon)" />
+            <div style={{ fontSize: 16, color: "var(--k-text)", fontWeight: 600 }}>Your cart is empty</div>
+            <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press" style={{ marginTop: 6 }}>
+              Browse Sarees <ChevronRight size={16} />
+            </button>
           </div>
+        ) : (
+          <>
+            <div className="k-cart-grid">
+              {/* Left — cart items */}
+              <div className="k-cart-list">
+                {cart.map((item, idx) => (
+                  <div key={`${item._id}-${idx}`} className="k-cart-card">
+                    <div className="k-cart-card-img">
+                      <SareeThumb
+                        name={item.name}
+                        fileId={item.imageIds?.[0]}
+                        grad={item.grad}
+                        emoji={item.emoji}
+                        emojiSize={28}
+                        gradientAngle={135}
+                      />
+                    </div>
+                    <div className="k-cart-card-info">
+                      <div className="k-cart-card-name">{item.name}</div>
+                      <div className="k-cart-card-meta">{item.description ?? "Description"}</div>
+                      <div className="k-cart-card-meta">
+                        Color: {item.colors?.[0] ? "—" : "Default"}
+                      </div>
+                      <div className="k-cart-card-price">₹{fmtPrice(item.price)}</div>
+                      <div className="k-cart-qty">
+                        <button
+                          onClick={() => onUpdateQty(idx, -1)}
+                          className="k-cart-qty-btn"
+                          aria-label="Decrease"
+                        >
+                          <Minus size={14} strokeWidth={2.5} />
+                        </button>
+                        <span className="k-cart-qty-val">{item.qty}</span>
+                        <button
+                          onClick={() => onUpdateQty(idx, 1)}
+                          className="k-cart-qty-btn"
+                          aria-label="Increase"
+                        >
+                          <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {/* share placeholder */}}
+                      className="k-cart-share"
+                      aria-label="Share"
+                    >
+                      <Upload size={14} strokeWidth={2} />
+                    </button>
+                    <button
+                      onClick={() => onRemoveItem(idx)}
+                      className="k-cart-remove"
+                      aria-label="Remove"
+                    >
+                      <Trash2 size={14} strokeWidth={2} />
+                    </button>
+                  </div>
+                ))}
+              </div>
 
-          {/* Actions */}
-          {!showQR ? (
-            <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-              <button onClick={async () => { await onCheckout(); setShowQR(true); }} className="k-btn k-btn-primary k-btn-pill k-press" style={{
-                flex: 1, padding: 18, fontSize: 17, fontWeight: 600,
-              }}>
-                <ShoppingCart size={18} /> Checkout
-              </button>
-              <button onClick={onFindTailor} className="k-btn k-btn-secondary k-btn-pill k-press" style={{
-                padding: "18px 28px", fontSize: 15,
-              }}>
-                <Scissors size={16} /> Find Tailor
-              </button>
-            </div>
-          ) : (
-            <div className="k-slideUp" style={{ textAlign: "center", marginTop: 28 }}>
-              <div className="k-popIn" style={{
-                width: 220, height: 220, margin: "0 auto 14px",
-                background: "var(--k-card)", borderRadius: "var(--k-r-lg)",
-                boxShadow: "var(--k-shadow-md)", display: "flex", alignItems: "center", justifyContent: "center",
-                border: "1px solid var(--k-border)", color: "var(--k-maroon)",
-              }}>
-                <QrCode size={140} strokeWidth={1.4} />
+              {/* Right — order summary */}
+              <div className="k-cart-summary">
+                <div className="k-cart-summary-title">Order Summary</div>
+                <div className="k-cart-summary-row">
+                  <span>Subtotal ({totalQty})</span>
+                  <span>₹{fmtPrice(subtotal)}</span>
+                </div>
+                <div className="k-cart-summary-row">
+                  <span>GST (18%)</span>
+                  <span>₹{fmtPrice(Math.round(gst))}</span>
+                </div>
+                <div className="k-cart-summary-divider" />
+                <div className="k-cart-summary-total">
+                  <span className="k-cart-summary-total-label">Total</span>
+                  <span className="k-cart-summary-total-value">₹{fmtPrice(Math.round(subtotal + gst))}</span>
+                </div>
+                <div className="k-cart-summary-note">
+                  The total amount you pay includes all applicable customs duties &amp; taxes.
+                  We guarantee no additional charges on delivery.
+                </div>
+                <button onClick={onFindTailor} className="k-cart-tailor-btn k-press">
+                  <Scissors size={14} /> Find Tailor <ArrowRight size={14} />
+                </button>
+                <button
+                  onClick={async () => { await onCheckout(); setShowQR(true); }}
+                  className="k-cart-checkout-btn k-press"
+                  disabled={cart.length === 0}
+                >
+                  Proceed To Checkout
+                </button>
               </div>
-              <div className="k-heading" style={{ fontSize: 18, marginBottom: 4 }}>Show to Store Team</div>
-              <div className="k-mono" style={{ fontSize: 15, color: "var(--k-text-muted)" }}>
-                Expires in {Math.floor(qrExp / 60)}:{String(qrExp % 60).padStart(2, "0")}
+            </div>
+
+            {/* QR card — appears after checkout */}
+            {showQR && (
+              <div className="k-cart-qr-card k-slideUp">
+                <div className="k-cart-qr-box">
+                  <QrCode size={84} strokeWidth={1.4} />
+                </div>
+                <div className="k-cart-qr-info">
+                  <div className="k-cart-qr-title">Show to Store Team</div>
+                  <div className="k-cart-qr-timer">
+                    Expires in {Math.floor(qrExp / 60)}:{String(qrExp % 60).padStart(2, "0")}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Recently Viewed */}
+        {recentlyViewed.length > 0 && (
+          <div className="k-cart-recent">
+            <div className="k-cart-recent-head">
+              <div className="k-cart-recent-title">Recently Viewed Products</div>
+              <div className="k-detail-similar-nav">
+                <button
+                  className="k-detail-nav-btn"
+                  onClick={() => recentRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
+                  aria-label="Previous"
+                >
+                  <ChevronLeft size={18} color="var(--k-text)" strokeWidth={2.25} />
+                </button>
+                <button
+                  className="k-detail-nav-btn"
+                  onClick={() => recentRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
+                  aria-label="Next"
+                >
+                  <ChevronRight size={18} color="var(--k-text)" strokeWidth={2.25} />
+                </button>
               </div>
             </div>
-          )}
-        </div>
+            <div ref={recentRef} className="k-cart-recent-rail k-no-scroll">
+              {recentlyViewed.map((s) => (
+                <div
+                  key={s._id}
+                  className="k-cart-recent-card"
+                  onClick={() => onProductTap(s)}
+                >
+                  <SareeThumb
+                    name={s.name}
+                    fileId={s.imageIds?.[0]}
+                    grad={s.grad}
+                    emoji={s.emoji}
+                    emojiSize={32}
+                    gradientAngle={135}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="k-detail-footer">
+        © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
       </div>
     </div>
   );
@@ -3917,6 +4243,14 @@ function TailorScreen({
   customerPhone,
   onBack,
   showToast,
+  navigate,
+  goHome,
+  triggerLogout,
+  trialCount,
+  wardrobeCount,
+  cartCount,
+  storeLogoFileId,
+  allSarees,
 }: {
   storeCity: string;
   storeId: string;
@@ -3926,25 +4260,38 @@ function TailorScreen({
   customerPhone: string;
   onBack: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
+  navigate: (s: Screen, product?: SareeItem) => void;
+  goHome: () => void;
+  triggerLogout: () => void;
+  trialCount: number;
+  wardrobeCount: number;
+  cartCount: number;
+  storeLogoFileId?: Id<"_storage">;
+  allSarees: SareeItem[];
 }) {
   const tailors = useQuery(api.tailorOps.listByCity, storeCity ? { city: storeCity } : "skip");
   const createReferral = useMutation(api.tailorOps.createReferral);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [viewing, setViewing] = useState<NonNullable<typeof tailors>[number] | null>(null);
+  const [filter, setFilter] = useState<"sort" | "recommended" | "nearby" | "topRated">("sort");
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
 
-  // Connect flow: write a referral row server-side for attribution and
-  // analytics, then open the tailor's WhatsApp with a pre-filled intro so
-  // the customer doesn't have to type a thing. We still open WhatsApp even
-  // if the referral write fails — the handoff is more important than the
-  // audit row.
+  const toggleLike = (id: string) => {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   async function handleConnect(t: {
     _id: Id<"tailors">;
     tailorId: string;
     name: string;
     phone: string;
   }) {
-    // Phone-check first: if we can't actually open WhatsApp, don't spam
-    // the tailor with a referral row they can't fulfill.
     const phoneDigits = (t.phone || "").replace(/[^0-9]/g, "");
     if (!phoneDigits) {
       showToast("Tailor contact not available", "warning");
@@ -3961,7 +4308,7 @@ function TailorScreen({
             customerPhone,
             storeId: storeId || undefined,
             storeName: storeName || undefined,
-            measurementsShared: true, // customer's measurements live on their row; order creation auto-copies
+            measurementsShared: true,
             date: new Date().toISOString().slice(0, 10),
           });
         } catch { /* analytics-level failure, don't block WhatsApp handoff */ }
@@ -3979,19 +4326,73 @@ function TailorScreen({
     }
   }
 
+  // Sort/filter the list reactively. Without geo data, "Near By" falls back
+  // to the unsorted list; "Top Rated" sorts by rating descending; "Sort By"
+  // and "Recommended" use the canonical order from the query.
+  const visibleTailors = (() => {
+    if (!tailors) return [];
+    const arr = [...tailors];
+    if (filter === "topRated") arr.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    return showAll ? arr : arr.slice(0, 6);
+  })();
+
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
+    <div className="k-tailor-shell">
+      <KioskHeader
+        trialCount={trialCount}
+        wardrobeCount={wardrobeCount}
+        cartCount={cartCount}
+        goHome={goHome}
+        triggerLogout={triggerLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+
+      <div className="k-tailor-actions">
+        <button onClick={onBack} className="k-tailor-back k-press" aria-label="Back">
+          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
         </button>
-        <div className="k-display" style={{ fontSize: 18 }}>Expert Tailors</div>
-        <div style={{ width: 44 }} />
+        <div className="k-tailor-pill">Expert Tailor</div>
+        <button onClick={goHome} className="k-tailor-home k-press" aria-label="Home">
+          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+        </button>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", maxWidth: 720, margin: "0 auto", width: "100%" }}>
-        {!tailors || tailors.length === 0 ? (
+
+      <div className="k-tailor-filters">
+        <button
+          onClick={() => setFilter("sort")}
+          className="k-tailor-chip k-tailor-chip-sort"
+        >
+          Sort By
+          <ChevronRight size={12} strokeWidth={3} />
+        </button>
+        {([
+          { id: "recommended", label: "Recommended" },
+          { id: "nearby", label: "Near By" },
+          { id: "topRated", label: "Top Rated" },
+        ] as const).map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            className={`k-tailor-chip${filter === f.id ? " is-active" : ""}`}
+          >
+            <span className="k-tailor-chip-check">
+              {filter === f.id && <Check size={9} strokeWidth={3} />}
+            </span>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="k-tailor-content">
+        {!tailors ? (
+          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--k-text-muted)" }}>
+            <Loader2 size={28} className="k-spin" style={{ color: "var(--k-maroon)" }} />
+          </div>
+        ) : tailors.length === 0 ? (
           <div style={{ textAlign: "center", padding: "64px 0", color: "var(--k-text-muted)" }}>
-            <div className="k-popIn" style={{
+            <div style={{
               width: 80, height: 80, margin: "0 auto 12px",
               borderRadius: "50%", background: "rgba(104,38,42,.08)",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -4002,48 +4403,98 @@ function TailorScreen({
             <div style={{ fontSize: 14 }}>No tailors found in this area</div>
           </div>
         ) : (
-          tailors.map((t, i) => (
-            <div key={t._id} className={`k-tailor-card k-slideUp k-d${Math.min((i % 6) + 1, 6)}`} style={{ display: "flex", gap: 14, alignItems: "center" }}>
-              <div className="k-silk" style={{
-                width: 60, height: 60, borderRadius: 12, flexShrink: 0,
-                background: "linear-gradient(135deg, #E8E0D4, #D4A843)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#fff",
-              }}>
-                <Scissors size={24} strokeWidth={1.8} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div className="k-heading" style={{ fontSize: 15 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 2 }}>
-                  {t.specialties?.join(", ") || "General"}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--k-text-muted)", marginTop: 3 }}>
-                  <Star size={12} color="var(--k-gold)" fill="var(--k-gold)" /> {t.rating}
-                  <span style={{ opacity: 0.5 }}>·</span>
-                  {t.city}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                <button
+          <>
+            {visibleTailors.map((t, i) => {
+              const liked = likedIds.has(t._id);
+              // Mock portfolio — pull 3 catalog images, rotated per tailor index
+              // so each card shows a distinct trio. This is a UI-only stand-in
+              // until real portfolio uploads land on the tailor schema.
+              const portfolio = [0, 1, 2].map((k) => allSarees[(i * 3 + k) % Math.max(allSarees.length, 1)]);
+              const initial = (t.name || "?").trim().charAt(0).toUpperCase();
+              const happy = t.referrals ?? t.reviewCount ?? 0;
+              const happyLabel = happy >= 1000 ? `${Math.round(happy / 100) / 10}k+` : happy >= 100 ? `${Math.floor(happy / 100) * 100}+` : `${happy}`;
+              return (
+                <div
+                  key={t._id}
+                  className="k-tailorx-card k-slideUp"
                   onClick={() => setViewing(t)}
-                  className="k-btn k-btn-secondary k-btn-pill k-press"
-                  style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, minHeight: 36 }}
-                  aria-label={`View ${t.name}`}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
                 >
-                  <Eye size={14} /> View
-                </button>
-                <button
-                  onClick={() => handleConnect(t)}
-                  disabled={connecting === t._id}
-                  className="k-btn k-btn-primary k-btn-pill k-press"
-                  style={{ padding: "8px 16px", fontSize: 12, fontWeight: 600, minHeight: 36, opacity: connecting === t._id ? 0.6 : 1 }}
-                >
-                  {connecting === t._id ? "…" : "Connect"}
-                </button>
-              </div>
-            </div>
-          ))
+                  <div className="k-tailorx-portfolio">
+                    {portfolio.map((s, k) => (
+                      <div key={k} className="k-tailorx-portfolio-cell">
+                        {s ? (
+                          <SareeThumb
+                            name={s.name}
+                            fileId={s.imageIds?.[0]}
+                            grad={s.grad}
+                            emoji={s.emoji}
+                            emojiSize={28}
+                            gradientAngle={135}
+                          />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", background: "var(--k-bg-warm)" }} />
+                        )}
+                      </div>
+                    ))}
+                    <span className="k-tailorx-map-pill">📍 Show on Map</span>
+                    <button
+                      className="k-tailorx-heart"
+                      onClick={(e) => { e.stopPropagation(); toggleLike(t._id); }}
+                      aria-label={liked ? "Unlike" : "Like"}
+                    >
+                      <Heart size={14} fill={liked ? "#E53935" : "transparent"} color={liked ? "#E53935" : "var(--k-text-mid)"} strokeWidth={2} />
+                    </button>
+                  </div>
+
+                  <div className="k-tailorx-info">
+                    <div className="k-tailorx-avatar">{initial}</div>
+                    <div className="k-tailorx-meta">
+                      <div className="k-tailorx-name">{t.name}</div>
+                      <div className="k-tailorx-spec">{t.specialties?.join(" & ") || "General"}</div>
+                    </div>
+                    <div className="k-tailorx-stats">
+                      <div className="k-tailorx-stat">
+                        <Star size={12} fill="var(--k-gold)" color="var(--k-gold)" strokeWidth={0} />
+                        <span className="k-tailorx-stat-val">{(t.rating ?? 0).toFixed(1)}</span>
+                        <span className="k-tailorx-stat-label">Rating</span>
+                      </div>
+                      <div className="k-tailorx-stat">
+                        <Users size={12} color="var(--k-maroon)" strokeWidth={2.4} />
+                        <span className="k-tailorx-stat-val">{happyLabel}</span>
+                        <span className="k-tailorx-stat-label">Happy Clients</span>
+                      </div>
+                      <div className="k-tailorx-stat">
+                        <MapPin size={12} color="var(--k-maroon)" strokeWidth={2.4} />
+                        <span className="k-tailorx-stat-val">{t.city}</span>
+                        <span className="k-tailorx-stat-label">{t.area || "—"}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleConnect(t); }}
+                      disabled={connecting === t._id}
+                      className="k-tailorx-cta k-press"
+                    >
+                      {connecting === t._id ? "…" : "Get in touch"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {tailors.length > 6 && !showAll && (
+              <button onClick={() => setShowAll(true)} className="k-tailorx-show-more k-press">
+                Show More
+              </button>
+            )}
+          </>
         )}
+      </div>
+
+      <div className="k-detail-footer">
+        © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
       </div>
 
       {viewing && (
