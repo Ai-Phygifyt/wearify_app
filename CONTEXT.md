@@ -924,3 +924,6 @@ Seed customers/stores/tailors all continue to work with OTP `123456`. See sectio
 ---
 
 **Maintenance:** when modules, tables, or major flows change materially, update the relevant section here so future sessions stay accurate. Append to section 12 when solving a non-obvious bug or making a design decision that future-you (or a new Claude session) would otherwise have to re-derive from scratch.
+
+
+changes
