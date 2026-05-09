@@ -21,6 +21,53 @@ export const getById = query({
   },
 });
 
+// 2b. Similar sarees (kiosk trial-room "Similar Categories" rail)
+// Scores each saree in the same store against the source: +3 same occasion,
+// +2 same fabric, +1 same type. Excludes the source. Returns top N by score
+// (ties broken by createdAt desc — newer surfaces first).
+// Bounded by .take(200) on the storeId index — sufficient for current store
+// sizes (largest is ~21 sarees post-Catelog-21). Revisit if a store ever
+// exceeds this cap.
+export const listSimilar = query({
+  args: {
+    sareeId: v.id("sarees"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const source = await ctx.db.get(args.sareeId);
+    if (!source) return [];
+    const limit = Math.max(1, Math.min(args.limit ?? 3, 10));
+    const all = await ctx.db
+      .query("sarees")
+      .withIndex("by_storeId", (q) => q.eq("storeId", source.storeId))
+      .take(200);
+    const scored = all
+      .filter((s) => s._id !== source._id && s.status === "active")
+      .map((s) => {
+        let score = 0;
+        if (source.occasion && s.occasion === source.occasion) score += 3;
+        if (source.fabric && s.fabric === source.fabric) score += 2;
+        if (source.type && s.type === source.type) score += 1;
+        return { saree: s, score };
+      })
+      .filter((row) => row.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (b.saree._creationTime ?? 0) - (a.saree._creationTime ?? 0);
+      })
+      .slice(0, limit);
+    // Narrow projection — the carousel only needs thumbnail data.
+    return scored.map(({ saree }) => ({
+      _id: saree._id,
+      name: saree.name,
+      price: saree.price,
+      imageIds: saree.imageIds,
+      grad: saree.grad,
+      emoji: saree.emoji,
+    }));
+  },
+});
+
 // 3. Create a new saree with defaults for analytics fields
 export const create = mutation({
   args: {

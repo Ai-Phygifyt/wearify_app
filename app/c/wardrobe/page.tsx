@@ -123,7 +123,15 @@ export default function WishlistPage() {
                   className={`cx-card cx-slideUp cx-d${Math.min(i + 1, 6)}`}
                   style={{ marginBottom: 10, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center" }}
                 >
-                  <Thumb imageId={w.sareeImageId as Id<"_storage"> | undefined} grad={w.sareeGrad} />
+                  <Thumb
+                    imageId={
+                      // AI try-on render first (the customer wearing this saree),
+                      // catalog flat-lay (no model) only as fallback.
+                      (w.lookImageFileId as Id<"_storage"> | undefined) ??
+                      (w.sareeImageId as Id<"_storage"> | undefined)
+                    }
+                    grad={w.sareeGrad}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="cx-truncate" style={{ fontWeight: 700, fontSize: 14, color: "var(--cx-text)" }}>
                       {w.sareeName}

@@ -190,7 +190,12 @@ export default function MyLooksPage() {
                     onClick={() => router.push(`/c/looks/${look._id}`)}
                     className="cx-silk"
                     style={{
-                      height: 140,
+                      // 2-col grid → ~170px-wide cards on a phone, so 240px
+                      // height ≈ 1.4:1 portrait — enough to fit the full
+                      // saree drape from shoulder to hem instead of cropping
+                      // mid-torso. Aspect-ratio would be cleaner but keeping
+                      // an explicit pixel value matches the rest of the page.
+                      height: 240,
                       position: "relative",
                       background: `linear-gradient(135deg, ${grad[0]}, ${grad[1] || grad[0]})`,
                     }}

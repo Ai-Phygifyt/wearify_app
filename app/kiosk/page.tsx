@@ -2,16 +2,22 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SareeThumb } from "@/components/SareeThumb";
+import { SareeImageGallery } from "@/components/SareeImageGallery";
+import { useConvexUrl } from "@/lib/ConvexImage";
 import {
-  ChevronLeft, ChevronRight, ChevronDown,
-  Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock, Hand,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight,
+  Check, X, Search, Home, LogOut, Phone, Hash, Camera, Lock,
   Shirt, ShoppingBag, ShoppingCart, Sparkles, Scissors, Star, QrCode,
-  Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal,
+  Minus, Plus, Delete, Loader2, ShieldCheck, Eye, SlidersHorizontal, Heart, Trash2, Upload,
+  Users, MapPin,
 } from "lucide-react";
+import { useUploadFile } from "@/lib/useUpload";
+import { GUARDS } from "@/lib/uploadGuards";
+import { cancelBgRemoval, clearBgRemovalState, enqueueBgRemoval, useBgRemovalStatus } from "@/lib/bgRemovalQueue";
 import { ScanChoiceScreen } from "./screens/ScanChoiceScreen";
 import { ConsentScreen } from "./screens/ConsentScreen";
 import { BodyScanScreen } from "./screens/BodyScanScreen";
@@ -25,7 +31,9 @@ import { TailorDetailModal } from "./screens/TailorDetailModal";
 const CFG = {
   maxTrial: 5,
   maxWardrobe: 10,
-  tryOnSec: 180,
+  tryOnSec: 240, // 4-minute trial-room countdown
+  trialEndAutoLogoutSec: 180, // 3-min grace on the "Time's Up" popup before auto-logout
+  trialEndContinueSec: 120, // "Continue" button adds 2 minutes
   inactivitySec: 300,
   scanValidMonths: 6,
 };
@@ -61,8 +69,6 @@ type Screen =
   | "order"
   | "tailors"
   | "tailorDetail"
-  | "feedback"
-  | "dataSave"
   | "sessionEnd";
 
 interface SareeItem {
@@ -98,6 +104,40 @@ function fmtPrice(n: number) {
   return s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + s.slice(-3);
 }
 
+// Try-on error prefix → user-facing toast text.
+// Action throws strings prefixed with `<CODE>:` so we can pattern-match
+// without parsing free-form errors. See spec §"UX states" §"Synchronous
+// error toasts".
+const TRYON_TOAST: Array<{ prefix: string; text: string; type: "warning" | "error" | "info" }> = [
+  { prefix: "CONCURRENCY_LIMIT:", text: "Wait for current renders to finish", type: "info" },
+  { prefix: "SESSION_CAP_REACHED:", text: "You've reached this session's try-on limit", type: "warning" },
+  { prefix: "RATE_LIMIT_MINUTE:", text: "Too many try-ons just now — wait a moment", type: "warning" },
+  { prefix: "RATE_LIMIT_HOUR:", text: "Too many try-ons recently", type: "warning" },
+  { prefix: "TRYON_DISABLED:", text: "Try-on is temporarily unavailable", type: "warning" },
+  { prefix: "NO_BODY_SCAN:", text: "Please complete a body scan first", type: "warning" },
+  { prefix: "UNAUTHORIZED:", text: "Session error — restart kiosk", type: "error" },
+];
+
+function handleTryOnError(
+  err: Error,
+  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void,
+  onNoBodyScan?: () => void,
+): void {
+  const msg = err.message ?? String(err);
+  if (msg.includes("NO_BODY_SCAN:") && onNoBodyScan) {
+    showToast("Please complete a body scan first", "warning");
+    onNoBodyScan();
+    return;
+  }
+  for (const { prefix, text, type } of TRYON_TOAST) {
+    if (msg.includes(prefix)) {
+      showToast(text, type);
+      return;
+    }
+  }
+  showToast("Something went wrong — try again", "error");
+}
+
 /* ═══ MAIN KIOSK PAGE ═══ */
 export default function KioskPage() {
   const router = useRouter();
@@ -125,12 +165,25 @@ export default function KioskPage() {
   // (on Allow) and BodyScanScreen can consume it, and so cleanup is
   // owned in one place — stopped on capture, Skip, wipe, or unmount.
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  // Front ("user") or back ("environment") camera. Persists across the
+  // switch so the same direction is requested when the consent flow
+  // re-opens the camera in a future session.
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
 
   // Language
   const [lang, setLang] = useState("en");
 
   // Trial room items (sarees from tablet shortlist)
   const [trialItems, setTrialItems] = useState<SareeItem[]>([]);
+
+  // Shortlisted items from the tablet (only populated when the customer
+  // entered via store code — codeEntry path). Renders as a "Shortlisted"
+  // ScrollSection above Trending on the kiosk home screen.
+  const [shortlistedItems, setShortlistedItems] = useState<SareeItem[]>([]);
+
+  // Maps sareeId → lookId so TrialTile can subscribe reactively.
+  // Populated as each runTryOn resolves; cleared on session wipe.
+  const [sareeLookIds, setSareeLookIds] = useState<Record<string, Id<"looks">>>({});
 
   // Wardrobe (saved during kiosk session)
   const [wardrobeItems, setWardrobeItems] = useState<SareeItem[]>([]);
@@ -148,6 +201,12 @@ export default function KioskPage() {
   const scanEligibleRef = useRef(false);
   const returningRef = useRef(false);
 
+  // Tracks sareeIds with an in-flight runTryOn fired by the reconciliation
+  // effect below. Prevents the effect from double-firing while a promise is
+  // pending — without this, every re-render that doesn't yet have the lookId
+  // mapped would queue another action call.
+  const inFlightTryOnRef = useRef<Set<string>>(new Set());
+
   // Toast
   const [toastMsg, setToastMsg] = useState("");
   const [toastType, setToastType] = useState<"info" | "success" | "error" | "warning">("info");
@@ -158,17 +217,44 @@ export default function KioskPage() {
   const createSessionMut = useMutation(api.sessionOps.createSession);
   const verifyOtpMut = useMutation(api.phoneAuth.verifyOtp);
   const addToWardrobeMut = useMutation(api.sessionOps.addToWardrobe);
-  const createLook = useMutation(api.sessionOps.createLook);
+  const removeFromWardrobeMut = useMutation(api.sessionOps.removeFromWardrobe);
+  const runTryOn = useAction(api.tryOn.runTryOn);
+  const retryLookMut = useAction(api.tryOn.retryLook);
   const createOrder = useMutation(api.sessionOps.createOrder);
   const endSessionMut = useMutation(api.sessionOps.endSession);
   const updateSessionMut = useMutation(api.sessionOps.updateSession);
   const recordBodyScan = useMutation(api.customers.recordBodyScan);
-  const addTrialCartItem = useMutation(api.sessionOps.addTrialCartItem);
-  const removeTrialCartItem = useMutation(api.sessionOps.removeTrialCartItem);
+  const { upload } = useUploadFile();
   const addCartItem = useMutation(api.sessionOps.addCartItem);
   const updateCartQtyMut = useMutation(api.sessionOps.updateCartQty);
   const removeCartItemMut = useMutation(api.sessionOps.removeCartItem);
   const clearCartMut = useMutation(api.sessionOps.clearCart);
+
+  // Fan-out state: set to true when the user chooses "Retake + refresh".
+  // Lives in the parent so the useEffect (below showToast) can access
+  // retryLookMut, trialItems, sareeLookIds, and deviceToken directly —
+  // no prop-drilling of callback.
+  const [pendingFanOut, setPendingFanOut] = useState(false);
+  const bodyScanInfo = useQuery(
+    api.customers.getBodyScanInfo,
+    customerId ? { customerId } : "skip",
+  );
+
+  // Cached AI renders for the current trial cart — keyed sareeId → lookId,
+  // returned only for completed looks whose personFileId matches the
+  // customer's current bodyScanFileId. Used by the reconciliation effect
+  // below to skip a fresh runTryOn (and the cost of a fresh RunPod render)
+  // when a reusable look already exists. A rescan / retake invalidates
+  // automatically because the customer's bodyScanFileId changes.
+  const cachedLooksForTrial = useQuery(
+    api.tryOn.getCachedLooksForSarees,
+    customerId && trialItems.length > 0
+      ? { customerId, sareeIds: trialItems.map((t) => t._id) }
+      : "skip",
+  );
+  // Holds the scan ts that was current when the fan-out was armed.
+  // null = not yet armed; any number = the baseline to compare against.
+  const previousScanTs = useRef<number | null>(null);
 
   // Load config
   useEffect(() => {
@@ -234,6 +320,38 @@ export default function KioskPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Shortlisted-rail persistence — sessionId-keyed so a stale entry from a
+  // previous customer's pairing won't surface for the next pairing.
+  // autoTrialDone prevents re-firing the first-2 auto-trial on mid-session
+  // page refresh.
+  const persistShortlisted = useCallback(
+    (record: { sessionId: string; sareeIds: Id<"sarees">[]; autoTrialDone: boolean }) => {
+      try {
+        localStorage.setItem("wearify_kiosk_shortlisted", JSON.stringify(record));
+      } catch { /* ignore quota errors */ }
+    },
+    [],
+  );
+
+  const readShortlistedRecord = useCallback(():
+    | { sessionId: string; sareeIds: Id<"sarees">[]; autoTrialDone: boolean }
+    | null => {
+    try {
+      const raw = localStorage.getItem("wearify_kiosk_shortlisted");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.sessionId !== "string") return null;
+      if (!Array.isArray(parsed?.sareeIds)) return null;
+      return parsed as {
+        sessionId: string;
+        sareeIds: Id<"sarees">[];
+        autoTrialDone: boolean;
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
   // 5-minute inactivity auto-logout. Also listens to keydown (forms) and
   // touchmove (scrolling) so a legitimately-engaged customer isn't wiped
   // mid-flow. handleWipe clears local state + wearify_kiosk_session so
@@ -286,6 +404,97 @@ export default function KioskPage() {
     setToastVisible(true);
   }, []);
 
+  // Fan-out effect: fires retryLook with useLatestBodyScan=true for every
+  // trial look once the customer records a new body scan. Gated on
+  // bodyScanInfo.ts changing from the value that was snapshotted when the
+  // user clicked "Retake + refresh" — so cancelling mid-scan flow leaves
+  // pendingFanOut=true but the effect never fires (ts didn't change).
+  useEffect(() => {
+    if (!pendingFanOut) return;
+
+    // First render after arming: snapshot the current ts so we can detect
+    // a change in subsequent renders. Do NOT fire the fan-out yet.
+    if (previousScanTs.current === null) {
+      // bodyScanInfo may still be undefined (query loading); treat null/undefined
+      // as "no existing scan" and store -1 as the baseline so any real ts will differ.
+      previousScanTs.current = bodyScanInfo?.ts ?? -1;
+      return;
+    }
+
+    // No new scan yet — ts unchanged or query still loading.
+    if (!bodyScanInfo?.ts) return;
+    if (bodyScanInfo.ts === previousScanTs.current) return;
+
+    // The scan ts changed — a fresh scan was recorded after the flag was set.
+    previousScanTs.current = null;
+
+    // Fan-out: retry all looks that have a lookId (completed or failed).
+    // Skipping queued/processing entries avoids double-submitting jobs that
+    // are already in-flight with the old scan. Failed entries are included
+    // because they would benefit from a fresh scan just as much as completed ones.
+    const lookIdsToRetry = trialItems
+      .map((s) => sareeLookIds[s._id])
+      .filter(Boolean) as Id<"looks">[];
+    for (const lookId of lookIdsToRetry) {
+      retryLookMut({ deviceToken, lookId, useLatestBodyScan: true })
+        .catch((err: Error) => handleTryOnError(err, showToast));
+    }
+    setPendingFanOut(false);
+  // trialItems and sareeLookIds are captured at effect-run time; including
+  // them as deps is correct — if the list changes before the scan comes in
+  // we want the latest list when the effect finally fires.
+  }, [pendingFanOut, bodyScanInfo, trialItems, sareeLookIds, retryLookMut, deviceToken, showToast]);
+
+  // Reconciliation effect — for each trialItem missing a lookId in
+  // sareeLookIds, either reuse a cached render (cachedLooksForTrial)
+  // or fire runTryOn. Covers three flows:
+  //   1. Items added to trialItems BEFORE a body scan: the call-site
+  //      runTryOn throws NO_BODY_SCAN: server-side, no looks row gets
+  //      inserted, sareeLookIds stays empty — TrialTile would otherwise
+  //      stay on "Preparing…" forever after the eventual scan completes.
+  //   2. Retention-hydrated trial cart items on a returning customer:
+  //      hydration restores trialItems but not sareeLookIds. With cached
+  //      renders available, no RunPod cost is paid for items the customer
+  //      already had rendered against the same body scan.
+  //   3. Same-session re-add of a previously rendered saree (e.g. via
+  //      wardrobe → cart → trial): the cache returns the existing lookId,
+  //      so no duplicate render fires.
+  // Cache resolution gate: wait for cachedLooksForTrial to settle before
+  // deciding what to fire — without this, the effect could race the cache
+  // resolve and submit a fresh RunPod job for an item we'd otherwise reuse.
+  // Server-side dedup at _findExistingLook still catches concurrent fires
+  // for cache misses, so a fresh runTryOn is safe.
+  useEffect(() => {
+    if (!customerId) return;
+    if (!sessionId) return;
+    if (!deviceToken) return;
+    if (!bodyScanInfo?.hasFileId) return;
+    if (cachedLooksForTrial === undefined) return;
+    for (const item of trialItems) {
+      if (sareeLookIds[item._id]) continue;
+      const cachedLookId = cachedLooksForTrial[item._id];
+      if (cachedLookId) {
+        // Cache hit — reuse the existing completed look. The TrialTile
+        // for this saree subscribes via getLook(lookId) and renders the
+        // stored AI image directly. No RunPod call.
+        setSareeLookIds((prev) => ({ ...prev, [item._id]: cachedLookId }));
+        continue;
+      }
+      if (inFlightTryOnRef.current.has(item._id)) continue;
+      const sareeId = item._id;
+      inFlightTryOnRef.current.add(sareeId);
+      runTryOn({ deviceToken, sessionId, sareeId })
+        .then((res) => {
+          inFlightTryOnRef.current.delete(sareeId);
+          setSareeLookIds((prev) => ({ ...prev, [sareeId]: res.lookId }));
+        })
+        .catch((err: Error) => {
+          inFlightTryOnRef.current.delete(sareeId);
+          handleTryOnError(err, showToast);
+        });
+    }
+  }, [customerId, sessionId, deviceToken, bodyScanInfo?.hasFileId, trialItems, sareeLookIds, cachedLooksForTrial, runTryOn, showToast]);
+
   // Stop every track on the current webcam stream and clear the ref.
   // Safe to call even if the stream was already stopped.
   const stopCamera = useCallback(() => {
@@ -307,7 +516,7 @@ export default function KioskPage() {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: cameraFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
       setCameraStream(stream);
@@ -321,7 +530,37 @@ export default function KioskPage() {
       showToast(msg, "error");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showToast]);
+  }, [showToast, cameraFacing]);
+
+  // Swap front/back camera mid-session. Stops the current stream first
+  // so the OS releases the device, then re-acquires with the opposite
+  // facingMode. Falls back to the original direction if the new one
+  // isn't available (e.g. kiosk display with only one camera).
+  const handleSwitchCamera = useCallback(async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
+    const next: "user" | "environment" = cameraFacing === "user" ? "environment" : "user";
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: next, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      setCameraStream(stream);
+      setCameraFacing(next);
+    } catch {
+      // Re-acquire the previous direction so the user isn't left with no preview.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: cameraFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        setCameraStream(stream);
+      } catch { /* nothing else to try */ }
+      showToast("Other camera is not available on this device.", "warning");
+    }
+  }, [cameraFacing, cameraStream, showToast]);
 
   const handleWipe = useCallback(() => {
     setTrialData(null);
@@ -331,6 +570,8 @@ export default function KioskPage() {
     setPhone("");
     setHasBodyScan(false);
     setTrialItems([]);
+    setShortlistedItems([]);
+    setSareeLookIds({});
     setWardrobeItems([]);
     setCartItems([]);
     setSelectedProduct(null);
@@ -338,14 +579,29 @@ export default function KioskPage() {
     returningRef.current = false;
     scanEligibleRef.current = false;
     hydratedRef.current = null;
+    shortlistHydratedRef.current = null;
+    // Clear fan-out flag so a stale pendingFanOut from a previous session
+    // doesn't accidentally fire during the next customer's session.
+    setPendingFanOut(false);
+    previousScanTs.current = null;
+    inFlightTryOnRef.current.clear();
+    // Drop any pending bg-removal jobs and stale per-look statuses from
+    // the queue's module-level state. Long-running kiosk tabs serve many
+    // customers; without this the `states` map grows unboundedly across
+    // the day. The WASM model itself stays warm — only the bookkeeping
+    // resets.
+    clearBgRemovalState();
     stopCamera();
     try { localStorage.removeItem("wearify_kiosk_session"); } catch { /* ignore */ }
+    try { localStorage.removeItem("wearify_kiosk_shortlisted"); } catch { /* ignore */ }
     setScreen("sessionEnd");
   }, [stopCamera]);
 
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const triggerLogout = useCallback(() => {
-    navigate("dataSave");
-  }, [navigate]);
+    setShowSavePrompt(true);
+  }, []);
 
   // Fetch all sarees for this store
   const allSarees = useQuery(
@@ -359,24 +615,50 @@ export default function KioskPage() {
     storeId ? { storeId } : "skip"
   );
 
-  // Persistent retention — load the customer's wardrobe + trial cart for THIS store.
+  // Persistent retention — load the customer's wardrobe + cart for THIS store.
   // Hydrates local state once `customerId`, `storeId`, and `allSarees` are all ready.
+  // Trial items are NOT persisted — they live only in React state for the session.
   const savedWardrobe = useQuery(
     api.sessionOps.listWardrobeByCustomer,
     customerId ? { customerId } : "skip",
-  );
-  const savedTrialCart = useQuery(
-    api.sessionOps.listTrialCart,
-    customerId && storeId ? { customerId, storeId } : "skip",
   );
   const savedCart = useQuery(
     api.sessionOps.listCart,
     customerId && storeId ? { customerId, storeId } : "skip",
   );
+  // Reactive sareeId → AI-render fileId map for the wardrobe screen.
+  // listWardrobeByCustomer surfaces lookImageFileId per row when the
+  // wardrobe item is bound to a completed look. The screen renders this
+  // in preference to the catalog photo.
+  const wardrobeLookImages = React.useMemo(() => {
+    const m: Record<string, Id<"_storage">> = {};
+    if (savedWardrobe) {
+      for (const w of savedWardrobe) {
+        const fid = (w as { lookImageFileId?: Id<"_storage"> }).lookImageFileId;
+        if (fid) m[w.sareeId] = fid;
+      }
+    }
+    return m;
+  }, [savedWardrobe]);
+  // Parallel sareeId → bg-removed cutout fileId map. Same shape as
+  // wardrobeLookImages but reads the new `lookImageNoBgFileId` field.
+  // Only the kiosk WardrobeScreen consumes this; the customer PWA
+  // /c/wardrobe deliberately ignores it (keeps showing the AI render
+  // with its original RunPod backdrop).
+  const wardrobeLookCutouts = React.useMemo(() => {
+    const m: Record<string, Id<"_storage">> = {};
+    if (savedWardrobe) {
+      for (const w of savedWardrobe) {
+        const fid = (w as { lookImageNoBgFileId?: Id<"_storage"> }).lookImageNoBgFileId;
+        if (fid) m[w.sareeId] = fid;
+      }
+    }
+    return m;
+  }, [savedWardrobe]);
   const hydratedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!customerId || !storeId || !allSarees) return;
-    if (savedWardrobe === undefined || savedTrialCart === undefined || savedCart === undefined) return;
+    if (savedWardrobe === undefined || savedCart === undefined) return;
     const key = `${customerId}:${storeId}`;
     if (hydratedRef.current === key) return;
     hydratedRef.current = key;
@@ -401,11 +683,6 @@ export default function KioskPage() {
         .map((w) => sareeMap.get(w.sareeId))
         .filter(Boolean) as SareeItem[]
     );
-    const trialForStore = uniqBySareeId(
-      savedTrialCart
-        .map((t) => sareeMap.get(t.sareeId))
-        .filter(Boolean) as SareeItem[]
-    );
     const cartForStore = uniqBySareeId(
       savedCart
         .map((c) => {
@@ -414,20 +691,37 @@ export default function KioskPage() {
         })
         .filter(Boolean) as Array<SareeItem & { qty: number }>
     );
-    // Merge rather than replace — codeEntry may have already populated trialItems from tablet shortlist.
     setWardrobeItems((prev) => {
       const have = new Set(prev.map((s) => s._id));
       return [...prev, ...wardrobeForStore.filter((s) => !have.has(s._id))];
-    });
-    setTrialItems((prev) => {
-      const have = new Set(prev.map((s) => s._id));
-      return [...prev, ...trialForStore.filter((s) => !have.has(s._id))];
     });
     setCartItems((prev) => {
       const have = new Set(prev.map((s) => s._id));
       return [...prev, ...cartForStore.filter((s) => !have.has(s._id))];
     });
-  }, [customerId, storeId, allSarees, savedWardrobe, savedTrialCart, savedCart]);
+  }, [customerId, storeId, allSarees, savedWardrobe, savedCart]);
+
+  // Restore the Shortlisted rail across browser refresh. Keyed on sessionId
+  // so a stale localStorage entry from a previous customer's pairing won't
+  // surface for the next pairing — sessionId-mismatch is a no-op.
+  // The shortlistedItems.length === 0 guard prevents re-hydrating on top of
+  // fresh state set by the codeEntry handler in the same render cycle.
+  const shortlistHydratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessionId || !allSarees) return;
+    if (shortlistedItems.length > 0) return;
+    if (shortlistHydratedRef.current === sessionId) return;
+    const record = readShortlistedRecord();
+    if (!record || record.sessionId !== sessionId) return;
+    const sareeMap = new Map(allSarees.map((s) => [s._id, s] as const));
+    const restored = record.sareeIds
+      .map((id) => sareeMap.get(id))
+      .filter(Boolean) as SareeItem[];
+    if (restored.length > 0) {
+      setShortlistedItems(restored);
+      shortlistHydratedRef.current = sessionId;
+    }
+  }, [sessionId, allSarees, shortlistedItems.length, readShortlistedRecord]);
 
   if (!storeId) return null;
 
@@ -441,10 +735,8 @@ export default function KioskPage() {
         return (
           <LangScreen
             lang={lang}
-            onSelect={(c) => {
-              setLang(c);
-              navigate("modeSelect");
-            }}
+            onSelect={(c) => setLang(c)}
+            onNext={() => navigate("modeSelect")}
             storeName={storeName}
           />
         );
@@ -461,6 +753,7 @@ export default function KioskPage() {
         return (
           <PhoneAuthScreen
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
             onSubmitPhone={(ph) => {
               setPhone(ph);
               navigate("otp");
@@ -474,6 +767,7 @@ export default function KioskPage() {
             phone={phone}
             storeId={storeId}
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
             onVerified={async (customer) => {
               if (!customer) {
                 // Unknown phone — collect minimal profile (name + DOB) on kiosk
@@ -509,10 +803,18 @@ export default function KioskPage() {
                 lang: customer.language ?? "en",
                 hasBodyScan: hasScan,
               });
-              if (scanEligibleRef.current) {
-                navigate("scanChoice");
-              } else {
+              // Eager body-scan gate: customers with NO scan on file ever go to
+              // consent first, so the trial-room flow can't throw NO_BODY_SCAN:
+              // server-side. Stale-scan customers (lastBodyScan present but >6
+              // months old) still go to home — the server only enforces presence
+              // of bodyScanFileId, not staleness, so they won't trip the error.
+              // Customers can still tap Skip on consent to land on home in
+              // browse-only mode; subsequent send-to-trial attempts are
+              // pre-checked client-side and re-route to consent (no server hit).
+              if (!customer.bodyScanFileId) {
                 navigate("consent");
+              } else {
+                navigate("home");
               }
             }}
             onBack={goBack}
@@ -523,6 +825,7 @@ export default function KioskPage() {
           <NewCustomerScreen
             phone={phone}
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
             onRegistered={async (cId, cName) => {
               setCustomerId(cId);
               setCustomerName(cName);
@@ -545,6 +848,10 @@ export default function KioskPage() {
                 lang,
                 hasBodyScan: false,
               });
+              // A newly-registered customer never has a scan on file. Eager
+              // gate sends them straight to consent — same rationale as the
+              // OTP no-scan branch. Skip on consent still lands them on home
+              // in browse-only mode.
               navigate("consent");
             }}
             onBack={() => navigate("otp")}
@@ -555,6 +862,7 @@ export default function KioskPage() {
           <CodeEntryScreen
             storeId={storeId}
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
             onValidCode={(data) => {
               setTrialData(data.trialRoom);
               setSessionId(data.trialRoom.sessionId);
@@ -583,46 +891,97 @@ export default function KioskPage() {
                 returningRef.current = false;
                 scanEligibleRef.current = false;
               }
-              // Resolve shortlist items to full saree data
+              // Resolve shortlist items to full saree data, sorted by addedAt
+              // ascending (oldest first — staff queues priority items first).
+              let resolved: SareeItem[] = [];
               if (data.mirrorItems && allSarees) {
                 const sareeMap = new Map(allSarees.map((s) => [s._id, s]));
-                const resolved = data.mirrorItems
+                const sortedMirror = [...data.mirrorItems].sort(
+                  (a: { addedAt?: number }, b: { addedAt?: number }) =>
+                    (a.addedAt ?? 0) - (b.addedAt ?? 0),
+                );
+                resolved = sortedMirror
                   .map((item: { sareeId: Id<"sarees"> }) => sareeMap.get(item.sareeId))
                   .filter(Boolean) as SareeItem[];
-                setTrialItems(resolved);
-                if (data.customer) {
-                  for (const item of resolved) {
-                    addTrialCartItem({ customerId: data.customer._id, storeId, sareeId: item._id });
-                    createLook({
+              }
+              setShortlistedItems(resolved);
+              persistShortlisted({
+                sessionId: data.trialRoom.sessionId,
+                sareeIds: resolved.map((s) => s._id),
+                autoTrialDone: false,
+              });
+
+              // Auto-trial the first 2 (oldest by addedAt). Remaining items
+              // sit in the Shortlisted home rail until the customer self-adds
+              // them. Replaces the previous bulk-dump-into-trialRoom behavior.
+              //
+              // Body-scan gate: when the customer has no scan on file, we
+              // populate trialItems but DON'T fire runTryOn — that would
+              // throw NO_BODY_SCAN: server-side. Once the customer completes
+              // the body scan via the consent flow below, the reconciliation
+              // effect (search "Reconciliation effect") sees bodyScanInfo
+              // flip and fires runTryOn for the queued items.
+              const firstTwo = resolved.slice(0, 2);
+              const customerHasScan = data.customer?.hasBodyScanFile === true;
+              if (firstTwo.length > 0) {
+                setTrialItems((prev) => {
+                  const existingIds = new Set(prev.map((s) => s._id));
+                  const merged = [...prev];
+                  for (const item of firstTwo) {
+                    if (!existingIds.has(item._id)) merged.push(item);
+                  }
+                  return merged;
+                });
+                if (data.customer && customerHasScan) {
+                  for (const item of firstTwo) {
+                    runTryOn({
+                      deviceToken: deviceToken!,
                       sessionId: data.trialRoom.sessionId,
-                      storeId,
-                      customerId: data.customer._id,
                       sareeId: item._id,
-                      sareeName: item.name,
-                      fabric: item.fabric,
-                      price: item.price,
-                      grad: item.grad,
-                    });
+                    })
+                      .then((res) => {
+                        setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
+                      })
+                      .catch((err: Error) => {
+                        // Defense-in-depth: scan was deleted between login
+                        // and this call. The eager gate above should have
+                        // caught the no-scan case — landing here is rare.
+                        handleTryOnError(err, showToast, () => navigate("consent"));
+                      });
                   }
                 }
               }
+              persistShortlisted({
+                sessionId: data.trialRoom.sessionId,
+                sareeIds: resolved.map((s) => s._id),
+                autoTrialDone: true,
+              });
               // Mark code as used
               markCodeUsed({ code: data.trialRoom.code, storeId });
-              if (returningRef.current && scanEligibleRef.current) {
-                navigate("scanChoice");
-              } else {
+              // Eager body-scan gate (matches phoneAuth / newCustomer paths):
+              // route no-scan customers through consent → bodyScan first.
+              // Auto-trial fires deferred via the reconciliation effect once
+              // the scan is recorded. Customers with a scan land directly on
+              // home with the Shortlisted rail and the first-2 already
+              // rendering against the AI.
+              if (data.customer && !customerHasScan) {
                 navigate("consent");
+              } else {
+                navigate("home");
               }
             }}
             onBack={() => setScreen("idle")}
           />
         );
-      case "scanChoice":
+      case "scanChoice": {
+        // Guard: only offer "Use Previous Scan" when a real file was persisted.
+        // Legacy records may have lastBodyScan but no bodyScanFileId.
+        const hasPreviousScan = bodyScanInfo?.hasFileId === true;
         return (
           <ScanChoiceScreen
             customerName={customerName}
+            hasPreviousScan={hasPreviousScan}
             onUsePrevious={() => {
-              // Skip body scan, go directly to trial room or home
               if (trialItems.length > 0) navigate("trialRoom");
               else navigate("home");
             }}
@@ -631,6 +990,7 @@ export default function KioskPage() {
             }}
           />
         );
+      }
       case "consent":
         return (
           <ConsentScreen
@@ -646,16 +1006,52 @@ export default function KioskPage() {
         return (
           <BodyScanScreen
             storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
+            triggerLogout={triggerLogout}
             stream={cameraStream}
-            onCapture={() => {
-              if (customerId) {
-                recordBodyScan({ customerId, deviceToken }).catch(() => {});
+            cameraFacing={cameraFacing}
+            onSwitchCamera={handleSwitchCamera}
+            onCapture={async (blob) => {
+              if (!customerId) {
+                stopCamera();
+                goBack();
+                return;
               }
-              setHasBodyScan(true);
-              scanEligibleRef.current = true;
-              persistKioskSession({ hasBodyScan: true });
-              stopCamera();
-              navigate("aiProcessing");
+              if (blob.size === 0) {
+                stopCamera();
+                showToast("Body scan failed — please try again", "error");
+                goBack();
+                return;
+              }
+              try {
+                const file = new File(
+                  [blob],
+                  `bodyscan-${Date.now()}.jpg`,
+                  { type: "image/jpeg" },
+                );
+                const fileId = await upload(file, GUARDS.bodyScan);
+                await recordBodyScan({ customerId, deviceToken, bodyScanFileId: fileId });
+                setHasBodyScan(true);
+                scanEligibleRef.current = true;
+                persistKioskSession({ hasBodyScan: true });
+                stopCamera();
+                // Skip the AI processing screen when there's nothing queued
+                // to process — common on the eager-gate path where a customer
+                // completes their first scan with an empty trial room. Goes
+                // straight to home. With queued items (codeEntry deferred
+                // auto-trial path), aiProcessing shows real per-look progress
+                // and auto-advances on first completion.
+                if (trialItems.length > 0) {
+                  navigate("aiProcessing");
+                } else {
+                  navigate("home");
+                }
+              } catch (err) {
+                console.error(err);
+                stopCamera();
+                showToast("Body scan upload failed — please try again", "error");
+                goBack();
+              }
             }}
             onBack={() => {
               stopCamera();
@@ -670,6 +1066,8 @@ export default function KioskPage() {
       case "aiProcessing":
         return (
           <AIProcessingScreen
+            trialItems={trialItems}
+            sareeLookIds={sareeLookIds}
             onDone={() => {
               if (trialItems.length > 0) setScreen("trialRoom");
               else setScreen("home");
@@ -681,9 +1079,31 @@ export default function KioskPage() {
           <TrialRoomScreen
             items={trialItems}
             wardrobeItems={wardrobeItems}
+            cartItemIds={new Set(cartItems.map((c) => c._id))}
+            customerName={customerName}
+            phone={phone}
+            onAddToCart={(saree) => {
+              // Trial-room "Add to Cart": item stays in the trial rail
+              // (parallel intents — trying-on + buying). Skip if already
+              // in cart. Mirrors the WardrobeScreen.onToggleInCart add
+              // path but never removes.
+              if (cartItems.some((c) => c._id === saree._id)) {
+                showToast("Already in cart", "info");
+                return;
+              }
+              if (customerId) {
+                addCartItem({ customerId, storeId, sareeId: saree._id, qty: 1 });
+              }
+              setCartItems((prev) => [...prev, { ...saree, qty: 1 }]);
+              showToast("Added to cart", "success");
+            }}
             onRemoveItem={(id) => {
+              // Cancel any pending bg-removal job for this saree's look —
+              // saves CPU when the customer rapidly adds/removes. No-op if
+              // already processing or finished.
+              const pendingLookId = sareeLookIds[id];
+              if (pendingLookId) cancelBgRemoval(pendingLookId);
               setTrialItems((prev) => prev.filter((s) => s._id !== id));
-              if (customerId) removeTrialCartItem({ customerId, storeId, sareeId: id });
             }}
             onAddToWardrobe={(items) => {
               // Filter out any saree that's already in the wardrobe —
@@ -705,15 +1125,14 @@ export default function KioskPage() {
               setTrialItems((prev) =>
                 prev.filter((s) => !items.some((i) => i._id === s._id))
               );
-              if (customerId) {
-                // Every trial item gets removed from the trial cart — regardless
-                // of whether the wardrobe add was a no-op (already there).
-                for (const item of items) {
-                  removeTrialCartItem({ customerId, storeId, sareeId: item._id });
-                }
-              }
               // Only persist the fresh sarees. Server-side is idempotent now
               // too but skipping a round-trip when we know it's a no-op.
+              // Pass the AI try-on lookId (when one exists) so /c/wardrobe
+              // and the kiosk wardrobe surface the customer-on-saree render
+              // instead of the catalog photo. Per-customer sareeLookIds is
+              // populated by runTryOn .then() callbacks; for items added
+              // before the render completes, lookId stays undefined here
+              // and the customer can re-trigger by re-adding later.
               for (const item of fresh) {
                 addToWardrobeMut({
                   sessionId,
@@ -721,6 +1140,7 @@ export default function KioskPage() {
                   sareeId: item._id,
                   sareeName: item.name,
                   price: item.price,
+                  lookId: sareeLookIds[item._id],
                 });
               }
               showToast(`Added ${fresh.length} to wardrobe`, "success");
@@ -731,6 +1151,14 @@ export default function KioskPage() {
             showToast={showToast}
             maxTrial={CFG.maxTrial}
             tryOnSec={CFG.tryOnSec}
+            sareeLookIds={sareeLookIds}
+            retryLookMut={retryLookMut}
+            deviceToken={deviceToken}
+            navigate={navigate}
+            setPendingFanOut={setPendingFanOut}
+            cartCount={cartItems.reduce((n, c) => n + c.qty, 0)}
+            storeName={storeName}
+            storeLogoFileId={storeData?.logoFileId}
           />
         );
       case "home":
@@ -739,25 +1167,37 @@ export default function KioskPage() {
             sarees={allSarees || []}
             trialItems={trialItems}
             wardrobeItems={wardrobeItems}
+            shortlistedItems={shortlistedItems}
             onProductTap={(p) => navigate("productDetail", p)}
             onSendToTrial={(items) => {
               setTrialItems((prev) => [...prev, ...items]);
-              if (customerId) {
+              // Client-side body-scan pre-check: if the customer has no scan
+              // on file, do NOT fire runTryOn — it would throw NO_BODY_SCAN:
+              // server-side and surface as a red Convex error in the console.
+              // Items still land in trialItems; the reconciliation effect
+              // re-fires runTryOn after recordBodyScan flips bodyScanInfo.
+              if (customerId && bodyScanInfo?.hasFileId === false) {
+                showToast("Body scan needed to try sarees on", "warning");
+                navigate("consent");
+                return;
+              }
+              if (customerId && bodyScanInfo?.hasFileId === true) {
                 for (const item of items) {
-                  addTrialCartItem({ customerId, storeId, sareeId: item._id });
-                  createLook({
+                  runTryOn({
+                    deviceToken: deviceToken!,
                     sessionId,
-                    storeId,
-                    customerId,
                     sareeId: item._id,
-                    sareeName: item.name,
-                    fabric: item.fabric,
-                    price: item.price,
-                    grad: item.grad,
-                  });
+                  })
+                    .then((res) => {
+                      setSareeLookIds((prev) => ({ ...prev, [item._id]: res.lookId }));
+                    })
+                    .catch((err: Error) => {
+                      // Defense-in-depth — scan deleted mid-session, etc.
+                      handleTryOnError(err, showToast, () => navigate("consent"));
+                    });
                 }
               }
-              navigate("aiProcessing");
+              navigate("trialRoom");
             }}
             navigate={navigate}
             goHome={goHome}
@@ -784,18 +1224,27 @@ export default function KioskPage() {
                 return;
               }
               setTrialItems((prev) => [...prev, selectedProduct]);
-              if (customerId) {
-                addTrialCartItem({ customerId, storeId, sareeId: selectedProduct._id });
-                createLook({
+              // Body-scan pre-check, same shape as HomeScreen.onSendToTrial.
+              // No-scan customers route to consent without firing runTryOn,
+              // so the Convex server log stays clean.
+              if (customerId && bodyScanInfo?.hasFileId === false) {
+                showToast("Body scan needed to try sarees on", "warning");
+                navigate("consent");
+                return;
+              }
+              if (customerId && bodyScanInfo?.hasFileId === true) {
+                runTryOn({
+                  deviceToken: deviceToken!,
                   sessionId,
-                  storeId,
-                  customerId,
                   sareeId: selectedProduct._id,
-                  sareeName: selectedProduct.name,
-                  fabric: selectedProduct.fabric,
-                  price: selectedProduct.price,
-                  grad: selectedProduct.grad,
-                });
+                })
+                  .then((res) => {
+                    setSareeLookIds((prev) => ({ ...prev, [selectedProduct._id]: res.lookId }));
+                  })
+                  .catch((err: Error) => {
+                    // Defense-in-depth — scan deleted mid-session, etc.
+                    handleTryOnError(err, showToast, () => navigate("consent"));
+                  });
               }
               showToast("Added to Trial Room", "success");
               navigate("trialRoom");
@@ -808,24 +1257,45 @@ export default function KioskPage() {
             trialCount={trialItems.length}
             wardrobeCount={wardrobeItems.length}
             cartCount={cartItems.length}
+            storeName={storeData?.name || storeName}
+            storeLogoFileId={storeData?.logoFileId}
           />
         ) : null;
       case "wardrobe":
         return (
           <WardrobeScreen
             items={wardrobeItems}
-            onMoveToCart={(items) => {
-              setCartItems((prev) => {
-                const have = new Set(prev.map((s) => s._id));
-                const fresh = items.filter((i) => !have.has(i._id));
+            lookImages={wardrobeLookImages}
+            lookCutouts={wardrobeLookCutouts}
+            sareeLookIds={sareeLookIds}
+            cartItemIds={new Set(cartItems.map((c) => c._id))}
+            onToggleInCart={(saree) => {
+              const inCart = cartItems.some((c) => c._id === saree._id);
+              if (inCart) {
+                // Remove from cart — both server (if customer) and local.
                 if (customerId) {
-                  for (const i of fresh) {
-                    addCartItem({ customerId, storeId, sareeId: i._id, qty: 1 });
-                  }
+                  removeCartItemMut({ customerId, storeId, sareeId: saree._id });
                 }
-                return [...prev, ...fresh.map((i) => ({ ...i, qty: 1 }))];
-              });
-              navigate("order");
+                setCartItems((prev) => prev.filter((c) => c._id !== saree._id));
+                showToast("Removed from cart", "info");
+              } else {
+                // Add to cart — both server (if customer) and local.
+                if (customerId) {
+                  addCartItem({ customerId, storeId, sareeId: saree._id, qty: 1 });
+                }
+                setCartItems((prev) => [...prev, { ...saree, qty: 1 }]);
+                showToast("Added to cart", "success");
+              }
+            }}
+            onRemoveFromWardrobe={(saree) => {
+              if (customerId && savedWardrobe) {
+                const row = savedWardrobe.find((w) => w.sareeId === saree._id);
+                if (row) {
+                  removeFromWardrobeMut({ wardrobeId: row._id, customerId }).catch(() => {});
+                }
+              }
+              setWardrobeItems((prev) => prev.filter((w) => w._id !== saree._id));
+              showToast("Removed from wardrobe", "info");
             }}
             navigate={navigate}
             goHome={goHome}
@@ -834,7 +1304,6 @@ export default function KioskPage() {
             wardrobeCount={wardrobeItems.length}
             cartCount={cartItems.length}
             maxWardrobe={CFG.maxWardrobe}
-            showToast={showToast}
             storeName={storeData?.name || storeName}
             storeLogoFileId={storeData?.logoFileId}
           />
@@ -878,6 +1347,22 @@ export default function KioskPage() {
                     deviceToken,
                   });
                   const cartIds = cartItems.map((c) => c._id);
+
+                  // Remove the purchased items from server-side wardrobe so
+                  // /c/wardrobe (customer PWA, reactive subscription) and
+                  // future kiosk hydrations no longer show them. Best-effort
+                  // per-row delete — race / missing rows are silent.
+                  if (customerId && savedWardrobe) {
+                    for (const sareeId of cartIds) {
+                      const row = savedWardrobe.find((w) => w.sareeId === sareeId);
+                      if (row) {
+                        try {
+                          await removeFromWardrobeMut({ wardrobeId: row._id, customerId });
+                        } catch { /* ignore */ }
+                      }
+                    }
+                  }
+
                   setWardrobeItems((prev) => prev.filter((w) => !cartIds.includes(w._id)));
                   if (customerId) {
                     try { await clearCartMut({ customerId, storeId }); } catch { /* ignore */ }
@@ -887,7 +1372,17 @@ export default function KioskPage() {
               }
             }}
             onFindTailor={() => navigate("tailors")}
+            onProductTap={(p) => navigate("productDetail", p)}
             onBack={goBack}
+            navigate={navigate}
+            goHome={goHome}
+            triggerLogout={triggerLogout}
+            trialCount={trialItems.length}
+            wardrobeCount={wardrobeItems.length}
+            cartCount={cartItems.length}
+            storeName={storeData?.name || storeName}
+            storeLogoFileId={storeData?.logoFileId}
+            recentlyViewed={(allSarees ?? []).slice(0, 12)}
           />
         );
       case "tailors":
@@ -895,49 +1390,20 @@ export default function KioskPage() {
           <TailorScreen
             storeCity={storeData?.city || ""}
             storeId={storeId}
-            storeName={storeName}
+            storeName={storeData?.name || storeName}
             customerId={customerId}
             customerName={customerName}
             customerPhone={phone ? `+91${phone}` : ""}
             onBack={goBack}
             showToast={showToast}
-          />
-        );
-      case "feedback":
-        return (
-          <FeedbackScreen
-            onSubmit={async (rating) => {
-              if (sessionId) {
-                try {
-                  await updateSessionMut({
-                    sessionId,
-                    rating,
-                    sareesTriedOn: wardrobeItems.length,
-                    sareesBrowsed: trialItems.length + wardrobeItems.length,
-                  });
-                  await endSessionMut({ sessionId, deviceToken });
-                } catch { /* ignore */ }
-              }
-              handleWipe();
-            }}
-            onHome={goHome}
-            onLogout={handleWipe}
-          />
-        );
-      case "dataSave":
-        return (
-          <DataSaveScreen
-            onSave={() => {
-              showToast("Saved to profile", "success");
-              navigate("feedback");
-            }}
-            onDelete={() => {
-              setWardrobeItems([]);
-              setTrialItems([]);
-              setCartItems([]);
-              showToast("Data deleted", "info");
-              navigate("feedback");
-            }}
+            navigate={navigate}
+            goHome={goHome}
+            triggerLogout={triggerLogout}
+            trialCount={trialItems.length}
+            wardrobeCount={wardrobeItems.length}
+            cartCount={cartItems.length}
+            storeLogoFileId={storeData?.logoFileId}
+            allSarees={allSarees ?? []}
           />
         );
       case "sessionEnd":
@@ -950,6 +1416,51 @@ export default function KioskPage() {
   return (
     <div style={{ width: "100%", height: "100vh", overflow: "hidden", position: "relative" }}>
       {renderScreen()}
+      {showSavePrompt && (
+        <DataSaveScreen
+          onSave={() => {
+            setShowSavePrompt(false);
+            showToast("Saved to profile", "success");
+            setShowFeedback(true);
+          }}
+          onDelete={() => {
+            setShowSavePrompt(false);
+            setWardrobeItems([]);
+            setTrialItems([]);
+            setCartItems([]);
+            showToast("Data deleted", "info");
+            setShowFeedback(true);
+          }}
+        />
+      )}
+      {showFeedback && (
+        <FeedbackScreen
+          onSubmit={async (rating, comment) => {
+            if (sessionId) {
+              try {
+                await updateSessionMut({
+                  sessionId,
+                  rating,
+                  ratingComment: comment || undefined,
+                  sareesTriedOn: wardrobeItems.length,
+                  sareesBrowsed: trialItems.length + wardrobeItems.length,
+                });
+                await endSessionMut({ sessionId, deviceToken });
+              } catch { /* ignore */ }
+            }
+            setShowFeedback(false);
+            handleWipe();
+          }}
+          onHome={() => {
+            setShowFeedback(false);
+            goHome();
+          }}
+          onLogout={() => {
+            setShowFeedback(false);
+            handleWipe();
+          }}
+        />
+      )}
       {toastVisible && (
         <KioskToast msg={toastMsg} type={toastType} onClose={() => setToastVisible(false)} />
       )}
@@ -979,303 +1490,202 @@ function KioskToast({ msg, type, onClose }: { msg: string; type: string; onClose
 }
 
 /* ── IDLE ── */
-const IDLE_SLIDES = [
-  {
-    img: "/kiosk/img1.jpg",
-    h: "See Yourself in This Beautiful Saree",
-    s: "Experience our curated collection with virtual try-on",
-  },
-  {
-    img: "/kiosk/img2.webp",
-    h: "New Bridal Collection",
-    s: "Kanjivaram & Banarasi silks, handpicked for your big day",
-  },
-  {
-    img: "/kiosk/img3.webp",
-    h: "Festival Specials",
-    s: "Celebrate every occasion in exclusive weaves",
-  },
-  {
-    img: "/kiosk/img4.jpg",
-    h: "Light. Luxurious. Effortless.",
-    s: "Explore organzas and chiffons for every day",
-  },
-];
-
-function IdleScreen({ storeName, onStart }: { storeName: string; onStart: () => void }) {
-  const [slideIdx, setSlideIdx] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setSlideIdx((i) => (i + 1) % IDLE_SLIDES.length), 5500);
-    return () => clearInterval(t);
-  }, []);
-  const slide = IDLE_SLIDES[slideIdx];
-
+function IdleScreen({ storeName: _storeName, onStart }: { storeName: string; onStart: () => void }) {
   return (
     <div onClick={onStart} className="k-shell k-idle-shell" style={{ cursor: "pointer" }}>
-      {/* Cycling image backdrop */}
+      {/* Background image */}
       <div className="k-idle-stage">
-        {IDLE_SLIDES.map((s, i) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={s.img} src={s.img} alt="" aria-hidden
-            className={`k-idle-img ${i === slideIdx ? "active" : ""}`} />
-        ))}
-        <div className="k-idle-veil" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/kiosk/first-page/background.jpg"
+          alt=""
+          aria-hidden
+          className="k-idle-img active"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/kiosk/ideal-screen-2.svg"
+          alt=""
+          aria-hidden
+          className="k-idle-overlay"
+        />
       </div>
 
       {/* Top bar */}
       <div className="k-idle-top">
-        <div className="k-brand" style={{ fontSize: 20, color: "var(--k-text)" }}>{storeName}</div>
+        <div className="k-idle-brand">PHYGIFYT</div>
         <div className="k-idle-lang" onClick={(e) => { e.stopPropagation(); onStart(); }}>
           <span>Eng</span>
-          <ChevronDown size={14} />
+          <ChevronDown size={16} />
         </div>
       </div>
 
-      {/* Center glassmorphic CTA */}
+      {/* Center touch-to-start button */}
       <div className="k-idle-cta-wrap">
-        <div className="k-idle-cta k-scaleIn">
-          <span className="k-idle-cta-icon">
-            <Hand size={22} strokeWidth={2} />
-          </span>
-          <span className="k-idle-cta-label">Touch to Start</span>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/kiosk/first-page/touch-to-start.svg"
+          alt="Touch to Start"
+          className="k-idle-touch"
+        />
       </div>
 
       {/* Bottom copy */}
-      <div key={slideIdx} className="k-idle-copy">
-        <h1 className="k-display k-slideUp" style={{ fontSize: 28, lineHeight: 1.25, letterSpacing: "0.01em" }}>
-          {slide.h}
-        </h1>
-        <p className="k-slideUp k-d2" style={{
-          fontSize: 14, color: "var(--k-text-mid)", marginTop: 8,
-          letterSpacing: "0.05em", textTransform: "uppercase",
-        }}>
-          {slide.s}
-        </p>
-        <div className="k-slideUp k-d3" style={{ display: "inline-flex", gap: 6, marginTop: 18 }}>
-          {IDLE_SLIDES.map((_, i) => (
-            <span key={i} style={{
-              width: i === slideIdx ? 28 : 8, height: 3, borderRadius: 2,
-              background: i === slideIdx ? "var(--k-maroon)" : "rgba(34,34,34,.25)",
-              transition: "width .4s ease, background .4s ease",
-            }} />
-          ))}
-        </div>
+      <div className="k-idle-copy">
+        <h1 className="k-idle-headline">SEE YOURSELF IN THIS BEAUTIFUL SAREE</h1>
+        <p className="k-idle-subline">EXPERIENCE OUR CURATED COLLECTION WITH VIRTUAL TRY-ON</p>
       </div>
     </div>
   );
 }
 
 /* ── MODE SELECT ── */
-function ModeSelectScreen({ storeName, onStoreCode, onCustomerLogin, onBack }: {
+function ModeSelectScreen({ onStoreCode, onCustomerLogin }: {
   storeName: string; onStoreCode: () => void; onCustomerLogin: () => void; onBack: () => void;
 }) {
+  const [selected, setSelected] = useState<"store" | "phone" | null>(null);
+  const handleNext = () => {
+    if (selected === "store") onStoreCode();
+    else if (selected === "phone") onCustomerLogin();
+  };
+
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-lang-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 20px", gap: 16, maxWidth: 480, margin: "0 auto", width: "100%" }}>
-        <h2 className="k-display k-slideUp" style={{ fontSize: 26, marginBottom: 4 }}>How would you like to start?</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 14, color: "var(--k-text-muted)", marginBottom: 20, textAlign: "center", lineHeight: 1.55 }}>
-          Choose store code if your assistant shared one, or login with your phone number
-        </p>
 
-        <button onClick={onStoreCode} className="k-press k-slideUp k-d2 k-card-hover" style={{
-          width: "100%", padding: "20px 24px", borderRadius: "var(--k-r)",
-          background: "var(--k-card)", border: "1px solid var(--k-border)", boxShadow: "var(--k-shadow)",
-          display: "flex", alignItems: "center", gap: 16, cursor: "pointer", textAlign: "left",
-        }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14, background: "var(--k-maroon)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            color: "#fff", boxShadow: "0 6px 14px rgba(104,38,42,.25)",
-          }}>
-            <Hash size={24} strokeWidth={2.25} />
+      <div className="k-lang-content">
+        <div className="k-lang-top">
+          <div className="k-lang-brand">PHYGIFYT</div>
+          <div className="k-lang-langbtn">
+            <span>Eng</span>
+            <ChevronDown size={16} />
           </div>
-          <div style={{ flex: 1 }}>
-            <div className="k-heading" style={{ fontSize: 17, color: "var(--k-text)" }}>Store Code</div>
-            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 3 }}>Enter 6-digit code from your assistant</div>
-          </div>
-          <ChevronRight size={20} color="var(--k-text-muted)" />
-        </button>
+        </div>
 
-        <button onClick={onCustomerLogin} className="k-press k-slideUp k-d3 k-card-hover" style={{
-          width: "100%", padding: "20px 24px", borderRadius: "var(--k-r)",
-          background: "var(--k-card)", border: "1px solid var(--k-border)", boxShadow: "var(--k-shadow)",
-          display: "flex", alignItems: "center", gap: 16, cursor: "pointer", textAlign: "left",
-        }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14, background: "var(--k-gold)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            color: "#fff", boxShadow: "0 6px 14px rgba(201,148,26,.3)",
-          }}>
-            <Phone size={22} strokeWidth={2.25} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div className="k-heading" style={{ fontSize: 17, color: "var(--k-text)" }}>Phone Login</div>
-            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 3 }}>Login with your mobile number</div>
-          </div>
-          <ChevronRight size={20} color="var(--k-text-muted)" />
-        </button>
+        <div className="k-lang-heading k-slideUp">
+          <h1 className="k-lang-title">How would you like to start?</h1>
+          <p className="k-lang-subtitle">Choose store code if your assistant shared<br />one, or login with your phone number</p>
+        </div>
+
+        <div className="k-mode-grid">
+          <button
+            onClick={() => setSelected("store")}
+            className={`k-mode-card k-press k-slideUp k-d2 ${selected === "store" ? "active" : ""}`}
+          >
+            <div className="k-mode-card-art">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/kiosk/login/store-code.svg" alt="" aria-hidden />
+            </div>
+            <div className="k-mode-card-label">Store Code</div>
+          </button>
+
+          <button
+            onClick={() => setSelected("phone")}
+            className={`k-mode-card k-press k-slideUp k-d3 ${selected === "phone" ? "active" : ""}`}
+          >
+            <div className="k-mode-card-art">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/kiosk/login/phone-login.svg" alt="" aria-hidden />
+            </div>
+            <div className="k-mode-card-label">Phone Login</div>
+          </button>
+        </div>
+
+        <div className="k-lang-next-wrap">
+          <button onClick={handleNext} disabled={!selected} className="k-mode-next">Next</button>
+        </div>
       </div>
     </div>
   );
 }
 
 /* ── PHONE AUTH ── */
-function PhoneAuthScreen({ storeName, onSubmitPhone, onBack }: {
-  storeName: string; onSubmitPhone: (phone: string) => void; onBack: () => void;
+function PhoneAuthScreen({ storeName, storeLogoFileId, onSubmitPhone, onBack }: {
+  storeName: string; storeLogoFileId?: Id<"_storage">;
+  onSubmitPhone: (phone: string) => void; onBack: () => void;
 }) {
   const [inp, setInp] = useState("");
   const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleKey = (k: string) => { setError(""); if (inp.length < 10) setInp((v) => v + k); };
-  const handleDel = () => { setError(""); setInp((v) => v.slice(0, -1)); };
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
+
   const handleSubmit = () => {
     if (inp.length !== 10) { setError("Valid 10-digit number required"); return; }
     if (!["6","7","8","9"].includes(inp[0])) { setError("Valid 10-digit number required"); return; }
     onSubmitPhone(inp);
   };
 
-  const complete = inp.length === 10 && !error;
-  const formattedInp = inp.length > 5 ? `${inp.slice(0, 5)} ${inp.slice(5)}` : inp;
-
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-pair-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div className="k-form-col">
-        {/* Hero badge */}
-        <div className="k-slideUp k-float" style={{
-          width: 64, height: 64, borderRadius: "50%",
-          background: "linear-gradient(135deg, var(--k-maroon) 0%, var(--k-maroon-l) 100%)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "#fff", marginTop: 6, marginBottom: 16,
-          boxShadow: "0 10px 24px rgba(104,38,42,.28), inset 0 1px 0 rgba(255,255,255,.18)",
-        }}>
-          <Phone size={26} strokeWidth={2} />
-        </div>
 
-        <h2 className="k-display k-slideUp k-d1" style={{ fontSize: 24, marginBottom: 6, textAlign: "center" }}>
-          Sign in with your mobile
-        </h2>
-        <div className="k-divider-gold k-slideUp k-d1" style={{ margin: "4px auto 10px" }} />
-        <p className="k-slideUp k-d2" style={{
-          fontSize: 13, color: "var(--k-text-muted)", marginBottom: 22,
-          textAlign: "center", lineHeight: 1.5, maxWidth: 280,
-        }}>
-          We'll send a one-time code to verify your number
-        </p>
-
-        {/* Phone display */}
-        <div className="k-slideUp k-d3" style={{
-          width: "100%", padding: "10px 12px 10px 10px", borderRadius: 14,
-          border: `1.5px solid ${error ? "var(--k-red)" : inp ? "var(--k-maroon)" : "var(--k-border)"}`,
-          background: "var(--k-card)",
-          display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
-          boxShadow: complete
-            ? "0 0 0 4px rgba(104,38,42,.08), 0 10px 24px rgba(104,38,42,.12)"
-            : inp ? "0 0 0 3px rgba(104,38,42,.06)" : "var(--k-shadow-xs)",
-          transition: "all .22s cubic-bezier(.22,1,.36,1)",
-        }}>
-          {/* +91 pill */}
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "8px 11px", borderRadius: 10,
-            background: "var(--k-bg-warm)",
-            border: "1px solid var(--k-border-l)",
-            color: "var(--k-text-mid)", flexShrink: 0,
-          }}>
-            <Phone size={13} strokeWidth={2.25} />
-            <span className="k-mono" style={{ fontSize: 13, fontWeight: 600 }}>+91</span>
-          </div>
-
-          {/* digits */}
-          <span className="k-mono" style={{
-            fontSize: 19, fontWeight: 600, flex: 1,
-            letterSpacing: inp ? "0.14em" : "0.04em",
-            color: "var(--k-text)",
-            whiteSpace: "nowrap", overflow: "hidden",
-          }}>
-            {inp
-              ? formattedInp
-              : <span style={{ color: "var(--k-text-light)", fontWeight: 400 }}>Mobile number</span>}
-          </span>
-
-          {complete && (
-            <div className="k-popIn" style={{
-              width: 24, height: 24, borderRadius: "50%",
-              background: "var(--k-green)", color: "#fff",
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              <Check size={14} strokeWidth={3} />
-            </div>
+      <div className="k-pair-topbar">
+        <div className="k-pair-topbar-logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} />
+          ) : (
+            <span>{initial}</span>
           )}
         </div>
+        <div className="k-pair-topbar-title">{storeName}</div>
+      </div>
 
-        {/* Progress dots */}
-        <div className="k-slideUp k-d3" style={{
-          display: "flex", gap: 5, marginBottom: error ? 10 : 14, alignSelf: "center",
-        }}>
-          {Array.from({ length: 10 }).map((_, i) => (
-            <span key={i} style={{
-              width: i < inp.length ? 16 : 6, height: 3, borderRadius: 2,
-              background: i < inp.length
-                ? (error ? "var(--k-red)" : "var(--k-maroon)")
-                : "rgba(104,38,42,.14)",
-              transition: "all .25s cubic-bezier(.22,1,.36,1)",
-            }} />
-          ))}
+      <div className="k-pair-content">
+        <button onClick={onBack} className="k-pair-back" aria-label="Back">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={48} />
+        </button>
+
+        <h1 className="k-phone-title k-slideUp">Hello!</h1>
+        <p className="k-phone-subtitle k-slideUp k-d1">Sign-in with your mobile</p>
+
+        <div className="k-phone-field k-slideUp k-d2" onClick={() => inputRef.current?.focus()}>
+          <div className="k-phone-prefix">
+            <Phone size={18} strokeWidth={2.25} />
+            <span>+91</span>
+          </div>
+          <input
+            ref={inputRef}
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoFocus
+            value={inp}
+            onChange={(e) => {
+              const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 10);
+              setInp(v);
+              setError("");
+            }}
+            className="k-phone-input"
+            aria-label="Mobile number"
+          />
         </div>
 
-        {error && (
-          <div className="k-slideDown" style={{
-            fontSize: 12, color: "var(--k-red)", fontWeight: 500,
-            marginBottom: 10, textAlign: "center",
-            padding: "6px 12px", borderRadius: 999,
-            background: "var(--k-red-bg)",
-            border: "1px solid rgba(192,57,43,.18)",
-          }}>{error}</div>
-        )}
-
-        <div className="k-numpad k-slideUp k-d4" style={{ width: "100%", marginTop: 4 }}>
-          {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
-            if (k === "") return <div key={i} />;
-            if (k === "del") return (
-              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
-                <Delete size={22} />
-              </button>
-            );
-            return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
-          })}
-        </div>
+        {error && <div className="k-pair-error">{error}</div>}
 
         <button
           onClick={handleSubmit}
-          disabled={!complete}
-          className={`k-btn k-btn-primary k-btn-pill k-slideUp k-d5 ${complete ? "k-silk" : ""}`}
-          style={{ width: "100%", marginTop: 16, fontSize: 16, fontWeight: 600, minHeight: 52 }}
+          disabled={inp.length !== 10}
+          className="k-phone-submit k-slideUp k-d3"
         >
-          Continue
-          <ChevronRight size={18} />
+          Continue <ArrowRight size={22} />
         </button>
 
-        <p className="k-slideUp k-d6" style={{
-          marginTop: 12, fontSize: 11, color: "var(--k-text-light)",
-          textAlign: "center", letterSpacing: "0.02em", lineHeight: 1.5,
-        }}>
-          By continuing you agree to our Terms & Privacy Policy
+        <p className="k-phone-terms k-slideUp k-d4">
+          By Continuing You Agree To Our Terms &amp; Privacy Policy
         </p>
       </div>
     </div>
@@ -1283,15 +1693,21 @@ function PhoneAuthScreen({ storeName, onSubmitPhone, onBack }: {
 }
 
 /* ── OTP SCREEN ── */
-function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
+function OTPScreen({ phone, storeName, storeLogoFileId, onVerified, onBack }: {
   phone: string; storeId: string; storeName: string;
+  storeLogoFileId?: Id<"_storage">;
   onVerified: (customer: { _id: Id<"customers">; name: string; lastBodyScan?: number; bodyScanFileId?: Id<"_storage">; language?: string } | null) => void;
   onBack: () => void;
 }) {
+  const OTP_LENGTH = 6;
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
 
   const verifyOtp = useMutation(api.phoneAuth.verifyOtp);
   const customer = useQuery(
@@ -1305,11 +1721,8 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
     return () => clearTimeout(t);
   }, [timer]);
 
-  const handleKey = (k: string) => { setError(""); if (otp.length < 6) setOtp((v) => v + k); };
-  const handleDel = () => { setError(""); setOtp((v) => v.slice(0, -1)); };
   const handleSubmit = async () => {
-    if (otp.length !== 6) return;
-    // customer is undefined while loading, null if not found
+    if (otp.length !== OTP_LENGTH) return;
     if (customer === undefined) {
       setError("Loading customer data, try again...");
       return;
@@ -1328,74 +1741,95 @@ function OTPScreen({ phone, storeId, storeName, onVerified, onBack }: {
     }
   };
 
-  const maskedPhone = phone ? phone.slice(0, 2) + "****" + phone.slice(-4) : "";
-
-  const activeIdx = otp.length;
+  const maskedPhone = phone ? phone.slice(0, 2) + "*****" + phone.slice(-3) : "";
 
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-pair-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div className="k-form-col">
-        <h2 className="k-display k-slideUp" style={{ fontSize: 22, marginBottom: 4 }}>Enter OTP</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 16 }}>
-          OTP sent to +91 {maskedPhone}
-        </p>
 
-        {/* OTP boxes */}
-        <div className="k-slideUp k-d2" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className={`k-codebox ${otp[i] ? "filled" : ""} ${i === activeIdx ? "active" : ""}`}>
-              {otp[i] || ""}
+      <div className="k-pair-topbar">
+        <div className="k-pair-topbar-logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} />
+          ) : (
+            <span>{initial}</span>
+          )}
+        </div>
+        <div className="k-pair-topbar-title">{storeName}</div>
+      </div>
+
+      <div className="k-pair-content">
+        <button onClick={onBack} className="k-pair-back" aria-label="Back">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={48} />
+        </button>
+
+        <h1 className="k-otp-title k-slideUp">Hello!</h1>
+        <p className="k-otp-subtitle k-slideUp k-d1">Enter a OTP</p>
+        <p className="k-otp-sent k-slideUp k-d2">OTP sent to +91 {maskedPhone}</p>
+
+        <div className="k-otp-boxes k-slideUp k-d3" onClick={() => inputRef.current?.focus()}>
+          {Array.from({ length: OTP_LENGTH }).map((_, i) => (
+            <div key={i} className={`k-otp-box ${otp[i] ? "filled" : ""}`}>
+              {otp[i] || "0"}
             </div>
           ))}
         </div>
 
-        {error && <div style={{ fontSize: 13, color: "var(--k-red)", marginBottom: 8, fontWeight: 500 }}>{error}</div>}
+        <input
+          ref={inputRef}
+          type="tel"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoFocus
+          value={otp}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^0-9]/g, "").slice(0, OTP_LENGTH);
+            setOtp(v);
+            setError("");
+          }}
+          className="k-pair-hidden-input"
+          aria-label="OTP"
+        />
 
-        <div style={{ marginTop: 4, marginBottom: 8 }}>
+        {error && <div className="k-pair-error">{error}</div>}
+
+        <button
+          onClick={handleSubmit}
+          disabled={otp.length !== OTP_LENGTH}
+          className="k-otp-submit k-slideUp k-d4"
+        >
+          Continue <ArrowRight size={22} />
+        </button>
+
+        <div className="k-otp-resend k-slideUp k-d5">
           {canResend ? (
-            <button onClick={() => { setTimer(60); setCanResend(false); setOtp(""); }} style={{
-              fontSize: 13, color: "var(--k-maroon)", fontWeight: 600, cursor: "pointer",
-              background: "none", border: "none", textDecoration: "underline",
-            }}>Resend OTP</button>
+            <button
+              onClick={() => { setTimer(60); setCanResend(false); setOtp(""); }}
+              className="k-otp-resend-btn"
+            >
+              Resend OTP
+            </button>
           ) : (
-            <div style={{ fontSize: 13, color: "var(--k-text-muted)" }}>
-              Resend in <span className="k-mono" style={{ color: "var(--k-maroon)", fontWeight: 600 }}>{timer}s</span>
-            </div>
+            <span>Resend in {timer}s</span>
           )}
         </div>
-
-        <div className="k-numpad k-slideUp k-d3" style={{ width: "100%", marginTop: 4 }}>
-          {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
-            if (k === "") return <div key={i} />;
-            if (k === "del") return (
-              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
-                <Delete size={22} />
-              </button>
-            );
-            return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
-          })}
-        </div>
-
-        <button onClick={handleSubmit} disabled={otp.length !== 6} className="k-btn k-btn-primary k-btn-pill k-slideUp k-d4" style={{ width: "100%", marginTop: 18, fontSize: 16, fontWeight: 600 }}>
-          Continue
-          <ChevronRight size={18} />
-        </button>
       </div>
     </div>
   );
 }
 
 /* ── NEW CUSTOMER (minimal capture: name + DOB) ── */
-function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
+function NewCustomerScreen({ phone, storeName, storeLogoFileId, onRegistered, onBack }: {
   phone: string;
   storeName: string;
+  storeLogoFileId?: Id<"_storage">;
   onRegistered: (customerId: Id<"customers">, customerName: string) => void;
   onBack: () => void;
 }) {
@@ -1404,6 +1838,9 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
   const [dob, setDob] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
 
   const maxDob = (() => {
     const d = new Date();
@@ -1443,66 +1880,72 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
   }
 
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-pair-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
 
-      <div className="k-form-col" style={{ maxWidth: 480 }}>
-        <h2 className="k-display k-slideUp" style={{ fontSize: 24, marginBottom: 4 }}>Welcome to Wearify</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 14, color: "var(--k-text-muted)", marginBottom: 28, textAlign: "center" }}>
-          Quick setup — complete the rest later on the Wearify app.
+      <div className="k-pair-topbar">
+        <div className="k-pair-topbar-logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} />
+          ) : (
+            <span>{initial}</span>
+          )}
+        </div>
+        <div className="k-pair-topbar-title">{storeName}</div>
+      </div>
+
+      <div className="k-pair-content">
+        <button onClick={onBack} className="k-pair-back" aria-label="Back">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={48} />
+        </button>
+
+        <h1 className="k-welcome-title k-slideUp">Welcome to Wearify</h1>
+        <p className="k-welcome-subtitle k-slideUp k-d1">
+          Quick setup-complete the rest later on the<br />Wearify app.
         </p>
 
-        <div className="k-slideUp k-d2" style={{ width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--k-text)", marginBottom: 6 }}>
-              Full Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setError(""); }}
-              placeholder="e.g. Ananya Mehta"
-              className="k-input"
-            />
-          </div>
-
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--k-text)", marginBottom: 6 }}>
-              Date of Birth
-            </label>
-            <input
-              type="date"
-              value={dob}
-              max={maxDob}
-              onChange={(e) => { setDob(e.target.value); setError(""); }}
-              className="k-input"
-            />
-          </div>
+        <div className="k-welcome-field k-slideUp k-d2">
+          <label className="k-welcome-label">Full Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(""); }}
+            placeholder="e.g. Ananya Mehta"
+            className="k-welcome-input"
+          />
         </div>
 
-        {error && (
-          <div style={{ fontSize: 13, color: "var(--k-red)", marginTop: 12, fontWeight: 500 }}>
-            {error}
-          </div>
-        )}
+        <div className="k-welcome-field k-slideUp k-d3">
+          <label className="k-welcome-label">Date of Birth</label>
+          <input
+            type="date"
+            value={dob}
+            max={maxDob}
+            onChange={(e) => { setDob(e.target.value); setError(""); }}
+            placeholder="dd-mm-yyyy"
+            className="k-welcome-input k-welcome-input-date"
+          />
+        </div>
+
+        {error && <div className="k-pair-error">{error}</div>}
 
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="k-btn k-btn-primary k-btn-pill k-slideUp k-d3"
-          style={{ width: "100%", marginTop: 24, fontSize: 16, fontWeight: 600 }}
+          className="k-welcome-submit k-slideUp k-d4"
         >
-          {saving ? (<><Loader2 size={18} className="k-spin" /> Creating…</>) : (<>Continue <ChevronRight size={18} /></>)}
+          {saving ? (<><Loader2 size={20} className="k-spin" /> Creating…</>) : (<>Continue <ArrowRight size={22} /></>)}
         </button>
 
-        <p className="k-slideUp k-d4" style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 18, textAlign: "center" }}>
-          Your try-on history and wardrobe will be saved to your phone number.
+        <p className="k-welcome-note k-slideUp k-d5">
+          Your try-on history and wardrobe will be saved to your<br />phone number.
         </p>
       </div>
     </div>
@@ -1513,24 +1956,26 @@ function NewCustomerScreen({ phone, storeName, onRegistered, onBack }: {
 
 /* ── CODE ENTRY ── */
 function CodeEntryScreen({
-  storeId, storeName, onValidCode, onBack,
+  storeId, storeName, storeLogoFileId, onValidCode, onBack,
 }: {
   storeId: string;
   storeName: string;
+  storeLogoFileId?: Id<"_storage">;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onValidCode: (data: any) => void;
   onBack: () => void;
 }) {
   const [code, setCode] = useState("");
+  const [deviceLabel, setDeviceLabel] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
-  // validateCode is a mutation now (rate-limited — can't be a query).
-  // We call it on Continue press, not reactively on typing.
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
+
   const validateCodeMut = useMutation(api.trialRoom.validateCode);
 
-  const handleKey = (k: string) => { setError(""); if (code.length < 6) setCode((v) => v + k); };
-  const handleDel = () => { setError(""); setCode((v) => v.slice(0, -1)); };
   const handleSubmit = async () => {
     if (code.length !== 6 || loading) return;
     setLoading(true);
@@ -1550,75 +1995,135 @@ function CodeEntryScreen({
     }
   };
 
-  const activeIdx = code.length;
-
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <div className="k-brand" style={{ fontSize: 18, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div style={{ width: 44 }} />
+    <div className="k-pair-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div className="k-form-col">
-        <h2 className="k-display k-slideUp" style={{ fontSize: 22, marginBottom: 4 }}>Enter Trial Room Code</h2>
-        <p className="k-slideUp k-d1" style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 16 }}>
-          6-digit code from your store assistant
-        </p>
-        <div className="k-slideUp k-d2" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className={`k-codebox ${code[i] ? "filled" : ""} ${i === activeIdx ? "active" : ""}`}>
-              {code[i] || ""}
-            </div>
-          ))}
+
+      <div className="k-pair-topbar">
+        <div className="k-pair-topbar-logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} />
+          ) : (
+            <span>{initial}</span>
+          )}
         </div>
-        {error && <div style={{ fontSize: 13, color: "var(--k-red)", marginBottom: 8, fontWeight: 500 }}>{error}</div>}
-        <div className="k-numpad k-slideUp k-d3" style={{ width: "100%", marginTop: 8 }}>
-          {["1","2","3","4","5","6","7","8","9","","0","del"].map((k, i) => {
-            if (k === "") return <div key={i} />;
-            if (k === "del") return (
-              <button key={i} className="k-num-back" onClick={handleDel} aria-label="Delete">
-                <Delete size={22} />
-              </button>
-            );
-            return <button key={i} onClick={() => handleKey(k)}>{k}</button>;
-          })}
-        </div>
-        <button onClick={handleSubmit} disabled={code.length !== 6 || loading} className="k-btn k-btn-primary k-btn-pill k-slideUp k-d4" style={{ width: "100%", marginTop: 18, fontSize: 16, fontWeight: 600 }}>
-          {loading ? (<><Loader2 size={18} className="k-spin" /> Verifying…</>) : (<>Continue <ChevronRight size={18} /></>)}
+        <div className="k-pair-topbar-title">{storeName}</div>
+      </div>
+
+      <div className="k-pair-content">
+        <button onClick={onBack} className="k-pair-back" aria-label="Back">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={48} />
         </button>
+
+        <h1 className="k-pair-title k-slideUp">Pair this kiosk</h1>
+        <p className="k-pair-subtitle k-slideUp k-d1">
+          Ask the store owner or admin for a 6-digit<br />pairing code
+        </p>
+
+        <div className="k-pair-field k-slideUp k-d2">
+          <div className="k-pair-label">PAIRING CODE</div>
+          <div className="k-pair-codes" onClick={() => codeInputRef.current?.focus()}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className={`k-pair-codebox ${code[i] ? "filled" : ""}`}>
+                {code[i] || "0"}
+              </div>
+            ))}
+          </div>
+          <input
+            ref={codeInputRef}
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoFocus
+            value={code}
+            onChange={(e) => {
+              const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+              setCode(v);
+              setError("");
+            }}
+            className="k-pair-hidden-input"
+            aria-label="Pairing code"
+          />
+        </div>
+
+        <div className="k-pair-field k-slideUp k-d3">
+          <div className="k-pair-label">DEVICE LABLE (OPTIONAL)</div>
+          <input
+            type="text"
+            value={deviceLabel}
+            onChange={(e) => setDeviceLabel(e.target.value)}
+            placeholder="e.g.Front mirror, Trial room 2"
+            className="k-pair-input"
+          />
+        </div>
+
+        {error && <div className="k-pair-error">{error}</div>}
+
+        <button
+          onClick={handleSubmit}
+          disabled={code.length !== 6 || loading}
+          className="k-pair-submit k-slideUp k-d4"
+        >
+          {loading ? (<><Loader2 size={20} className="k-spin" /> Verifying…</>) : "Pair Kiosk"}
+        </button>
+
+        <div className="k-pair-helpers k-slideUp k-d5">
+          <p>Secure pairing between this device &amp; your account</p>
+          <p>Ask the store owner to generate a fresh code if pairing<br />has expired</p>
+        </div>
       </div>
     </div>
   );
 }
 
 /* ── LANGUAGE ── */
-function LangScreen({ lang, onSelect, storeName }: { lang: string; onSelect: (c: string) => void; storeName: string }) {
+function LangScreen({ lang, onSelect, onNext }: { lang: string; onSelect: (c: string) => void; onNext: () => void; storeName: string }) {
   return (
-    <div className="k-shell" style={{ alignItems: "center", padding: "0 20px" }}>
-      <div className="k-slideUp" style={{ marginTop: 56, textAlign: "center" }}>
-        <div className="k-brand" style={{ fontSize: 22, color: "var(--k-maroon)" }}>{storeName}</div>
-        <div className="k-divider-gold" />
-        <h2 className="k-display" style={{ fontSize: 22, marginTop: 12 }}>Select Your Language</h2>
-        <p style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Choose your preferred language</p>
+    <div className="k-lang-shell">
+      <div className="k-lang-stage">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-1.svg" alt="" aria-hidden className="k-lang-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/ideal-screen-2.svg" alt="" aria-hidden className="k-lang-overlay" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, padding: "28px 0", width: "100%", maxWidth: 560, marginTop: 8 }}>
-        {LANGS.map((l, i) => (
-          <button key={l.c} onClick={() => onSelect(l.c)} className={`k-press k-slideUp k-d${Math.min((i % 8) + 1, 8)}`} style={{
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "18px 8px", borderRadius: 14,
-            background: lang === l.c ? "var(--k-maroon)" : "var(--k-card)",
-            color: lang === l.c ? "#fff" : "var(--k-text)",
-            border: `1px solid ${lang === l.c ? "var(--k-maroon)" : "var(--k-border)"}`,
-            boxShadow: lang === l.c ? "0 6px 16px rgba(104,38,42,.22)" : "var(--k-shadow-xs)",
-            cursor: "pointer", minHeight: 72,
-            transition: "all .2s ease",
-          }}>
-            <span className="k-heading" style={{ fontSize: 18 }}>{l.v}</span>
-            <span style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>{l.n}</span>
-          </button>
-        ))}
+
+      <div className="k-lang-content">
+        <div className="k-lang-top">
+          <div className="k-lang-brand">PHYGIFYT</div>
+          <div className="k-lang-langbtn">
+            <span>Eng</span>
+            <ChevronDown size={16} />
+          </div>
+        </div>
+
+        <div className="k-lang-heading k-slideUp">
+          <h1 className="k-lang-title">Select your language</h1>
+          <p className="k-lang-subtitle">Choose your preferred language</p>
+        </div>
+
+        <div className="k-lang-grid">
+          {LANGS.map((l, i) => (
+            <button
+              key={l.c}
+              onClick={() => onSelect(l.c)}
+              className={`k-lang-card k-press k-slideUp k-d${Math.min((i % 8) + 1, 8)} ${lang === l.c ? "active" : ""}`}
+            >
+              <span className="k-lang-card-native">{l.v}</span>
+              <span className="k-lang-card-name">{l.n}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="k-lang-next-wrap">
+          <button onClick={onNext} className="k-lang-next">Next</button>
+        </div>
       </div>
     </div>
   );
@@ -1656,7 +2161,7 @@ function StoreBrand({ storeName, logoFileId }: { storeName: string; logoFileId?:
 function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogout, navigate, onBack, storeName, storeLogoFileId }: {
   trialCount: number; wardrobeCount: number; cartCount: number;
   goHome: () => void; triggerLogout: () => void;
-  navigate: (s: Screen) => void; onBack?: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; onBack?: () => void;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const iconBtn = (
@@ -1679,7 +2184,7 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "14px 24px", background: "var(--k-card)",
+      padding: "22px 24px", background: "var(--k-card)",
       borderBottom: "1px solid var(--k-border-l)", flexShrink: 0, zIndex: 40,
     }}>
       {onBack ? (
@@ -1701,17 +2206,28 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
 }
 
 /* ── HOME ── */
-function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToTrial, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxTrial, showToast, storeName, storeLogoFileId }: {
+function HomeScreen({ sarees, trialItems, wardrobeItems, shortlistedItems, onProductTap, onSendToTrial, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxTrial, showToast, storeName, storeLogoFileId }: {
   sarees: SareeItem[]; trialItems: SareeItem[]; wardrobeItems: SareeItem[];
+  shortlistedItems: SareeItem[];
   onProductTap: (p: SareeItem) => void; onSendToTrial: (items: SareeItem[]) => void;
-  navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxTrial: number;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
+
+  const toggleLike = (id: string) => {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   // Price band: null = any. Stored as [min, max | null] in rupees.
   const [priceBand, setPriceBand] = useState<[number, number | null] | null>(null);
   // Multi-select tags (Premium / Trending / Fast Moving / New — whatever the store curates)
@@ -1780,11 +2296,77 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
   // Group by occasion for categories
   const occasions = [...new Set(sarees.map((s) => s.occasion))];
 
+  const favourites = shortlistedItems.length > 0
+    ? shortlistedItems
+    : wardrobeItems.length > 0
+      ? wardrobeItems
+      : sarees.slice(0, 8);
+
   return (
     <div className="k-shell">
       <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
 
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 100 }}>
+        {!filtered ? (
+          <div className="k-home-content">
+            <div className="k-home-search-row">
+              <div className="k-home-search">
+                <Search size={22} color="var(--k-text-muted)" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search saree..."
+                />
+                {query && (
+                  <button onClick={() => setQuery("")} aria-label="Clear" className="k-home-search-clear">
+                    <X size={20} />
+                  </button>
+                )}
+              </div>
+              <button onClick={() => navigate("consent")} className="k-home-scan-btn" aria-label="Scan">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/kiosk/home/scan.svg" alt="" aria-hidden width={28} />
+              </button>
+            </div>
+
+            <HomeRail title="My Favourites">
+              {favourites.map((s) => (
+                <FavouriteCard
+                  key={s._id}
+                  saree={s}
+                  onTap={() => onProductTap(s)}
+                  onAddToTrial={() => {
+                    if (isInTrial(s._id) || isInWardrobe(s._id)) return;
+                    if (trialItems.length >= maxTrial) {
+                      showToast(`Max ${maxTrial} sarees per trial`, "warning");
+                      return;
+                    }
+                    onSendToTrial([s]);
+                  }}
+                  liked={likedIds.has(s._id)}
+                  onToggleLike={() => toggleLike(s._id)}
+                  inTrial={isInTrial(s._id)}
+                  inWardrobe={isInWardrobe(s._id)}
+                />
+              ))}
+            </HomeRail>
+
+            <HomeRail title="Trending Now">
+              {trending.map((s) => (
+                <TrendingCard key={s._id} saree={s} onTap={() => onProductTap(s)} />
+              ))}
+            </HomeRail>
+
+            <HomeRail title="New Arrivals">
+              {newArrivals.map((s) => (
+                <NewArrivalCard key={s._id} saree={s} onTap={() => onProductTap(s)} />
+              ))}
+            </HomeRail>
+          </div>
+        ) : null}
+
+        <div style={{ display: filtered ? "block" : "none" }}>
         {/* Search bar + filter */}
         <div style={{ padding: "16px 24px 8px", display: "flex", gap: 10, position: "relative" }}>
           <div style={{
@@ -1981,6 +2563,15 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
               ))}
             </div>
 
+            {shortlistedItems.length > 0 && (
+              <ScrollSection title="Shortlisted">
+                {shortlistedItems.map((s) => (
+                  <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} onCheck={() => toggleSelect(s)}
+                    isSelected={selectedIds.has(s._id)} isInTrial={isInTrial(s._id)} isInWardrobe={isInWardrobe(s._id)} />
+                ))}
+              </ScrollSection>
+            )}
+
             <ScrollSection title="Trending Now">
               {trending.map((s) => (
                 <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} onCheck={() => toggleSelect(s)}
@@ -1994,9 +2585,109 @@ function HomeScreen({ sarees, trialItems, wardrobeItems, onProductTap, onSendToT
                   isSelected={selectedIds.has(s._id)} isInTrial={isInTrial(s._id)} isInWardrobe={isInWardrobe(s._id)} />
               ))}
             </ScrollSection>
+
+            {/* All sarees — full grid below the curated rails so customers
+                aren't capped at the 16 visible in Trending + New Arrivals.
+                Uses the same grid layout as the filtered-results view. */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", marginBottom: 14 }}>
+                <div className="k-display" style={{ fontSize: 20 }}>All Sarees</div>
+                <div style={{ fontSize: 13, color: "var(--k-text-muted)" }}>{sarees.length} {sarees.length === 1 ? "item" : "items"}</div>
+              </div>
+              <div style={{ padding: "0 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+                {sarees.map((s) => (
+                  <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} onCheck={() => toggleSelect(s)}
+                    isSelected={selectedIds.has(s._id)} isInTrial={isInTrial(s._id)} isInWardrobe={isInWardrobe(s._id)} />
+                ))}
+              </div>
+            </div>
           </>
         )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function HomeRail({ title, children }: { title: string; children: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  return (
+    <div className="k-home-section">
+      <div className="k-home-section-head">
+        <h2 className="k-home-section-title">{title}</h2>
+        <div className="k-home-nav">
+          <button onClick={() => scrollRef.current?.scrollBy({ left: -360, behavior: "smooth" })} className="k-home-nav-btn" aria-label="Scroll left">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kiosk/home/backward.svg" alt="" aria-hidden width={40} />
+          </button>
+          <button onClick={() => scrollRef.current?.scrollBy({ left: 360, behavior: "smooth" })} className="k-home-nav-btn" aria-label="Scroll right">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kiosk/home/forward.svg" alt="" aria-hidden width={40} />
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="k-home-rail k-no-scroll">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FavouriteCard({ saree, onTap, onAddToTrial, liked, onToggleLike, inTrial, inWardrobe }: {
+  saree: SareeItem; onTap: () => void; onAddToTrial: () => void;
+  liked: boolean; onToggleLike: () => void;
+  inTrial: boolean; inWardrobe: boolean;
+}) {
+  const disabled = inTrial || inWardrobe;
+  return (
+    <div className="k-fav-card">
+      <div className="k-fav-card-img" onClick={onTap}>
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={36} />
+        <button
+          type="button"
+          className={`k-fav-heart ${liked ? "is-liked" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onToggleLike(); }}
+          aria-label={liked ? "Unlike" : "Like"}
+          aria-pressed={liked}
+        >
+          <Heart size={18} fill={liked ? "#dc2626" : "transparent"} color={liked ? "#dc2626" : "#9ca3af"} strokeWidth={2.25} />
+        </button>
+      </div>
+      <div className="k-fav-card-info">
+        <div className="k-fav-tag">{saree.occasion}</div>
+        <div className="k-fav-name">{saree.name}</div>
+        <div className="k-fav-meta">{saree.fabric} • 6.3 meters</div>
+        <div className="k-fav-price">₹{fmtPrice(saree.price)}</div>
+        <button
+          className="k-fav-add-btn"
+          onClick={(e) => { e.stopPropagation(); onAddToTrial(); }}
+          disabled={disabled}
+        >
+          {inWardrobe ? "In Wardrobe" : inTrial ? "In Trial Room" : "Add To Trial Room"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TrendingCard({ saree, onTap }: { saree: SareeItem; onTap: () => void }) {
+  return (
+    <div className="k-trend-card" onClick={onTap}>
+      <div className="k-trend-card-img">
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={48} />
+      </div>
+      <div className="k-trend-card-label">{saree.occasion || saree.name}</div>
+    </div>
+  );
+}
+
+function NewArrivalCard({ saree, onTap }: { saree: SareeItem; onTap: () => void }) {
+  return (
+    <div className="k-arrival-card" onClick={onTap}>
+      <div className="k-arrival-card-img">
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={48} />
+      </div>
+      <div className="k-arrival-card-name">{saree.fabric || saree.name}</div>
     </div>
   );
 }
@@ -2106,539 +2797,1437 @@ function SareeCard({ saree, onTap, onCheck, isSelected, isInTrial, isInWardrobe 
 }
 
 /* ── PRODUCT DETAIL ── */
-function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAddToTrial, onBack, onProductTap, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount }: {
+function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAddToTrial, onBack, onProductTap, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, storeName, storeLogoFileId }: {
   product: SareeItem; allSarees: SareeItem[]; isInTrial: boolean; isInWardrobe: boolean;
   onAddToTrial: () => void; onBack: () => void; onProductTap: (p: SareeItem) => void;
-  navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number;
+  storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [selColor, setSelColor] = useState(0);
-  const disc = product.mrp && product.mrp > product.price ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
-  const similar = allSarees.filter((s) => s.occasion === product.occasion && s._id !== product._id).slice(0, 6);
+  const [liked, setLiked] = useState(true);
+  const railRef = useRef<HTMLDivElement>(null);
+  const similar = allSarees.filter((s) => s.occasion === product.occasion && s._id !== product._id).slice(0, 8);
+
+  const subtitle = [product.fabric, "Handwoven", product.region].filter(Boolean).join(" · ");
+  const handwovenLabel = product.region ? `Handwoven In ${product.region}` : "Handwoven";
 
   return (
     <div className="k-shell">
-      <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} onBack={onBack} />
+      <KioskHeader
+        trialCount={trialCount}
+        wardrobeCount={wardrobeCount}
+        cartCount={cartCount}
+        goHome={goHome}
+        triggerLogout={triggerLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
 
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 24 }}>
-        {/* Hero section — image left, details right */}
-        <div style={{ display: "flex", padding: "24px", gap: 28, minHeight: 320 }}>
-          {/* Left: product image */}
-          <div style={{
-            width: "38%", maxWidth: 360, position: "relative", borderRadius: "var(--k-r-lg)",
-            overflow: "hidden", boxShadow: "var(--k-shadow-md)", flexShrink: 0, aspectRatio: "3/4",
-          }}>
-            <div style={{ position: "absolute", inset: 0 }}>
-              <SareeThumb name={product.name} fileId={product.imageIds?.[0]} grad={product.grad} emoji={product.emoji} emojiSize={72} />
+      <div className="k-detail-content">
+        {/* Back / Home row */}
+        <div className="k-detail-actions">
+          <button onClick={onBack} className="k-detail-action-btn k-detail-home-btn k-press" aria-label="Back">
+            <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
+          </button>
+          <button onClick={goHome} className="k-detail-action-btn k-detail-home-btn k-press" aria-label="Home">
+            <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+          </button>
+        </div>
+
+        {/* Hero — image + info */}
+        <div className="k-detail-hero">
+          <div className="k-detail-img">
+            <SareeImageGallery name={product.name} imageIds={product.imageIds} grad={product.grad} emoji={product.emoji} emojiSize={72} />
+            <div className="k-detail-rating">
+              <Star size={13} fill="var(--k-gold)" color="var(--k-gold)" strokeWidth={0} />
+              <span>4.5</span>
             </div>
-            {/* Tag */}
-            {product.tag && (
-              <div style={{
-                position: "absolute", top: 14, left: 14,
-                padding: "4px 14px", borderRadius: "var(--k-r-pill)",
-                background: product.tag === "Premium" ? "var(--k-maroon)" : "var(--k-gold)",
-                color: "#fff", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px",
-              }}>{product.tag}</div>
-            )}
-            {disc > 0 && (
-              <div style={{
-                position: "absolute", bottom: 14, left: 14,
-                padding: "4px 12px", borderRadius: "var(--k-r-pill)",
-                background: "var(--k-green)", color: "#fff", fontSize: 13, fontWeight: 700,
-              }}>-{disc}% OFF</div>
-            )}
+            <button
+              onClick={() => setLiked((v) => !v)}
+              className={`k-detail-heart${liked ? " is-liked" : ""}`}
+              aria-label={liked ? "Unlike" : "Like"}
+            >
+              <Heart size={20} fill={liked ? "#E53935" : "transparent"} color={liked ? "#E53935" : "var(--k-text-mid)"} strokeWidth={2} />
+            </button>
           </div>
 
-          {/* Right: details */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            {/* Breadcrumb */}
-            <div style={{ fontSize: 13, color: "var(--k-text-muted)", marginBottom: 6 }}>
-              {product.occasion} · {product.fabric}{product.region ? ` · ${product.region}` : ""}
-            </div>
+          <div className="k-detail-info">
+            <h2 className="k-detail-title">{product.name}</h2>
+            <div className="k-detail-subtitle">{subtitle}</div>
 
-            {/* Name */}
-            <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, marginBottom: 8 }}>{product.name}</h2>
-
-            {/* Description */}
-            {product.description && (
-              <p style={{ fontSize: 15, color: "var(--k-text-mid)", lineHeight: 1.6, marginBottom: 16 }}>{product.description}</p>
-            )}
-
-            {/* Price */}
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
-              <span className="k-mono" style={{ fontSize: 28, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(product.price)}</span>
+            <div className="k-detail-price-row">
+              <span className="k-detail-price">₹ {fmtPrice(product.price)}</span>
               {product.mrp && product.mrp > product.price && (
-                <span className="k-mono" style={{ fontSize: 16, color: "var(--k-text-light)", textDecoration: "line-through" }}>₹{fmtPrice(product.mrp)}</span>
-              )}
-              {disc > 0 && (
-                <span style={{ padding: "2px 10px", borderRadius: "var(--k-r-pill)", background: "var(--k-green-bg)", color: "var(--k-green)", fontSize: 13, fontWeight: 600 }}>Save ₹{fmtPrice(product.mrp! - product.price)}</span>
+                <span className="k-detail-mrp">₹ {fmtPrice(product.mrp)}</span>
               )}
             </div>
 
-            {/* Colors */}
-            {product.colors.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Available Colors</div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  {product.colors.map((c, i) => (
-                    <div key={i} onClick={() => setSelColor(i)} style={{
-                      width: 32, height: 32, borderRadius: "50%", background: c, cursor: "pointer",
-                      border: i === selColor ? "3px solid var(--k-maroon)" : "2px solid var(--k-border)",
-                      boxShadow: i === selColor ? "0 0 0 2px rgba(107,26,26,.2)" : "none",
-                      transition: "all .15s",
-                    }} />
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="k-detail-divider" />
 
-            {/* Details chips */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-              {[product.fabric, product.occasion, product.type, product.region].filter(Boolean).map((tag, i) => (
-                <span key={i} style={{
-                  padding: "6px 14px", borderRadius: "var(--k-r-pill)",
-                  background: "var(--k-bg-warm)", fontSize: 12, fontWeight: 500, color: "var(--k-text-mid)",
-                }}>{tag}</span>
+            <div className="k-detail-colors-head">Colors</div>
+            <div className="k-detail-colors">
+              {product.colors.slice(0, 6).map((c, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelColor(i)}
+                  className={`k-detail-color${i === selColor ? " is-active" : ""}`}
+                  style={{ background: c }}
+                  aria-label={`Color ${i + 1}`}
+                />
               ))}
             </div>
 
-            {/* CTA */}
-            <button onClick={onAddToTrial} disabled={isInTrial || isInWardrobe} className="k-btn k-btn-primary k-btn-pill k-press" style={{
-              width: "100%", maxWidth: 360, padding: "18px 24px", fontSize: 17, fontWeight: 600,
-            }}>
-              {isInWardrobe ? <ShoppingBag size={20} /> : isInTrial ? <Shirt size={20} /> : <Sparkles size={20} />}
-              {isInWardrobe ? "Already in Wardrobe" : isInTrial ? "Already in Trial Room" : "Add to Trial Room"}
+            <div className="k-detail-divider k-detail-section-divider" />
+
+            <div className="k-detail-features">
+              <div className="k-detail-feature">
+                <div className="k-detail-feature-icon">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/kiosk/detail/pure-silk.svg" alt="" aria-hidden />
+                </div>
+                <span className="k-detail-feature-label">100% {product.fabric || "Pure Silk"}</span>
+              </div>
+              <div className="k-detail-feature">
+                <div className="k-detail-feature-icon">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/kiosk/detail/hand-woven.svg" alt="" aria-hidden />
+                </div>
+                <span className="k-detail-feature-label">{handwovenLabel}</span>
+              </div>
+              <div className="k-detail-feature">
+                <div className="k-detail-feature-icon">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/kiosk/detail/premium.svg" alt="" aria-hidden />
+                </div>
+                <span className="k-detail-feature-label">Premium Quality</span>
+              </div>
+              <div className="k-detail-feature">
+                <div className="k-detail-feature-icon">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/kiosk/detail/easy-return.svg" alt="" aria-hidden />
+                </div>
+                <span className="k-detail-feature-label">Easy Return</span>
+              </div>
+            </div>
+
+            <button
+              onClick={onAddToTrial}
+              disabled={isInTrial || isInWardrobe}
+              className="k-detail-tryon k-press"
+            >
+              {isInWardrobe ? "ALREADY IN WARDROBE" : isInTrial ? "ALREADY IN TRIAL ROOM" : "TRY-ON"}
             </button>
           </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: "var(--k-border-l)", margin: "8px 24px 16px" }} />
-
-        {/* Similar sarees */}
+        {/* Similar Categories */}
         {similar.length > 0 && (
-          <ScrollSection title="You May Also Like">
-            {similar.map((s) => (
-              <SareeCard key={s._id} saree={s} onTap={() => onProductTap(s)} isSelected={false} isInTrial={false} isInWardrobe={false} />
-            ))}
-          </ScrollSection>
+          <>
+            <div className="k-detail-divider k-detail-section-divider" />
+            <div className="k-detail-similar">
+              <div className="k-detail-similar-head">
+                <h3 className="k-detail-similar-title">Similar Categories</h3>
+                <div className="k-detail-similar-nav">
+                  <button
+                    className="k-detail-nav-btn"
+                    onClick={() => railRef.current?.scrollBy({ left: -260, behavior: "smooth" })}
+                    aria-label="Previous"
+                  >
+                    <ChevronLeft size={18} color="var(--k-text)" strokeWidth={2.25} />
+                  </button>
+                  <button
+                    className="k-detail-nav-btn"
+                    onClick={() => railRef.current?.scrollBy({ left: 260, behavior: "smooth" })}
+                    aria-label="Next"
+                  >
+                    <ChevronRight size={18} color="var(--k-text)" strokeWidth={2.25} />
+                  </button>
+                </div>
+              </div>
+              <div ref={railRef} className="k-detail-similar-rail k-no-scroll">
+                {similar.map((s) => (
+                  <div key={s._id} className="k-detail-sim-card" onClick={() => onProductTap(s)}>
+                    <div className="k-detail-sim-img">
+                      <SareeThumb name={s.name} fileId={s.imageIds?.[0]} grad={s.grad} emoji={s.emoji} emojiSize={36} />
+                      <button
+                        className="k-detail-heart is-liked"
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label="Like"
+                      >
+                        <Heart size={18} fill="#E53935" color="#E53935" strokeWidth={2} />
+                      </button>
+                    </div>
+                    <div className="k-detail-sim-info">
+                      <div className="k-detail-sim-name">{s.name}</div>
+                      <div className="k-detail-sim-row">
+                        <span className="k-detail-sim-meta">{[s.fabric, "Handwoven"].filter(Boolean).join(" · ")}</span>
+                        <span className="k-detail-sim-price">₹{fmtPrice(s.price)}</span>
+                      </div>
+                      {s.colors.length > 0 && (
+                        <div className="k-detail-sim-colors">
+                          {s.colors.slice(0, 5).map((c, i) => (
+                            <span key={i} className="k-detail-sim-swatch" style={{ background: c }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
+      </div>
+
+      <div className="k-detail-footer">
+        © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
       </div>
     </div>
   );
 }
 
-/* ── TRIAL ROOM ── */
-function TrialRoomScreen({ items, wardrobeItems, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec }: {
-  items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
-  onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
-  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
+/* ── TRIAL TILE ── */
+// Per-saree component that subscribes reactively to its look row.
+// Renders skeleton while waiting for runTryOn to resolve or the job to finish,
+// shows the AI result on completion, and falls back to the saree thumbnail on failure.
+// Click handlers, selection badges, and remove buttons stay on the parent wrapper.
+// =========================================================================
+// TrialTile — small card on the trial-room left rail.
+// Render phases:
+//   1. AI generating (queued/processing/no-lookId) → catalog photo
+//      behind a gaussian-blur wave
+//   2. AI completed → plain catalog photo (no wave, no cutout). The
+//      bg-removed cutout still gets enqueued (right-panel preview reads
+//      it), but the small card stays on the catalog so the customer can
+//      glance and recognize the saree without their own face shrunk to
+//      ~120px tall. Also closes a click-blocking bug where the cutout's
+//      z-index 3 covered the checkbox at z-index 2.
+//   3. Failed → catalog + error chip + Retry button
+//
+// Bg removal is enqueued the moment we observe (status === "completed" &&
+// imageFileId set && imageNoBgFileId missing). The queue is sequential
+// (see lib/bgRemovalQueue.ts) so multiple tiles don't all fire at once.
+// =========================================================================
+
+function TrialTile({
+  saree,
+  lookId,
+  retryLookMut,
+  deviceToken,
+  showToast,
+}: {
+  saree: SareeItem;
+  lookId: Id<"looks"> | undefined;
+  retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
+  deviceToken: string;
+  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
 }) {
-  const [timer, setTimer] = useState(tryOnSec);
-  const [selIdx, setSelIdx] = useState(0);
-  const [selForWard, setSelForWard] = useState<Set<string>>(new Set());
-  const [showEnd, setShowEnd] = useState(false);
+  const look = useQuery(
+    api.tryOn.getLook,
+    lookId ? { lookId } : "skip",
+  );
+  const status = look?.status;
+  const resultUrl = useConvexUrl(look?.imageFileId);
 
-  useEffect(() => { if (timer <= 0) { setShowEnd(true); return; } const t = setTimeout(() => setTimer((v) => v - 1), 1000); return () => clearTimeout(t); }, [timer]);
+  const { upload } = useUploadFile();
+  const attachBgRemoved = useMutation(api.tryOn.attachBgRemovedImage);
+  const deleteOrphan = useMutation(api.tryOn.deleteOrphanCutout);
+  // bgStatus is intentionally NOT subscribed here. The small card never
+  // renders the cutout (right-panel does), so this component doesn't
+  // need to react to queue advances. The enqueue effect below still
+  // fires for downstream consumers.
 
-  const toggleWard = (id: string) => { setSelForWard((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
-  const moveToWardrobe = () => {
-    const sel = items.filter((s) => selForWard.has(s._id));
-    if (sel.length === 0) { showToast("Select sarees first", "warning"); return; }
-    onAddToWardrobe(sel);
-    setSelForWard(new Set());
-  };
+  // Enqueue bg-removal when (1) the look is completed, (2) we have a
+  // resolvable URL for the source AI image, and (3) no cutout exists yet.
+  // useBgRemovalStatus filters re-fires inside the queue — re-rendering
+  // here is harmless.
+  useEffect(() => {
+    if (!lookId || !look) return;
+    if (look.status !== "completed") return;
+    if (!look.imageFileId || !resultUrl) return;
+    if (look.imageNoBgFileId) return;
+    if (!deviceToken) return;
+    const sourceImageFileId = look.imageFileId;
+    enqueueBgRemoval({
+      lookId,
+      sourceImageFileId,
+      srcUrl: resultUrl,
+      deviceToken,
+      upload: (file) => upload(file, GUARDS.lookCutout),
+      attach: (args) =>
+        attachBgRemoved({
+          deviceToken,
+          lookId,
+          sourceImageFileId: args.sourceImageFileId,
+          fileId: args.fileId,
+        }),
+      cleanup: (fileId) => deleteOrphan({ deviceToken, fileId }).then(() => undefined),
+    });
+  }, [
+    lookId, look, resultUrl, deviceToken, upload, attachBgRemoved, deleteOrphan,
+  ]);
 
-  const current = items[selIdx] || items[0];
-
-  if (items.length === 0) return (
-    <div className="k-shell" style={{ alignItems: "center", justifyContent: "center" }}>
-      <div className="k-popIn" style={{
-        width: 110, height: 110, borderRadius: "50%",
-        background: "linear-gradient(135deg, rgba(104,38,42,.08), rgba(201,148,26,.1))",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "var(--k-maroon)",
-      }}>
-        <Shirt size={52} strokeWidth={1.6} />
+  // Phase 2 — AI completed. Show the catalog flat-lay; the right-panel
+  // hero is where the customer sees themselves wearing the saree (with
+  // the bg-removed cutout). Decoupling the small thumbnail from the
+  // cutout lifecycle also fixes a click-blocking bug: the cutout's
+  // z-index 3 overlay used to swallow taps on the checkbox + remove
+  // buttons (z-index 2), so "Move to Wardrobe" never appeared once a
+  // tile flipped to completed.
+  if (status === "completed") {
+    return (
+      <div className="k-card k-card-hover" style={{ aspectRatio: "1 / 1.2", overflow: "hidden" }}>
+        <SareeThumb
+          name={saree.name}
+          fileId={saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0]}
+          grad={saree.grad}
+          emoji={saree.emoji}
+          emojiSize={32}
+          gradientAngle={135}
+        />
       </div>
-      <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, color: "var(--k-text)", marginTop: 18 }}>Trial Room Empty</h2>
-      <p className="k-slideUp k-d3" style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Select sarees from the catalog to get started</p>
-      <button onClick={onGoHome} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp k-d4" style={{ marginTop: 22, padding: "14px 32px", fontSize: 16, fontWeight: 600 }}>
-        Browse Sarees <ChevronRight size={18} />
+    );
+  }
+
+  // Phase 4 — failed.
+  if (status === "failed") {
+    const errMsg = look?.errorMessage ?? "Something went wrong";
+    return (
+      <div className="k-card" style={{
+        aspectRatio: "1 / 1.2",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} />
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
+          padding: 12, gap: 8,
+          background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,.55) 100%)",
+        }}>
+          <span className="k-chip k-chip-maroon" style={{ fontSize: 13 }}>
+            {errMsg}
+          </span>
+          <button
+            className="k-btn k-btn-primary k-btn-pill"
+            style={{ padding: "8px 14px", fontSize: 13 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!lookId) return;
+              retryLookMut({ deviceToken, lookId })
+                .catch((err: Error) => handleTryOnError(err, showToast));
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Wave animation — only reached for queued/processing/no-lookId
+  // (status === "completed" + "failed" branch above). Always the
+  // "generating" phase here; "polishing" was for the small-card cutout
+  // transition which we no longer render.
+  return (
+    <div className="k-card" style={{ aspectRatio: "1 / 1.2", position: "relative", overflow: "hidden" }}>
+      <div className="k-wave-stage" data-phase="generating">
+        <div className="k-wave-image" style={{ position: "absolute", inset: 0 }}>
+          <SareeThumb
+            name={saree.name}
+            fileId={saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0]}
+            grad={saree.grad}
+          />
+        </div>
+        <div className="k-wave-sheen" />
+        <div className="k-wave-grain" />
+        <div className="k-wave-veil" />
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// TrialPreviewImage — right-panel hero in the trial room.
+//
+// Same lifecycle phases as TrialTile, with two differences:
+//   - Phase A/B captions are visible ("Draping your saree…" / "Polishing
+//     the cutout…" + queue position when 2+ jobs are stacked).
+//   - Phase 3 renders the cutout at ~80% of the panel with a soft drop
+//     shadow and the ivory backdrop showing through.
+//
+// Bg removal itself is not enqueued from here — TrialTile owns the
+// enqueue side-effect, and there's always a tile mounted whenever the
+// preview is mounted, so we just observe.
+// =========================================================================
+
+function TrialPreviewImage({ saree, lookId }: {
+  saree: SareeItem;
+  lookId: Id<"looks"> | undefined;
+}) {
+  const look = useQuery(
+    api.tryOn.getLook,
+    lookId ? { lookId } : "skip",
+  );
+  const status = look?.status;
+  const resultUrl = useConvexUrl(look?.imageFileId);
+  const cutoutUrl = useConvexUrl(look?.imageNoBgFileId);
+  const bgStatus = useBgRemovalStatus(lookId ?? null);
+
+  // No look at all yet — plain catalog photo (e.g. saree just added,
+  // runTryOn in flight but no row inserted yet).
+  if (!lookId) {
+    return (
+      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={160} gradientAngle={135} />
+    );
+  }
+
+  // Phase 3 — cutout ready. Render at ~80% with the ivory wash behind.
+  if (status === "completed" && cutoutUrl) {
+    return (
+      <div className="k-wave-stage is-revealed" style={{ position: "absolute", inset: 0 }}>
+        <div className="k-trial-cutout is-shown">
+          <img src={cutoutUrl} alt={saree.name} />
+        </div>
+      </div>
+    );
+  }
+
+  // Phase A — AI is generating. Heavy blur, catalog photo as the base.
+  // Phase B — AI done but cutout pending. Softer blur, AI render as the base.
+  // Phase "failed" — bg removal bailed. Fall through to plain AI render.
+  if (status === "completed" && bgStatus.state === "failed" && resultUrl) {
+    return (
+      <img src={resultUrl} alt={saree.name} style={{ width: "100%", height: "100%", objectFit: "contain", padding: 14 }} />
+    );
+  }
+
+  const isPolishing =
+    status === "completed" || bgStatus.state === "queued" || bgStatus.state === "processing";
+  const phase: "generating" | "polishing" = isPolishing ? "polishing" : "generating";
+
+  const captionTitle = isPolishing ? "Polishing the cutout…" : "Draping your saree…";
+  const captionSub =
+    bgStatus.state === "queued" && bgStatus.total > 1
+      ? `Next in line · ${bgStatus.position} of ${bgStatus.total}`
+      : bgStatus.state === "processing"
+        ? "Almost ready"
+        : status === "queued" || !status
+          ? "Awaiting render"
+          : "Generating";
+
+  return (
+    <div className="k-wave-stage" data-phase={phase}>
+      {resultUrl ? (
+        <img className="k-wave-image" src={resultUrl} alt="" aria-hidden />
+      ) : (
+        <div className="k-wave-image" style={{ position: "absolute", inset: 0 }}>
+          <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={160} gradientAngle={135} />
+        </div>
+      )}
+      <div className="k-wave-sheen" />
+      <div className="k-wave-grain" />
+      <div className="k-wave-veil" />
+      <div className="k-wave-caption">
+        <span className="k-wave-caption-title">{captionTitle}</span>
+        <span className="k-wave-caption-sub">{captionSub}</span>
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// TrialHeroCutout — the centerpiece of the v2 trial room.
+//
+// Renders the bg-removed AI cutout of the active saree, anchored to the
+// podium. Falls back to a wave (with the catalog photo or AI-with-bg as
+// the under-image) while the look is still queued/processing/has-no-cutout.
+// On bg-removal failure, falls through to the raw AI render.
+// =========================================================================
+
+function TrialHeroCutout({ saree, lookId }: {
+  saree: SareeItem;
+  lookId: Id<"looks"> | undefined;
+}) {
+  const look = useQuery(api.tryOn.getLook, lookId ? { lookId } : "skip");
+  const status = look?.status;
+  const resultUrl = useConvexUrl(look?.imageFileId);
+  const cutoutUrl = useConvexUrl(look?.imageNoBgFileId);
+  const bgStatus = useBgRemovalStatus(lookId ?? null);
+
+  // Cutout ready — the goal: customer "standing on the pedestal" with
+  // the kiosk's themed background showing through transparent edges.
+  if (status === "completed" && cutoutUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={cutoutUrl} alt={saree.name} />;
+  }
+
+  // Bg-removal explicitly failed — fall back to raw AI render so the
+  // customer isn't stuck on an infinite wave. Defense-in-depth path.
+  // (Previously fell here on "still processing" too — that surfaced
+  // the kitchen-backdrop scene briefly. Now gated on bgStatus.failed.)
+  if (status === "completed" && bgStatus.state === "failed" && resultUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={resultUrl} alt={saree.name} style={{ borderRadius: 24 }} />
+    );
+  }
+
+  // Otherwise still in flight (RunPod processing OR bg-removal queue).
+  // Wave animation hides the in-progress state; under-image is the AI
+  // render once we have it, else the catalog fallback.
+  return (
+    <div className="k-trial-v2-cutout-wave">
+      <div className="k-wave-stage" data-phase={status === "completed" ? "polishing" : "generating"}>
+        {resultUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="k-wave-image" src={resultUrl} alt="" aria-hidden />
+        ) : (
+          <div className="k-wave-image" style={{ position: "absolute", inset: 0 }}>
+            <SareeThumb
+              name={saree.name}
+              fileId={saree.imageIds?.[3] ?? saree.imageIds?.[2] ?? saree.imageIds?.[0]}
+              grad={saree.grad}
+            />
+          </div>
+        )}
+        <div className="k-wave-sheen" />
+        <div className="k-wave-grain" />
+        <div className="k-wave-veil" />
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// TrialCardV2 — left-rail card with WhatsApp share + X remove + Add to
+// Cart (or "In Cart"). Catalog photo top, action strip bottom.
+// =========================================================================
+
+function TrialCardV2({ saree, lookId, deviceToken, active, inCart, onSelect, onShare, onRemove, onAddToCart }: {
+  saree: SareeItem;
+  // The completed look's id (or undefined). Drives the bg-removal
+  // enqueue effect below so the hero cutout actually appears for
+  // each saree in trial. Must be threaded from the parent — without
+  // it, no one calls enqueueBgRemoval and the hero stays on the wave
+  // forever (regression from the v1 → v2 layout refactor).
+  lookId: Id<"looks"> | undefined;
+  deviceToken: string;
+  active: boolean;
+  inCart: boolean;
+  onSelect: () => void;
+  onShare: () => void;
+  onRemove: () => void;
+  onAddToCart: () => void;
+}) {
+  // Subscribe to the look so we can decide when to enqueue bg-removal.
+  // This subscription is per-card (one per trial item) — same shape as
+  // commit 81ef8c9's TrialTile owned. Cheap: Convex dedups identical
+  // useQuery calls within a tab.
+  const look = useQuery(api.tryOn.getLook, lookId ? { lookId } : "skip");
+  const resultUrl = useConvexUrl(look?.imageFileId);
+  const { upload } = useUploadFile();
+  const attachBgRemoved = useMutation(api.tryOn.attachBgRemovedImage);
+  const deleteOrphan = useMutation(api.tryOn.deleteOrphanCutout);
+
+  useEffect(() => {
+    if (!lookId || !look) return;
+    if (look.status !== "completed") return;
+    if (!look.imageFileId || !resultUrl) return;
+    if (look.imageNoBgFileId) return;
+    if (!deviceToken) return;
+    const sourceImageFileId = look.imageFileId;
+    enqueueBgRemoval({
+      lookId,
+      sourceImageFileId,
+      srcUrl: resultUrl,
+      deviceToken,
+      upload: (file) => upload(file, GUARDS.lookCutout),
+      attach: (args) =>
+        attachBgRemoved({
+          deviceToken,
+          lookId,
+          sourceImageFileId: args.sourceImageFileId,
+          fileId: args.fileId,
+        }),
+      cleanup: (fileId) => deleteOrphan({ deviceToken, fileId }).then(() => undefined),
+    });
+  }, [lookId, look, resultUrl, deviceToken, upload, attachBgRemoved, deleteOrphan]);
+
+  return (
+    <div
+      className={`k-trial-card-v2${active ? " is-active" : ""}`}
+      onClick={onSelect}
+    >
+      <div className="k-trial-card-v2-img">
+        {/* Trial-rail thumbnail prefers slot 0 (model wearing the saree)
+            so the card visually matches what the customer is trying on,
+            with slots 3/2 only as fallback for older sarees that lack
+            slot 0. Differs from the runTryOn garment-input chain (which
+            wants the flat-lay slot 3) — different intent. */}
+        <SareeThumb
+          name={saree.name}
+          fileId={saree.imageIds?.[0] ?? saree.imageIds?.[3] ?? saree.imageIds?.[2]}
+          grad={saree.grad}
+          emoji={saree.emoji}
+          emojiSize={28}
+          gradientAngle={135}
+        />
+        <button
+          className="k-trial-card-v2-corner-btn is-wa"
+          onClick={(e) => { e.stopPropagation(); onShare(); }}
+          aria-label="Share on WhatsApp"
+        >
+          {/* Inline WhatsApp glyph — keeping the green color via parent class */}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.59 1.38 5.07L2 22l5.07-1.38A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.07 14.07c-.21.6-1.21 1.16-1.7 1.21-.42.04-.96.06-1.55-.1-.36-.1-.82-.25-1.41-.5-2.49-1.07-4.12-3.58-4.24-3.74-.12-.16-1.01-1.34-1.01-2.56s.64-1.82.87-2.07c.23-.25.5-.31.66-.31s.33 0 .47.01c.15.01.36-.06.56.43.21.51.71 1.77.77 1.9.06.13.1.28.02.45-.08.17-.12.27-.24.42-.12.15-.25.34-.36.45-.12.12-.24.25-.1.49.13.24.6.99 1.29 1.6.88.79 1.62 1.04 1.86 1.16.24.12.38.1.52-.06.14-.16.6-.7.76-.94.16-.24.32-.2.54-.12.22.08 1.4.66 1.64.78.24.12.4.18.46.28.05.1.05.6-.16 1.18z"/>
+          </svg>
+        </button>
+        <button
+          className="k-trial-card-v2-corner-btn is-x"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          aria-label="Remove from trial"
+        >
+          <X size={14} strokeWidth={2.5} />
+        </button>
+      </div>
+      <button
+        className={`k-trial-card-v2-cta${inCart ? " in-cart" : ""}`}
+        onClick={(e) => { e.stopPropagation(); onAddToCart(); }}
+      >
+        {inCart ? <><Check size={12} strokeWidth={3} /> In Cart</> : "Add to Cart"}
       </button>
     </div>
   );
+}
+
+// =========================================================================
+// SareeDetailPanel — right-rail card showing the active saree's name,
+// description, price, similar-categories carousel, and color swatches.
+// =========================================================================
+
+function SareeDetailPanel({ saree, onSelectSimilar }: {
+  saree: SareeItem;
+  onSelectSimilar: (s: { _id: Id<"sarees">; name: string; price: number; imageIds?: Id<"_storage">[]; grad?: string[]; emoji?: string }) => void;
+}) {
+  const similar = useQuery(api.sarees.listSimilar, { sareeId: saree._id, limit: 3 });
+
+  // Color swatch palette — saree.colors[] are color names like "Pink",
+  // "Blue", "Mustard". Map to a small named-color palette so the dots
+  // render. Unknown names fall back to a neutral.
+  const COLOR_MAP: Record<string, string> = {
+    pink: "#E8959F", red: "#B53A48", maroon: "#7B1D1D", blue: "#3A6FB5",
+    navy: "#1F3A6E", teal: "#1F827E", green: "#3F8A4D", olive: "#717C32",
+    yellow: "#E8C84A", mustard: "#C9941A", gold: "#C9941A", orange: "#D6803C",
+    purple: "#6B3A87", lavender: "#B8A3D6", black: "#1A1A1A", white: "#F5F0E6",
+    cream: "#EFE3CF", beige: "#D9C9A8", brown: "#7C5A3C", grey: "#999",
+    gray: "#999", silver: "#C8C8CC",
+  };
+  const swatches = (saree.colors ?? []).slice(0, 5).map((c) => {
+    const key = c.toLowerCase().trim();
+    return COLOR_MAP[key] ?? "#9C8878";
+  });
 
   return (
-    <div className="k-shell" style={{ position: "relative", overflow: "hidden" }}>
-      {/* Top bar */}
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "16px 24px",
-        background: "linear-gradient(180deg, rgba(245,240,234,.95), transparent)",
-      }}>
-        <button onClick={onGoHome} className="k-press" aria-label="Home" style={{
-          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
-          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
-        }}><Home size={20} /></button>
-        <div className="k-timer" style={{ padding: "10px 22px", fontSize: 20, fontWeight: 700 }}>
-          <span style={{ color: timer <= 30 ? "var(--k-red)" : "var(--k-text)" }}>
-            {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
-          </span>
-        </div>
-        <button onClick={onLogout} className="k-press" aria-label="Logout" style={{
-          width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.9)",
-          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          border: "1px solid rgba(255,255,255,.6)", boxShadow: "var(--k-shadow)", color: "var(--k-text)",
-        }}><LogOut size={20} /></button>
+    <div className="k-trial-v2-right">
+      <div className="k-trial-v2-right-name">{saree.name}</div>
+      {saree.description && (
+        <div className="k-trial-v2-right-desc">{saree.description.slice(0, 80)}{saree.description.length > 80 ? "…" : ""}</div>
+      )}
+      <div className="k-trial-v2-right-price">₹{fmtPrice(saree.price)}</div>
+      <div className="k-trial-v2-right-divider" />
+
+      <div className="k-trial-v2-right-section-h">
+        <span>Similar Categories</span>
+        <span className="arrow"><ChevronRight size={14} /></span>
       </div>
-
-      <div style={{ display: "flex", width: "100%", height: "100vh", paddingTop: 72 }}>
-        {/* LEFT panel — saree grid */}
-        <div style={{
-          width: "28%", minWidth: 280, height: "100%", overflowY: "auto",
-          padding: "12px 10px", paddingBottom: 80,
-          background: "rgba(0,0,0,.03)", borderRight: "1px solid var(--k-border)",
-        }}>
-          <div style={{ fontSize: 16, fontWeight: 700, padding: "6px 8px", marginBottom: 10 }}>
-            Trial Room ({items.length}/{maxTrial})
-          </div>
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(108px, 1fr))", gap: 10,
-          }}>
-            {items.map((saree, idx) => {
-              const active = idx === selIdx;
-              const selW = selForWard.has(saree._id);
-              return (
-                <div key={saree._id} onClick={() => setSelIdx(idx)}
-                  className={`k-trial-card k-press k-slideUp${active ? " is-active" : ""}`}
-                >
-                  <div className="k-trial-card-img">
-                    <div>
-                      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={38} gradientAngle={135} />
-                    </div>
-                    <div onClick={(e) => { e.stopPropagation(); toggleWard(saree._id); }} style={{
-                      position: "absolute", top: 6, left: 6, zIndex: 2,
-                      width: 28, height: 28, borderRadius: 7,
-                      border: `2px solid ${selW ? "var(--k-green)" : "rgba(255,255,255,.85)"}`,
-                      background: selW ? "var(--k-green)" : "rgba(255,255,255,.55)",
-                      backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                      display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                      color: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,.15)",
-                    }}>
-                      {selW && <Check size={15} strokeWidth={3} />}
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); onRemoveItem(saree._id); }} aria-label="Remove" style={{
-                      position: "absolute", top: 6, right: 6, zIndex: 2,
-                      width: 28, height: 28, borderRadius: "50%", cursor: "pointer", border: "none",
-                      background: "rgba(255,255,255,.85)",
-                      backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "var(--k-red)", boxShadow: "0 2px 8px rgba(0,0,0,.15)",
-                    }}><X size={14} strokeWidth={2.5} /></button>
-                  </div>
-                  <div className="k-trial-card-info">
-                    <div className="k-trial-card-name">{saree.name}</div>
-                    <div className="k-trial-card-price">₹{fmtPrice(saree.price)}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {selForWard.size > 0 && (
-            <button onClick={moveToWardrobe} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp" style={{
-              width: "100%", marginTop: 12, fontSize: 15, fontWeight: 600,
-            }}>
-              <ShoppingBag size={18} /> Add to Wardrobe ({selForWard.size})
-            </button>
-          )}
-          <button onClick={onGoToWardrobe} className="k-btn k-btn-pill k-press" style={{
-            width: "100%", marginTop: 10, fontSize: 14, fontWeight: 600,
-            background: "rgba(255,255,255,.6)",
-            backdropFilter: "blur(14px)",
-            WebkitBackdropFilter: "blur(14px)",
-            border: "1.5px solid var(--k-maroon)", color: "var(--k-maroon)",
-          }}>
-            <ShoppingBag size={16} /> Go to Wardrobe ({wardrobeItems.length})
-            <ChevronRight size={16} />
-          </button>
-        </div>
-
-        {/* RIGHT panel — preview card */}
-        <div style={{
-          flex: 1, display: "flex",
-          padding: "20px 28px 32px",
-        }}>
-          {current && (
-            <div className="k-trial-preview k-slideUp" style={{ flex: 1, height: "100%" }}>
-              {/* Image top */}
-              <div className="k-trial-preview-img">
-                <SareeThumb name={current.name} fileId={current.imageIds?.[0]} grad={current.grad} emoji={current.emoji} emojiSize={160} gradientAngle={135} />
-              </div>
-
-              {/* Info bottom — glassmorphism */}
-              <div className="k-trial-preview-info">
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="k-display" style={{ fontSize: 26 }}>{current.name}</div>
-                    {current.description && (
-                      <div style={{ fontSize: 14, color: "var(--k-text-mid)", marginTop: 6, lineHeight: 1.5 }}>
-                        {current.description}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
-                      {current.fabric && <span className="k-chip k-chip-maroon" style={{ fontSize: 11 }}>{current.fabric}</span>}
-                      {current.occasion && <span className="k-chip k-chip-gold" style={{ fontSize: 11 }}>{current.occasion}</span>}
-                      {current.region && <span className="k-chip" style={{ fontSize: 11 }}>{current.region}</span>}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div className="k-mono" style={{ fontSize: 26, fontWeight: 700, color: "var(--k-maroon)", lineHeight: 1 }}>
-                      ₹{fmtPrice(current.price)}
-                    </div>
-                    {current.mrp && current.mrp > current.price && (
-                      <div className="k-mono" style={{ fontSize: 13, color: "var(--k-text-light)", textDecoration: "line-through", marginTop: 4 }}>
-                        ₹{fmtPrice(current.mrp)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+      <div className="k-trial-v2-similar">
+        {similar === undefined ? (
+          <>
+            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
+            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
+            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
+          </>
+        ) : (
+          similar.map((s) => (
+            <div
+              key={s._id}
+              className="k-trial-v2-similar-thumb"
+              onClick={() => onSelectSimilar(s)}
+              role="button"
+              aria-label={`View ${s.name}`}
+            >
+              <SareeThumb
+                name={s.name}
+                fileId={s.imageIds?.[3] ?? s.imageIds?.[2] ?? s.imageIds?.[0]}
+                grad={s.grad}
+                emoji={s.emoji}
+                emojiSize={20}
+              />
             </div>
-          )}
-        </div>
+          ))
+        )}
       </div>
+
+      {swatches.length > 0 && (
+        <>
+          <div className="k-trial-v2-right-divider" />
+          <div className="k-trial-v2-right-section-h">
+            <span>Select Color</span>
+          </div>
+          <div className="k-trial-v2-colors">
+            {swatches.map((color, i) => (
+              <div
+                key={i}
+                className="k-trial-v2-color-dot"
+                style={{ background: color }}
+                aria-label={saree.colors?.[i]}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── TRIAL ROOM ── */
+function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phone, onAddToCart, onRemoveItem, onAddToWardrobe, onGoHome, onGoToWardrobe, onLogout, showToast, maxTrial, tryOnSec, sareeLookIds, retryLookMut, deviceToken, navigate, setPendingFanOut, cartCount, storeName, storeLogoFileId }: {
+  items: SareeItem[]; wardrobeItems: SareeItem[]; onRemoveItem: (id: Id<"sarees">) => void;
+  // Sareeids currently in the cart — for showing "In Cart" state on trial cards.
+  cartItemIds: Set<string>;
+  customerName: string;
+  phone: string;
+  // One-tap add to cart from the trial-room card. Parent fires the
+  // mutation + updates local cart + emits a toast. Saree stays in trial.
+  onAddToCart: (saree: SareeItem) => void;
+  onAddToWardrobe: (items: SareeItem[]) => void; onGoHome: () => void; onGoToWardrobe: () => void; onLogout: () => void;
+  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void; maxTrial: number; tryOnSec: number;
+  sareeLookIds: Record<string, Id<"looks">>;
+  retryLookMut: (args: { deviceToken: string; lookId: Id<"looks"> }) => Promise<{ lookId: Id<"looks"> }>;
+  deviceToken: string;
+  navigate: (s: Screen, product?: SareeItem) => void;
+  setPendingFanOut: (v: boolean) => void;
+  cartCount: number;
+  storeName?: string;
+  storeLogoFileId?: Id<"_storage">;
+}) {
+  const [timer, setTimer] = useState(tryOnSec);
+  const [selIdx, setSelIdx] = useState(0);
+  const [showEnd, setShowEnd] = useState(false);
+  const [endCountdown, setEndCountdown] = useState(CFG.trialEndAutoLogoutSec);
+  const [retakeOpen, setRetakeOpen] = useState(false);
+
+  useEffect(() => { if (timer <= 0) { setShowEnd(true); return; } const t = setTimeout(() => setTimer((v) => v - 1), 1000); return () => clearTimeout(t); }, [timer]);
+
+  // Auto-logout grace timer on the "Time's Up" popup. Re-initializes every
+  // time the popup opens so a Continue → re-trigger sequence gets a fresh
+  // 3-minute window. Cleared when the popup closes (Continue button) or
+  // when the user explicitly hits Logout.
+  useEffect(() => {
+    if (!showEnd) return;
+    setEndCountdown(CFG.trialEndAutoLogoutSec);
+  }, [showEnd]);
+
+  useEffect(() => {
+    if (!showEnd) return;
+    if (endCountdown <= 0) {
+      onLogout();
+      return;
+    }
+    const t = setTimeout(() => setEndCountdown((v) => v - 1), 1000);
+    return () => clearTimeout(t);
+  }, [showEnd, endCountdown, onLogout]);
+
+  // Close the Retake confirm modal when the session-end overlay takes over —
+  // both use .k-overlay (z-index 100), so without this the retake modal would
+  // sit above the Time's Up dialog due to render order.
+  useEffect(() => { if (showEnd && retakeOpen) setRetakeOpen(false); }, [showEnd, retakeOpen]);
+
+  // Clamp selIdx as items list shrinks (X-out of the active card etc.).
+  const safeSelIdx = Math.min(selIdx, Math.max(0, items.length - 1));
+  const current = items[safeSelIdx] || items[0];
+
+  // WhatsApp share for a single saree — opens wa.me with prefilled text.
+  // Mirrors /c/looks/[id] handleShare. Customer name personalizes if known.
+  const handleShareSaree = (saree: SareeItem) => {
+    const greet = customerName ? `${customerName}, check out` : "Check out";
+    const msg = encodeURIComponent(
+      `${greet} this beautiful ${saree.name} saree at ${storeName ?? "Wearify"}! ₹${fmtPrice(saree.price)}`,
+    );
+    window.open(`https://wa.me/${phone ? phone.replace(/[^\d]/g, "") : ""}?text=${msg}`, "_blank");
+  };
+
+  // Add the currently-active (right-panel-visible) saree to wardrobe.
+  // Single-item add — count is always 1 unless extended later.
+  const addActiveToWardrobe = () => {
+    if (!current) return;
+    onAddToWardrobe([current]);
+    showToast("Added to wardrobe", "success");
+  };
+
+  if (items.length === 0) return (
+    <div className="k-shell">
+      <KioskHeader
+        trialCount={items.length}
+        wardrobeCount={wardrobeItems.length}
+        cartCount={cartCount}
+        goHome={onGoHome}
+        triggerLogout={onLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+        <div className="k-popIn" style={{
+          width: 110, height: 110, borderRadius: "50%",
+          background: "linear-gradient(135deg, rgba(104,38,42,.08), rgba(201,148,26,.1))",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--k-maroon)",
+        }}>
+          <Shirt size={52} strokeWidth={1.6} />
+        </div>
+        <h2 className="k-display k-slideUp k-d2" style={{ fontSize: 24, color: "var(--k-text)", marginTop: 18 }}>Trial Room Empty</h2>
+        <p className="k-slideUp k-d3" style={{ fontSize: 13, color: "var(--k-text-muted)", marginTop: 4 }}>Select sarees from the catalog to get started</p>
+        <button onClick={onGoHome} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp k-d4" style={{ marginTop: 22, padding: "14px 32px", fontSize: 16, fontWeight: 600 }}>
+          Browse Sarees <ChevronRight size={18} />
+        </button>
+      </div>
+    </div>
+  );
+
+  const similar = items.filter((s) => s._id !== current?._id).slice(0, 3);
+  const colors = ["#a3c8ad", "#cb9d7a", "#c44141", "#f0d96b", "#3878b6"];
+
+  return (
+    <div className="k-trial-v2-shell">
+      {/* Page-level header (logo + name + 4 action icons) — kept as the
+          existing KioskHeader. Sits at top in normal flow; the
+          immersive stage below fills the remaining viewport. */}
+      <KioskHeader
+        trialCount={items.length}
+        wardrobeCount={wardrobeItems.length}
+        cartCount={cartCount}
+        goHome={onGoHome}
+        triggerLogout={onLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+
+      {/* Immersive stage — everything from here lives below the header */}
+      <div className="k-trial-v2-stage">
+      {/* Full-bleed background image */}
+      <div className="k-trial-v2-bg" />
+
+      {/* Decorative podium asset anchored at the floor */}
+      <div className="k-trial-v2-podium">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/poduim.png" alt="" aria-hidden />
+      </div>
+
+      {/* Customer cutout — bg-removed AI render of the active saree */}
+      {current && (
+        <div className="k-trial-v2-cutout">
+          <TrialHeroCutout saree={current} lookId={sareeLookIds[current._id]} />
+        </div>
+      )}
+
+      {/* Subhead — back-arrow / Trial Room pill + timer / retake camera */}
+      <div className="k-trial-v2-subhead">
+        <button
+          onClick={onGoHome}
+          aria-label="Back"
+          className="k-trial-v2-iconbtn"
+        >
+          <ChevronLeft size={20} />
+        </button>
+        <div className="k-trial-v2-subhead-center">
+          <div className="k-trial-v2-pill">Trial Room</div>
+          <div className="k-trial-v2-timer" style={{ color: timer <= 30 ? "var(--k-red)" : undefined }}>
+            {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
+          </div>
+        </div>
+        <button
+          onClick={() => setRetakeOpen(true)}
+          aria-label="Retake body scan"
+          className="k-trial-v2-iconbtn"
+          title="Retake body scan"
+        >
+          <Camera size={20} />
+        </button>
+      </div>
+
+      {/* Left rail — Selected Sarees */}
+      <div className="k-trial-v2-left">
+        <div className="k-trial-v2-left-header">Selected Sarees</div>
+        <div className="k-trial-v2-left-stack">
+          {items.map((saree, idx) => (
+            <TrialCardV2
+              key={saree._id}
+              saree={saree}
+              lookId={sareeLookIds[saree._id]}
+              deviceToken={deviceToken}
+              active={idx === safeSelIdx}
+              inCart={cartItemIds.has(saree._id)}
+              onSelect={() => setSelIdx(idx)}
+              onShare={() => handleShareSaree(saree)}
+              onRemove={() => onRemoveItem(saree._id)}
+              onAddToCart={() => onAddToCart(saree)}
+            />
+          ))}
+        </div>
+        <button className="k-trial-v2-add-more" onClick={onGoHome}>
+          Add More
+        </button>
+      </div>
+
+      {/* Right rail — saree detail */}
+      {current && (
+        <SareeDetailPanel
+          saree={current}
+          onSelectSimilar={(s) => {
+            // Tapping a similar-categories thumb: if the saree is already
+            // in the trial rail, switch the active preview to it. If not,
+            // jump to its product detail page so the customer can add it.
+            const idx = items.findIndex((i) => i._id === s._id);
+            if (idx >= 0) {
+              setSelIdx(idx);
+            } else {
+              navigate("productDetail", s as SareeItem);
+            }
+          }}
+        />
+      )}
+
+      {/* Bottom dock — two stacked CTAs centered above the podium */}
+      <div className="k-trial-v2-dock">
+        <button
+          className="k-trial-v2-dock-pill is-light"
+          onClick={addActiveToWardrobe}
+          disabled={!current}
+        >
+          <ShoppingBag size={18} style={{ marginRight: 10 }} />
+          Add to Wardrobe
+          <span className="badge">1</span>
+        </button>
+        <button
+          className="k-trial-v2-dock-pill is-dark"
+          onClick={onGoToWardrobe}
+        >
+          Go to Wardrobe
+          <span className="arrow">
+            <ChevronRight size={18} />
+          </span>
+        </button>
+      </div>
+      </div>{/* /.k-trial-v2-stage */}
 
       {/* Time's up dialog */}
       {showEnd && (
         <div className="k-overlay">
           <div className="k-modal k-scaleIn" style={{ maxWidth: 400 }}>
             <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Time&apos;s Up!</h3>
-            <p style={{ fontSize: 15, color: "var(--k-text-muted)", marginBottom: 20 }}>Session ending. Continue or logout?</p>
+            <p style={{ fontSize: 15, color: "var(--k-text-muted)", marginBottom: 8 }}>Session ending. Continue or logout?</p>
+            <p style={{ fontSize: 13, color: "var(--k-red)", fontWeight: 600, marginBottom: 20 }}>
+              Auto-logout in {Math.floor(endCountdown / 60)}:{String(endCountdown % 60).padStart(2, "0")}
+            </p>
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={onLogout} className="k-press" style={{
                 flex: 1, padding: 16, borderRadius: "var(--k-r-pill)",
                 background: "var(--k-red)", color: "#fff", border: "none",
                 fontSize: 16, fontWeight: 600, cursor: "pointer",
               }}>Logout</button>
-              <button onClick={() => { setTimer((v) => v + 60); setShowEnd(false); }} className="k-press" style={{
+              <button onClick={() => { setTimer((v) => v + CFG.trialEndContinueSec); setShowEnd(false); }} className="k-press" style={{
                 flex: 1, padding: 16, borderRadius: "var(--k-r-pill)",
                 background: "transparent", border: "1.5px solid var(--k-border)",
                 fontSize: 16, fontWeight: 600, cursor: "pointer",
-              }}>Continue (+1 min)</button>
+              }}>Continue (+2 min)</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Retake body scan confirm modal */}
+      {retakeOpen && (
+        <RetakeConfirmModal
+          onClose={() => setRetakeOpen(false)}
+          onConfirm={(alsoRefresh) => {
+            navigate("scanChoice");
+            setRetakeOpen(false);
+            if (alsoRefresh) {
+              setPendingFanOut(true);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── RETAKE CONFIRM MODAL ── */
+function RetakeConfirmModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: (alsoRefresh: boolean) => void;
+}) {
+  return (
+    <div className="k-overlay" onClick={onClose}>
+      <div className="k-card" onClick={(e) => e.stopPropagation()} style={{
+        maxWidth: 420, padding: 24, gap: 16,
+        display: "flex", flexDirection: "column",
+      }}>
+        <h3 className="k-heading" style={{ margin: 0 }}>Retake body scan?</h3>
+        <p style={{ color: "var(--k-text-muted)", margin: 0 }}>
+          We&apos;ll capture a fresh scan. Should we also refresh the
+          looks already in your trial room with the new pose?
+        </p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="k-btn k-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="k-btn k-btn-secondary" onClick={() => onConfirm(false)}>
+            Just retake
+          </button>
+          <button className="k-btn k-btn-primary" onClick={() => onConfirm(true)}>
+            Retake + refresh
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ── WARDROBE ── */
-function WardrobeScreen({ items, onMoveToCart, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, maxWardrobe, showToast, storeName, storeLogoFileId }: {
-  items: SareeItem[]; onMoveToCart: (items: SareeItem[]) => void;
-  navigate: (s: Screen) => void; goHome: () => void; triggerLogout: () => void;
+// Per-saree thumbnail that subscribes to the bound look (if any) and shows
+// the AI try-on render once the look completes. Mirrors TrialTile's pattern
+// so wardrobe cards stay reactive to in-flight try-on jobs.
+function WardrobeCardImg({ saree, lookId, serverLookFileId, serverCutoutFileId }: {
+  saree: SareeItem;
+  lookId?: Id<"looks">;
+  serverLookFileId?: Id<"_storage">;
+  serverCutoutFileId?: Id<"_storage">;
+}) {
+  const look = useQuery(api.tryOn.getLook, lookId ? { lookId } : "skip");
+  const liveCutout = look?.status === "completed" ? look.imageNoBgFileId ?? undefined : undefined;
+  const liveRender = look?.status === "completed" ? look.imageFileId ?? undefined : undefined;
+  // Priority: live cutout (best — transparent bg) → server cutout → live render → server render → catalog
+  const fileId =
+    liveCutout ??
+    serverCutoutFileId ??
+    liveRender ??
+    serverLookFileId ??
+    saree.imageIds?.[3] ??
+    saree.imageIds?.[2] ??
+    saree.imageIds?.[0];
+  return (
+    <SareeThumb
+      name={saree.name}
+      fileId={fileId}
+      grad={saree.grad}
+      emoji={saree.emoji}
+      emojiSize={24}
+      gradientAngle={135}
+    />
+  );
+}
+
+function WardrobeScreen({ items, lookImages, lookCutouts, sareeLookIds, cartItemIds, onToggleInCart, onRemoveFromWardrobe, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, storeName, storeLogoFileId }: {
+  items: SareeItem[];
+  lookImages: Record<string, Id<"_storage">>;
+  lookCutouts: Record<string, Id<"_storage">>;
+  sareeLookIds: Record<string, Id<"looks">>;
+  cartItemIds: Set<string>;
+  onToggleInCart: (saree: SareeItem) => void;
+  onRemoveFromWardrobe: (saree: SareeItem) => void;
+  navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
   trialCount: number; wardrobeCount: number; cartCount: number; maxWardrobe: number;
-  showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
-  const [selForCart, setSelForCart] = useState<Set<string>>(new Set());
-  const toggleSel = (id: string) => { setSelForCart((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
-  const moveToCart = () => { const sel = items.filter((s) => selForCart.has(s._id)); if (sel.length === 0) { showToast("Select sarees first", "warning"); return; } onMoveToCart(sel); setSelForCart(new Set()); };
+  const [selIdx, setSelIdx] = useState(0);
+  const shelfRef = useRef<HTMLDivElement>(null);
+  const safeIdx = Math.min(selIdx, Math.max(0, items.length - 1));
+  const active = items[safeIdx];
+
+  // Live look subscription for the showcase — mirrors WardrobeCardImg so the
+  // center model picks up the AI render the moment the look completes, even
+  // if the server-persisted wardrobe row hasn't been re-fetched yet.
+  const activeLookId = active ? sareeLookIds[active._id] : undefined;
+  const activeLook = useQuery(api.tryOn.getLook, activeLookId ? { lookId: activeLookId } : "skip");
+  const activeLiveCutout = activeLook?.status === "completed" ? activeLook.imageNoBgFileId ?? undefined : undefined;
+  const activeLiveRender = activeLook?.status === "completed" ? activeLook.imageFileId ?? undefined : undefined;
+  const activeShowcaseFileId = active
+    ? activeLiveCutout
+      ?? lookCutouts[active._id]
+      ?? activeLiveRender
+      ?? lookImages[active._id]
+      ?? active.imageIds?.[3]
+      ?? active.imageIds?.[2]
+      ?? active.imageIds?.[0]
+    : undefined;
+
   return (
-    <div className="k-shell">
-      <KioskHeader trialCount={trialCount} wardrobeCount={wardrobeCount} cartCount={cartCount} goHome={goHome} triggerLogout={triggerLogout} navigate={navigate} storeName={storeName} storeLogoFileId={storeLogoFileId} />
-      <div style={{ textAlign: "center", padding: "12px 0 6px" }}>
-        <div className="k-chip k-chip-maroon k-slideDown" style={{ background: "var(--k-maroon)", color: "#fff", borderColor: "var(--k-maroon)", padding: "7px 18px", fontSize: 14, fontWeight: 600 }}>
-          <ShoppingBag size={14} /> My Wardrobe ({items.length}/{maxWardrobe})
+    <div className="k-ward-shell">
+      <KioskHeader
+        trialCount={trialCount}
+        wardrobeCount={wardrobeCount}
+        cartCount={cartCount}
+        goHome={goHome}
+        triggerLogout={triggerLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+
+      <div className="k-ward-actions">
+        <button onClick={goHome} className="k-ward-back k-press" aria-label="Back">
+          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
+        </button>
+        <div className="k-ward-pill">
+          My Wardrobe <Heart size={20} fill="var(--k-maroon)" color="var(--k-maroon)" />
         </div>
+        <button onClick={goHome} className="k-ward-home k-press" aria-label="Home">
+          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+        </button>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px", paddingBottom: 100 }}>
-        {items.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "64px 0", color: "var(--k-text-muted)" }}>
-            <div className="k-popIn" style={{
-              width: 96, height: 96, margin: "0 auto",
-              borderRadius: "50%", background: "rgba(104,38,42,.08)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "var(--k-maroon)",
-            }}>
-              <ShoppingBag size={42} strokeWidth={1.6} />
+
+      <div className="k-ward-stage">
+        {/* Full-bleed wardrobe background — covers the whole stage */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/wardrobe.svg" alt="" aria-hidden className="k-ward-bg" />
+
+        <div className="k-ward-content">
+          {/* Left — small saree cards stacked on the wardrobe shelves */}
+          <div className="k-ward-left">
+            <button
+              className="k-ward-scroll-btn"
+              onClick={() => shelfRef.current?.scrollBy({ top: -200, behavior: "smooth" })}
+              aria-label="Scroll up"
+            >
+              <ChevronUp size={18} strokeWidth={2.25} />
+            </button>
+            <div ref={shelfRef} className="k-ward-shelf k-no-scroll">
+              {items.length === 0 ? (
+                <div style={{ padding: "20px 12px", textAlign: "center", color: "var(--k-text-muted)", fontSize: 12 }}>
+                  No sarees in wardrobe yet
+                </div>
+              ) : (
+                items.map((saree, i) => {
+                  const inCart = cartItemIds.has(saree._id);
+                  return (
+                    <div
+                      key={saree._id}
+                      className={`k-ward-card${i === safeIdx ? " is-active" : ""}`}
+                      onClick={() => setSelIdx(i)}
+                    >
+                      <div className="k-ward-card-img">
+                        <WardrobeCardImg
+                          saree={saree}
+                          lookId={sareeLookIds[saree._id]}
+                          serverLookFileId={lookImages[saree._id]}
+                          serverCutoutFileId={lookCutouts[saree._id]}
+                        />
+                      </div>
+                      <div className="k-ward-card-info">
+                        <div className="k-ward-card-name">{saree.name}</div>
+                        <div className="k-ward-card-price">₹{fmtPrice(saree.price)}</div>
+                        <div className="k-ward-card-actions">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onToggleInCart(saree); }}
+                            className={`k-ward-card-btn k-ward-card-btn-cart k-press${inCart ? " is-in-cart" : ""}`}
+                          >
+                            {inCart ? <Check size={9} strokeWidth={3} /> : <ShoppingBag size={9} strokeWidth={2.5} />}
+                            {inCart ? "In Cart" : "Add To Cart"}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onRemoveFromWardrobe(saree); }}
+                            className="k-ward-card-btn k-ward-card-btn-remove k-press"
+                          >
+                            <Trash2 size={9} strokeWidth={2.25} /> Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-            <div className="k-slideUp k-d2" style={{ marginTop: 16, fontSize: 15 }}>Your wardrobe is empty</div>
-            <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press k-slideUp k-d3" style={{ marginTop: 18, fontSize: 14 }}>
-              Browse Sarees <ChevronRight size={16} />
+            <button
+              className="k-ward-scroll-btn"
+              onClick={() => shelfRef.current?.scrollBy({ top: 200, behavior: "smooth" })}
+              aria-label="Scroll down"
+            >
+              <ChevronDown size={18} strokeWidth={2.25} />
             </button>
           </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, maxWidth: 960, margin: "0 auto" }}>
-            {items.map((saree) => {
-              const selC = selForCart.has(saree._id);
-              return (
-                <div key={saree._id} className="k-product-card k-slideUp" style={{ border: selC ? "2px solid var(--k-green)" : undefined }}>
-                  <div style={{ position: "relative", width: "100%", paddingTop: "120%", overflow: "hidden" }}>
-                    <div style={{ position: "absolute", inset: 0 }}>
-                      <SareeThumb name={saree.name} fileId={saree.imageIds?.[0]} grad={saree.grad} emoji={saree.emoji} emojiSize={32} gradientAngle={135} />
-                    </div>
-                  </div>
-                  <div style={{ padding: "10px 12px" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{saree.name}</div>
-                    <div className="k-mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--k-maroon)" }}>₹{fmtPrice(saree.price)}</div>
-                    <button onClick={() => toggleSel(saree._id)} className="k-press" style={{
-                      width: "100%", marginTop: 8, padding: "8px", borderRadius: 10,
-                      fontSize: 11, fontWeight: 600, cursor: "pointer",
-                      background: selC ? "var(--k-green)" : "transparent",
-                      color: selC ? "#fff" : "var(--k-text)",
-                      border: `1px solid ${selC ? "var(--k-green)" : "var(--k-border)"}`,
-                      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                    }}>
-                      {selC ? (<><Check size={14} strokeWidth={3} /> Selected</>) : "Add to Cart"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+
+          {/* Center — model standing on the wardrobe podium */}
+          <div className="k-ward-center">
+            {active ? (
+              <div className="k-ward-look">
+                <SareeThumb
+                  name={active.name}
+                  fileId={activeShowcaseFileId}
+                  grad={active.grad}
+                  emoji={active.emoji}
+                  emojiSize={64}
+                  gradientAngle={135}
+                  style={{ objectFit: "contain", objectPosition: "center bottom" }}
+                />
+              </div>
+            ) : (
+              <div className="k-ward-empty">
+                <Heart size={48} strokeWidth={1.6} color="var(--k-maroon)" />
+                <div style={{ fontSize: 16, color: "var(--k-text)", fontWeight: 600 }}>Your wardrobe is empty</div>
+                <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press" style={{ marginTop: 6 }}>
+                  Browse Sarees <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Floating CTA — Move to Cart pill */}
+        {active && (
+          <div className="k-ward-cta-wrap">
+            <button
+              onClick={() => onToggleInCart(active)}
+              className="k-ward-cta k-press"
+              disabled={cartItemIds.has(active._id)}
+            >
+              <span className="k-ward-cta-icon">
+                <ShoppingBag size={16} color="#fff" strokeWidth={2.25} />
+              </span>
+              {cartItemIds.has(active._id) ? "In Cart" : "Move to Cart"}
+            </button>
           </div>
         )}
       </div>
-      {selForCart.size > 0 && (
-        <div className="k-slideUp" style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 50 }}>
-          <button onClick={moveToCart} className="k-btn k-btn-primary k-btn-pill k-press" style={{
-            padding: "14px 32px", fontSize: 14, fontWeight: 600, boxShadow: "var(--k-shadow-lg)",
-          }}>
-            <ShoppingCart size={16} /> Move to Cart ({selForCart.size})
-          </button>
-        </div>
-      )}
+
+      <div className="k-detail-footer">
+        © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
+      </div>
     </div>
   );
 }
 
 /* ── ORDER ── */
-function OrderScreen({ cart, onUpdateQty, onRemoveItem, onCheckout, onFindTailor, onBack }: {
+function OrderScreen({ cart, recentlyViewed, onUpdateQty, onRemoveItem, onCheckout, onFindTailor, onProductTap, onBack, navigate, goHome, triggerLogout, trialCount, wardrobeCount, cartCount, storeName, storeLogoFileId }: {
   cart: Array<SareeItem & { qty: number }>;
+  recentlyViewed: SareeItem[];
   onUpdateQty: (idx: number, delta: number) => void;
   onRemoveItem: (idx: number) => void;
-  onCheckout: () => Promise<void>; onFindTailor: () => void; onBack: () => void;
+  onCheckout: () => Promise<void>; onFindTailor: () => void;
+  onProductTap: (saree: SareeItem) => void; onBack: () => void;
+  navigate: (s: Screen, product?: SareeItem) => void; goHome: () => void; triggerLogout: () => void;
+  trialCount: number; wardrobeCount: number; cartCount: number;
+  storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [showQR, setShowQR] = useState(false);
   const [qrExp, setQrExp] = useState(600);
+  const recentRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (!showQR || qrExp <= 0) return; const t = setTimeout(() => setQrExp((v) => v - 1), 1000); return () => clearTimeout(t); }, [showQR, qrExp]);
-  const updateQty = onUpdateQty;
-  const removeItem = onRemoveItem;
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const gst = cart.reduce((s, i) => s + i.price * i.qty * (i.price < 1000 ? 0.05 : 0.12), 0);
+  const totalQty = cart.reduce((s, i) => s + i.qty, 0);
+
   return (
-    <div className="k-shell">
-      {/* Header */}
-      <div className="k-topbar" style={{ padding: "16px 24px" }}>
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={22} />
+    <div className="k-cart-shell">
+      <KioskHeader
+        trialCount={trialCount}
+        wardrobeCount={wardrobeCount}
+        cartCount={cartCount}
+        goHome={goHome}
+        triggerLogout={triggerLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+
+      <div className="k-cart-actions">
+        <button onClick={onBack} className="k-cart-back k-press" aria-label="Back">
+          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
         </button>
-        <div className="k-display" style={{ fontSize: 22 }}>Your Cart</div>
-        <div className="k-chip" style={{ fontSize: 12 }}>
-          <ShoppingCart size={12} /> {cart.length} {cart.length === 1 ? "item" : "items"}
+        <div className="k-cart-title-wrap">
+          <div className="k-cart-title">Your Cart</div>
+          <div className="k-cart-subtitle">
+            {cart.length === 0
+              ? "Cart is empty"
+              : `${cart.length} ${cart.length === 1 ? "Item" : "Items"} In Your Cart`}
+          </div>
         </div>
+        <button onClick={goHome} className="k-cart-home k-press" aria-label="Home">
+          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+        </button>
       </div>
 
-      {/* Content — centered column layout */}
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 24px", paddingBottom: 24 }}>
-        <div style={{ width: "100%", maxWidth: 640 }}>
-          {/* Cart items */}
-          {cart.map((item, idx) => {
-            return (
-              <div key={idx} className="k-slideUp" style={{
-                display: "flex", gap: 16, padding: "16px", background: "var(--k-card)",
-                borderRadius: "var(--k-r)", boxShadow: "var(--k-shadow)", marginBottom: 12, alignItems: "center",
-                border: "1px solid var(--k-border-l)",
-              }}>
-                {/* Thumbnail */}
-                <div style={{
-                  width: 64, height: 64, borderRadius: "var(--k-r-sm)", flexShrink: 0, overflow: "hidden",
-                }}>
-                  <SareeThumb name={item.name} fileId={item.imageIds?.[0]} grad={item.grad} emoji={item.emoji} emojiSize={28} gradientAngle={135} />
-                </div>
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>{item.name}</div>
-                  <div style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 2 }}>{item.fabric} · {item.occasion}</div>
-                  <div className="k-mono" style={{ fontSize: 16, color: "var(--k-maroon)", fontWeight: 700, marginTop: 4 }}>₹{fmtPrice(item.price)}</div>
-                </div>
-                {/* Qty controls */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => updateQty(idx, -1)} className="k-iconbtn k-press" aria-label="Decrease" style={{ width: 36, height: 36 }}>
-                    <Minus size={16} />
-                  </button>
-                  <span className="k-mono" style={{ fontSize: 18, fontWeight: 700, minWidth: 28, textAlign: "center" }}>{item.qty}</span>
-                  <button onClick={() => updateQty(idx, 1)} className="k-iconbtn k-press" aria-label="Increase" style={{ width: 36, height: 36 }}>
-                    <Plus size={16} />
-                  </button>
-                </div>
-                {/* Remove */}
-                <button onClick={() => removeItem(idx)} className="k-press" aria-label="Remove" style={{
-                  width: 36, height: 36, borderRadius: "50%", cursor: "pointer",
-                  background: "var(--k-red-bg)", border: "none",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--k-red)",
-                }}><X size={16} strokeWidth={2.5} /></button>
-              </div>
-            );
-          })}
-
-          {/* Receipt */}
-          <div style={{
-            background: "var(--k-card)", borderRadius: "var(--k-r-lg)",
-            padding: "24px", marginTop: 8, boxShadow: "var(--k-shadow-md)",
-            border: "1px solid var(--k-border-l)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, marginBottom: 8 }}>
-              <span style={{ color: "var(--k-text-muted)" }}>Subtotal</span>
-              <span className="k-mono" style={{ fontWeight: 600 }}>₹{fmtPrice(subtotal)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, marginBottom: 12 }}>
-              <span style={{ color: "var(--k-text-muted)" }}>GST</span>
-              <span className="k-mono" style={{ fontWeight: 600 }}>₹{fmtPrice(Math.round(gst))}</span>
-            </div>
-            <div style={{ height: 1, background: "var(--k-border)", marginBottom: 12 }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 22, fontWeight: 700, color: "var(--k-maroon)" }}>
-              <span>Total</span>
-              <span className="k-mono">₹{fmtPrice(Math.round(subtotal + gst))}</span>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--k-text-muted)", fontStyle: "italic", marginTop: 6 }}>Prices indicative. Final at counter.</div>
+      <div className="k-cart-content">
+        {cart.length === 0 ? (
+          <div className="k-cart-empty">
+            <ShoppingCart size={48} strokeWidth={1.6} color="var(--k-maroon)" />
+            <div style={{ fontSize: 16, color: "var(--k-text)", fontWeight: 600 }}>Your cart is empty</div>
+            <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press" style={{ marginTop: 6 }}>
+              Browse Sarees <ChevronRight size={16} />
+            </button>
           </div>
+        ) : (
+          <>
+            <div className="k-cart-grid">
+              {/* Left — cart items */}
+              <div className="k-cart-list">
+                {cart.map((item, idx) => (
+                  <div key={`${item._id}-${idx}`} className="k-cart-card">
+                    <div className="k-cart-card-img">
+                      <SareeThumb
+                        name={item.name}
+                        fileId={item.imageIds?.[0]}
+                        grad={item.grad}
+                        emoji={item.emoji}
+                        emojiSize={28}
+                        gradientAngle={135}
+                      />
+                    </div>
+                    <div className="k-cart-card-info">
+                      <div className="k-cart-card-name">{item.name}</div>
+                      <div className="k-cart-card-meta">{item.description ?? "Description"}</div>
+                      <div className="k-cart-card-meta">
+                        Color: {item.colors?.[0] ? "—" : "Default"}
+                      </div>
+                      <div className="k-cart-card-price">₹{fmtPrice(item.price)}</div>
+                      <div className="k-cart-qty">
+                        <button
+                          onClick={() => onUpdateQty(idx, -1)}
+                          className="k-cart-qty-btn"
+                          aria-label="Decrease"
+                        >
+                          <Minus size={14} strokeWidth={2.5} />
+                        </button>
+                        <span className="k-cart-qty-val">{item.qty}</span>
+                        <button
+                          onClick={() => onUpdateQty(idx, 1)}
+                          className="k-cart-qty-btn"
+                          aria-label="Increase"
+                        >
+                          <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {/* share placeholder */}}
+                      className="k-cart-share"
+                      aria-label="Share"
+                    >
+                      <Upload size={14} strokeWidth={2} />
+                    </button>
+                    <button
+                      onClick={() => onRemoveItem(idx)}
+                      className="k-cart-remove"
+                      aria-label="Remove"
+                    >
+                      <Trash2 size={14} strokeWidth={2} />
+                    </button>
+                  </div>
+                ))}
+              </div>
 
-          {/* Actions */}
-          {!showQR ? (
-            <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-              <button onClick={async () => { await onCheckout(); setShowQR(true); }} className="k-btn k-btn-primary k-btn-pill k-press" style={{
-                flex: 1, padding: 18, fontSize: 17, fontWeight: 600,
-              }}>
-                <ShoppingCart size={18} /> Checkout
-              </button>
-              <button onClick={onFindTailor} className="k-btn k-btn-secondary k-btn-pill k-press" style={{
-                padding: "18px 28px", fontSize: 15,
-              }}>
-                <Scissors size={16} /> Find Tailor
-              </button>
-            </div>
-          ) : (
-            <div className="k-slideUp" style={{ textAlign: "center", marginTop: 28 }}>
-              <div className="k-popIn" style={{
-                width: 220, height: 220, margin: "0 auto 14px",
-                background: "var(--k-card)", borderRadius: "var(--k-r-lg)",
-                boxShadow: "var(--k-shadow-md)", display: "flex", alignItems: "center", justifyContent: "center",
-                border: "1px solid var(--k-border)", color: "var(--k-maroon)",
-              }}>
-                <QrCode size={140} strokeWidth={1.4} />
+              {/* Right — order summary */}
+              <div className="k-cart-summary">
+                <div className="k-cart-summary-title">Order Summary</div>
+                <div className="k-cart-summary-row">
+                  <span>Subtotal ({totalQty})</span>
+                  <span>₹{fmtPrice(subtotal)}</span>
+                </div>
+                <div className="k-cart-summary-row">
+                  <span>GST (18%)</span>
+                  <span>₹{fmtPrice(Math.round(gst))}</span>
+                </div>
+                <div className="k-cart-summary-divider" />
+                <div className="k-cart-summary-total">
+                  <span className="k-cart-summary-total-label">Total</span>
+                  <span className="k-cart-summary-total-value">₹{fmtPrice(Math.round(subtotal + gst))}</span>
+                </div>
+                <div className="k-cart-summary-note">
+                  The total amount you pay includes all applicable customs duties &amp; taxes.
+                  We guarantee no additional charges on delivery.
+                </div>
+                <button onClick={onFindTailor} className="k-cart-tailor-btn k-press">
+                  <Scissors size={14} /> Find Tailor <ArrowRight size={14} />
+                </button>
+                <button
+                  onClick={async () => { await onCheckout(); setShowQR(true); }}
+                  className="k-cart-checkout-btn k-press"
+                  disabled={cart.length === 0}
+                >
+                  Proceed To Checkout
+                </button>
               </div>
-              <div className="k-heading" style={{ fontSize: 18, marginBottom: 4 }}>Show to Store Team</div>
-              <div className="k-mono" style={{ fontSize: 15, color: "var(--k-text-muted)" }}>
-                Expires in {Math.floor(qrExp / 60)}:{String(qrExp % 60).padStart(2, "0")}
+            </div>
+
+            {/* QR card — appears after checkout */}
+            {showQR && (
+              <div className="k-cart-qr-card k-slideUp">
+                <div className="k-cart-qr-box">
+                  <QrCode size={84} strokeWidth={1.4} />
+                </div>
+                <div className="k-cart-qr-info">
+                  <div className="k-cart-qr-title">Show to Store Team</div>
+                  <div className="k-cart-qr-timer">
+                    Expires in {Math.floor(qrExp / 60)}:{String(qrExp % 60).padStart(2, "0")}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Recently Viewed */}
+        {recentlyViewed.length > 0 && (
+          <div className="k-cart-recent">
+            <div className="k-cart-recent-head">
+              <div className="k-cart-recent-title">Recently Viewed Products</div>
+              <div className="k-detail-similar-nav">
+                <button
+                  className="k-detail-nav-btn"
+                  onClick={() => recentRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
+                  aria-label="Previous"
+                >
+                  <ChevronLeft size={18} color="var(--k-text)" strokeWidth={2.25} />
+                </button>
+                <button
+                  className="k-detail-nav-btn"
+                  onClick={() => recentRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
+                  aria-label="Next"
+                >
+                  <ChevronRight size={18} color="var(--k-text)" strokeWidth={2.25} />
+                </button>
               </div>
             </div>
-          )}
-        </div>
+            <div ref={recentRef} className="k-cart-recent-rail k-no-scroll">
+              {recentlyViewed.map((s) => (
+                <div
+                  key={s._id}
+                  className="k-cart-recent-card"
+                  onClick={() => onProductTap(s)}
+                >
+                  <SareeThumb
+                    name={s.name}
+                    fileId={s.imageIds?.[0]}
+                    grad={s.grad}
+                    emoji={s.emoji}
+                    emojiSize={32}
+                    gradientAngle={135}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="k-detail-footer">
+        © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
       </div>
     </div>
   );
@@ -2654,6 +4243,14 @@ function TailorScreen({
   customerPhone,
   onBack,
   showToast,
+  navigate,
+  goHome,
+  triggerLogout,
+  trialCount,
+  wardrobeCount,
+  cartCount,
+  storeLogoFileId,
+  allSarees,
 }: {
   storeCity: string;
   storeId: string;
@@ -2663,25 +4260,38 @@ function TailorScreen({
   customerPhone: string;
   onBack: () => void;
   showToast: (msg: string, type: "info" | "success" | "error" | "warning") => void;
+  navigate: (s: Screen, product?: SareeItem) => void;
+  goHome: () => void;
+  triggerLogout: () => void;
+  trialCount: number;
+  wardrobeCount: number;
+  cartCount: number;
+  storeLogoFileId?: Id<"_storage">;
+  allSarees: SareeItem[];
 }) {
   const tailors = useQuery(api.tailorOps.listByCity, storeCity ? { city: storeCity } : "skip");
   const createReferral = useMutation(api.tailorOps.createReferral);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [viewing, setViewing] = useState<NonNullable<typeof tailors>[number] | null>(null);
+  const [filter, setFilter] = useState<"sort" | "recommended" | "nearby" | "topRated">("sort");
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
 
-  // Connect flow: write a referral row server-side for attribution and
-  // analytics, then open the tailor's WhatsApp with a pre-filled intro so
-  // the customer doesn't have to type a thing. We still open WhatsApp even
-  // if the referral write fails — the handoff is more important than the
-  // audit row.
+  const toggleLike = (id: string) => {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   async function handleConnect(t: {
     _id: Id<"tailors">;
     tailorId: string;
     name: string;
     phone: string;
   }) {
-    // Phone-check first: if we can't actually open WhatsApp, don't spam
-    // the tailor with a referral row they can't fulfill.
     const phoneDigits = (t.phone || "").replace(/[^0-9]/g, "");
     if (!phoneDigits) {
       showToast("Tailor contact not available", "warning");
@@ -2698,7 +4308,7 @@ function TailorScreen({
             customerPhone,
             storeId: storeId || undefined,
             storeName: storeName || undefined,
-            measurementsShared: true, // customer's measurements live on their row; order creation auto-copies
+            measurementsShared: true,
             date: new Date().toISOString().slice(0, 10),
           });
         } catch { /* analytics-level failure, don't block WhatsApp handoff */ }
@@ -2716,19 +4326,73 @@ function TailorScreen({
     }
   }
 
+  // Sort/filter the list reactively. Without geo data, "Near By" falls back
+  // to the unsorted list; "Top Rated" sorts by rating descending; "Sort By"
+  // and "Recommended" use the canonical order from the query.
+  const visibleTailors = (() => {
+    if (!tailors) return [];
+    const arr = [...tailors];
+    if (filter === "topRated") arr.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    return showAll ? arr : arr.slice(0, 6);
+  })();
+
   return (
-    <div className="k-shell">
-      <div className="k-topbar">
-        <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={20} />
+    <div className="k-tailor-shell">
+      <KioskHeader
+        trialCount={trialCount}
+        wardrobeCount={wardrobeCount}
+        cartCount={cartCount}
+        goHome={goHome}
+        triggerLogout={triggerLogout}
+        navigate={navigate}
+        storeName={storeName}
+        storeLogoFileId={storeLogoFileId}
+      />
+
+      <div className="k-tailor-actions">
+        <button onClick={onBack} className="k-tailor-back k-press" aria-label="Back">
+          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
         </button>
-        <div className="k-display" style={{ fontSize: 18 }}>Expert Tailors</div>
-        <div style={{ width: 44 }} />
+        <div className="k-tailor-pill">Expert Tailor</div>
+        <button onClick={goHome} className="k-tailor-home k-press" aria-label="Home">
+          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+        </button>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", maxWidth: 720, margin: "0 auto", width: "100%" }}>
-        {!tailors || tailors.length === 0 ? (
+
+      <div className="k-tailor-filters">
+        <button
+          onClick={() => setFilter("sort")}
+          className="k-tailor-chip k-tailor-chip-sort"
+        >
+          Sort By
+          <ChevronRight size={12} strokeWidth={3} />
+        </button>
+        {([
+          { id: "recommended", label: "Recommended" },
+          { id: "nearby", label: "Near By" },
+          { id: "topRated", label: "Top Rated" },
+        ] as const).map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            className={`k-tailor-chip${filter === f.id ? " is-active" : ""}`}
+          >
+            <span className="k-tailor-chip-check">
+              {filter === f.id && <Check size={9} strokeWidth={3} />}
+            </span>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="k-tailor-content">
+        {!tailors ? (
+          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--k-text-muted)" }}>
+            <Loader2 size={28} className="k-spin" style={{ color: "var(--k-maroon)" }} />
+          </div>
+        ) : tailors.length === 0 ? (
           <div style={{ textAlign: "center", padding: "64px 0", color: "var(--k-text-muted)" }}>
-            <div className="k-popIn" style={{
+            <div style={{
               width: 80, height: 80, margin: "0 auto 12px",
               borderRadius: "50%", background: "rgba(104,38,42,.08)",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -2739,48 +4403,98 @@ function TailorScreen({
             <div style={{ fontSize: 14 }}>No tailors found in this area</div>
           </div>
         ) : (
-          tailors.map((t, i) => (
-            <div key={t._id} className={`k-tailor-card k-slideUp k-d${Math.min((i % 6) + 1, 6)}`} style={{ display: "flex", gap: 14, alignItems: "center" }}>
-              <div className="k-silk" style={{
-                width: 60, height: 60, borderRadius: 12, flexShrink: 0,
-                background: "linear-gradient(135deg, #E8E0D4, #D4A843)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#fff",
-              }}>
-                <Scissors size={24} strokeWidth={1.8} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div className="k-heading" style={{ fontSize: 15 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: "var(--k-text-muted)", marginTop: 2 }}>
-                  {t.specialties?.join(", ") || "General"}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--k-text-muted)", marginTop: 3 }}>
-                  <Star size={12} color="var(--k-gold)" fill="var(--k-gold)" /> {t.rating}
-                  <span style={{ opacity: 0.5 }}>·</span>
-                  {t.city}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                <button
+          <>
+            {visibleTailors.map((t, i) => {
+              const liked = likedIds.has(t._id);
+              // Mock portfolio — pull 3 catalog images, rotated per tailor index
+              // so each card shows a distinct trio. This is a UI-only stand-in
+              // until real portfolio uploads land on the tailor schema.
+              const portfolio = [0, 1, 2].map((k) => allSarees[(i * 3 + k) % Math.max(allSarees.length, 1)]);
+              const initial = (t.name || "?").trim().charAt(0).toUpperCase();
+              const happy = t.referrals ?? t.reviewCount ?? 0;
+              const happyLabel = happy >= 1000 ? `${Math.round(happy / 100) / 10}k+` : happy >= 100 ? `${Math.floor(happy / 100) * 100}+` : `${happy}`;
+              return (
+                <div
+                  key={t._id}
+                  className="k-tailorx-card k-slideUp"
                   onClick={() => setViewing(t)}
-                  className="k-btn k-btn-secondary k-btn-pill k-press"
-                  style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, minHeight: 36 }}
-                  aria-label={`View ${t.name}`}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
                 >
-                  <Eye size={14} /> View
-                </button>
-                <button
-                  onClick={() => handleConnect(t)}
-                  disabled={connecting === t._id}
-                  className="k-btn k-btn-primary k-btn-pill k-press"
-                  style={{ padding: "8px 16px", fontSize: 12, fontWeight: 600, minHeight: 36, opacity: connecting === t._id ? 0.6 : 1 }}
-                >
-                  {connecting === t._id ? "…" : "Connect"}
-                </button>
-              </div>
-            </div>
-          ))
+                  <div className="k-tailorx-portfolio">
+                    {portfolio.map((s, k) => (
+                      <div key={k} className="k-tailorx-portfolio-cell">
+                        {s ? (
+                          <SareeThumb
+                            name={s.name}
+                            fileId={s.imageIds?.[0]}
+                            grad={s.grad}
+                            emoji={s.emoji}
+                            emojiSize={28}
+                            gradientAngle={135}
+                          />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", background: "var(--k-bg-warm)" }} />
+                        )}
+                      </div>
+                    ))}
+                    <span className="k-tailorx-map-pill">📍 Show on Map</span>
+                    <button
+                      className="k-tailorx-heart"
+                      onClick={(e) => { e.stopPropagation(); toggleLike(t._id); }}
+                      aria-label={liked ? "Unlike" : "Like"}
+                    >
+                      <Heart size={14} fill={liked ? "#E53935" : "transparent"} color={liked ? "#E53935" : "var(--k-text-mid)"} strokeWidth={2} />
+                    </button>
+                  </div>
+
+                  <div className="k-tailorx-info">
+                    <div className="k-tailorx-avatar">{initial}</div>
+                    <div className="k-tailorx-meta">
+                      <div className="k-tailorx-name">{t.name}</div>
+                      <div className="k-tailorx-spec">{t.specialties?.join(" & ") || "General"}</div>
+                    </div>
+                    <div className="k-tailorx-stats">
+                      <div className="k-tailorx-stat">
+                        <Star size={12} fill="var(--k-gold)" color="var(--k-gold)" strokeWidth={0} />
+                        <span className="k-tailorx-stat-val">{(t.rating ?? 0).toFixed(1)}</span>
+                        <span className="k-tailorx-stat-label">Rating</span>
+                      </div>
+                      <div className="k-tailorx-stat">
+                        <Users size={12} color="var(--k-maroon)" strokeWidth={2.4} />
+                        <span className="k-tailorx-stat-val">{happyLabel}</span>
+                        <span className="k-tailorx-stat-label">Happy Clients</span>
+                      </div>
+                      <div className="k-tailorx-stat">
+                        <MapPin size={12} color="var(--k-maroon)" strokeWidth={2.4} />
+                        <span className="k-tailorx-stat-val">{t.city}</span>
+                        <span className="k-tailorx-stat-label">{t.area || "—"}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleConnect(t); }}
+                      disabled={connecting === t._id}
+                      className="k-tailorx-cta k-press"
+                    >
+                      {connecting === t._id ? "…" : "Get in touch"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {tailors.length > 6 && !showAll && (
+              <button onClick={() => setShowAll(true)} className="k-tailorx-show-more k-press">
+                Show More
+              </button>
+            )}
+          </>
         )}
+      </div>
+
+      <div className="k-detail-footer">
+        © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
       </div>
 
       {viewing && (

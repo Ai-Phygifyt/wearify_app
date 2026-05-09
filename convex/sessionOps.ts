@@ -376,12 +376,20 @@ export const listByCustomer = query({
       .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
       .order("desc")
       .take(200);
-    // Enrich with saree cover image so /c/looks can fall back when the look
-    // itself has no imageFileId (e.g. try-ons produced before image capture).
+    // Only surface completed AI try-ons. queued / processing / failed /
+    // abandoned looks would otherwise fall back to the saree's model
+    // catalog photo (no imageFileId yet) and surface as "look" cards
+    // with a model-wearing-saree image — confusing the customer into
+    // thinking that's their try-on render. Filter them out at source.
+    const completed = looks.filter((l) => l.status === "completed");
+    // Enrich with saree fallback. Prefer slot 3 (flat-lay, no model)
+    // over slot 0 (model shot) — defense in depth in case a completed
+    // look somehow lacks imageFileId.
     return await Promise.all(
-      looks.map(async (l) => {
+      completed.map(async (l) => {
         const saree = await ctx.db.get(l.sareeId);
-        const sareeImageId = saree?.imageIds?.[0];
+        const sareeImageId =
+          saree?.imageIds?.[3] ?? saree?.imageIds?.[2] ?? saree?.imageIds?.[0];
         return {
           ...l,
           sareeImageId,
@@ -402,7 +410,20 @@ export const listBySession = query({
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
       .order("desc")
       .take(200);
-    return looks;
+    // Same completed-only filter and flat-lay fallback as listByCustomer.
+    // See the rationale comments there.
+    const completed = looks.filter((l) => l.status === "completed");
+    const sarees = await Promise.all(completed.map((l) => ctx.db.get(l.sareeId)));
+    return completed.map((l, i) => {
+      const saree = sarees[i];
+      return {
+        ...l,
+        sareeImageId:
+          saree?.imageIds?.[3] ?? saree?.imageIds?.[2] ?? saree?.imageIds?.[0],
+        sareeGrad: saree?.grad,
+        sareeEmoji: saree?.emoji,
+      };
+    });
   },
 });
 
@@ -438,6 +459,50 @@ export const toggleWish = mutation({
   },
 });
 
+// =====================================================================
+// deleteLook — customer removes a look from their /c/looks history.
+//
+// Auth: customer ownership check (look.customerId === args.customerId).
+// Idempotent: silently no-ops on a missing row so a double-tap from the
+// UI doesn't surface a "Look not found" error.
+//
+// Side effects on storage:
+//   - imageFileId (the AI try-on render — unique to this look) is deleted
+//   - imageNoBgFileId (the bg-removed cutout — unique to this look) is deleted
+// We do NOT delete personFileId (customer's body scan, shared across all
+// looks for the customer) or garmentFileId (saree image owned by the
+// store, shared across customers). Those are reused.
+//
+// Wardrobe rows that reference this look via wardrobe.lookId become
+// orphaned; listWardrobeByCustomer already tolerates a missing look
+// (falls through to the catalog fallback chain), so no cascade.
+// =====================================================================
+
+export const deleteLook = mutation({
+  args: {
+    lookId: v.id("looks"),
+    customerId: v.id("customers"),
+  },
+  handler: async (ctx, args): Promise<{ deleted: boolean }> => {
+    const look = await ctx.db.get(args.lookId);
+    if (!look) return { deleted: false };
+    if (look.customerId !== args.customerId) {
+      throw new Error("UNAUTHORIZED: not your look");
+    }
+    // Best-effort storage cleanup — failures are silent so a stuck
+    // storage call doesn't block the row deletion. Orphan blobs are
+    // harmless; orphan look rows would clutter the customer's history.
+    if (look.imageFileId) {
+      try { await ctx.storage.delete(look.imageFileId); } catch { /* ignore */ }
+    }
+    if (look.imageNoBgFileId) {
+      try { await ctx.storage.delete(look.imageNoBgFileId); } catch { /* ignore */ }
+    }
+    await ctx.db.delete(args.lookId);
+    return { deleted: true };
+  },
+});
+
 // ============================================================
 // SHORTLIST
 // ============================================================
@@ -450,6 +515,15 @@ export const addToShortlist = mutation({
     customerId: v.optional(v.id("customers")),
   },
   handler: async (ctx, args) => {
+    // Max 10 items per session — server is the source of truth.
+    const existing = await ctx.db
+      .query("shortlist")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+      .take(11);
+    if (existing.length >= 10) {
+      throw new Error("SHORTLIST_FULL: Shortlist is full (max 10 items)");
+    }
+
     const id = await ctx.db.insert("shortlist", {
       sessionId: args.sessionId,
       sareeId: args.sareeId,
@@ -541,6 +615,12 @@ export const addToWardrobe = mutation({
     accessories: v.optional(v.array(v.string())),
     neckline: v.optional(v.string()),
     price: v.optional(v.number()),
+    // The AI try-on look the customer is moving from trial → wardrobe.
+    // Optional because the move can happen before the render completes,
+    // and because guest/dry-run paths may not have one. When present,
+    // listWardrobeByCustomer surfaces the look's imageFileId as the
+    // primary thumbnail for /c/wardrobe + the kiosk wardrobe screen.
+    lookId: v.optional(v.id("looks")),
   },
   handler: async (ctx, args) => {
     // Idempotent: if the same customer already has this saree in their
@@ -553,7 +633,16 @@ export const addToWardrobe = mutation({
         .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
         .take(200);
       const dup = prior.find((w) => w.sareeId === args.sareeId);
-      if (dup) return dup._id;
+      if (dup) {
+        // If the existing row had no lookId and the caller now has one,
+        // patch it in. Lets a customer who previously moved a saree to
+        // wardrobe before the AI render completed get the try-on image
+        // bound on a subsequent re-add.
+        if (args.lookId && !dup.lookId) {
+          await ctx.db.patch(dup._id, { lookId: args.lookId });
+        }
+        return dup._id;
+      }
     }
 
     // Max 10 items per session
@@ -574,6 +663,7 @@ export const addToWardrobe = mutation({
       accessories: args.accessories,
       neckline: args.neckline,
       price: args.price,
+      lookId: args.lookId,
       addedAt: Date.now(),
     });
     if (args.customerId) {
@@ -606,6 +696,59 @@ export const removeFromWardrobe = mutation({
 // One-shot cleanup for wardrobe rows that duplicated before addToWardrobe
 // became idempotent. For every (customerId, sareeId) pair keep the OLDEST
 // row and delete the rest. Run once: `npx convex run sessionOps:dedupeWardrobe '{}'`.
+// One-shot: link existing wardrobe rows to their matching completed look.
+// Walks every wardrobe row that's missing `lookId`; finds a look in the
+// same session for the same (customer, saree) with status="completed";
+// patches the row. Idempotent — re-runs are a no-op once linked, and we
+// only patch when status === "completed" so in-flight looks are skipped.
+//
+// Run once per environment: npx convex run sessionOps:backfillWardrobeLookIds '{}'
+export const backfillWardrobeLookIds = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const wardrobe = await ctx.db.query("wardrobe").take(5000);
+    let scanned = 0;
+    let patched = 0;
+    let noMatch = 0;
+    for (const w of wardrobe) {
+      scanned += 1;
+      if (w.lookId) continue; // already linked
+      if (!w.customerId) continue; // guest rows have no customer-keyed look match
+
+      // Prefer a look from the SAME session (the move trial→wardrobe path
+      // produces a look in the active session). Fall back to any completed
+      // look this customer has for this saree if the session match is empty.
+      const sessionMatches = await ctx.db
+        .query("looks")
+        .withIndex("by_sessionId", (q) => q.eq("sessionId", w.sessionId))
+        .take(200);
+      let candidate = sessionMatches.find(
+        (l) =>
+          l.customerId === w.customerId &&
+          l.sareeId === w.sareeId &&
+          l.status === "completed",
+      );
+      if (!candidate) {
+        const customerLooks = await ctx.db
+          .query("looks")
+          .withIndex("by_customerId", (q) => q.eq("customerId", w.customerId))
+          .take(500);
+        // Most recent completed look for this saree.
+        candidate = customerLooks
+          .filter((l) => l.sareeId === w.sareeId && l.status === "completed")
+          .sort((a, b) => b.createdAt - a.createdAt)[0];
+      }
+      if (!candidate) {
+        noMatch += 1;
+        continue;
+      }
+      await ctx.db.patch(w._id, { lookId: candidate._id });
+      patched += 1;
+    }
+    return { scanned, patched, noMatch, alreadyLinked: scanned - patched - noMatch };
+  },
+});
+
 export const dedupeWardrobe = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -642,6 +785,12 @@ export const listWardrobeByCustomer = query({
     // Fetch all sarees in parallel, then look up each unique store at most once
     // (a customer typically has few distinct stores in their wardrobe).
     const sarees = await Promise.all(items.map((w) => ctx.db.get(w.sareeId)));
+    // Resolve the linked AI try-on look (if any) per row. Renderers prefer
+    // the look's imageFileId over the catalog photo so the customer sees
+    // their own try-on render in /c/wardrobe + the kiosk wardrobe screen.
+    const looks = await Promise.all(
+      items.map((w) => (w.lookId ? ctx.db.get(w.lookId) : null)),
+    );
     const uniqueStoreIds = Array.from(
       new Set(sarees.map((s) => s?.storeId).filter((id): id is string => !!id)),
     );
@@ -658,13 +807,31 @@ export const listWardrobeByCustomer = query({
     );
     return items.map((w, i) => {
       const saree = sarees[i];
+      const look = looks[i];
       const store = saree?.storeId ? storeById.get(saree.storeId) : null;
       return {
         ...w,
         storeId: saree?.storeId,
         storeName: store?.name,
         storeCity: store?.city,
-        sareeImageId: saree?.imageIds?.[0],
+        // Look render takes precedence — only surfaces if status is
+        // completed AND imageFileId is set (e.g. a not-yet-finished
+        // queued look returns null and the catalog fallback kicks in).
+        lookImageFileId:
+          look?.status === "completed" ? look.imageFileId ?? undefined : undefined,
+        // Bg-removed cutout (kiosk-only consumer; produced client-side
+        // post-completion via @imgly/background-removal). Same gate as
+        // imageFileId — only surfaces when look is completed. /c/wardrobe
+        // does not read this field; the kiosk WardrobeScreen prefers it
+        // over imageFileId so customer sees themselves on the kiosk's
+        // ivory backdrop instead of the RunPod studio bg.
+        lookImageNoBgFileId:
+          look?.status === "completed" ? look.imageNoBgFileId ?? undefined : undefined,
+        // Catalog fallback. Slot 3 first (flat-lay, no model — same chain
+        // as the try-on garment input) → slot 0 last resort. Avoids the
+        // model-leak surface area in /c/wardrobe.
+        sareeImageId:
+          saree?.imageIds?.[3] ?? saree?.imageIds?.[2] ?? saree?.imageIds?.[0],
         sareeGrad: saree?.grad,
         sareeEmoji: saree?.emoji,
         sareeFabric: saree?.fabric,
@@ -682,76 +849,6 @@ export const getWardrobe = query({
       .order("desc")
       .take(10);
     return items;
-  },
-});
-
-// ============================================================
-// KIOSK TRIAL CART — per (customer, store) persistent trial room
-// ============================================================
-
-export const addTrialCartItem = mutation({
-  args: {
-    customerId: v.id("customers"),
-    storeId: v.string(),
-    sareeId: v.id("sarees"),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("kioskTrialCart")
-      .withIndex("by_customer_store_saree", (q) =>
-        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
-      )
-      .unique();
-    if (existing) return existing._id;
-    return await ctx.db.insert("kioskTrialCart", {
-      customerId: args.customerId,
-      storeId: args.storeId,
-      sareeId: args.sareeId,
-      addedAt: Date.now(),
-    });
-  },
-});
-
-export const removeTrialCartItem = mutation({
-  args: {
-    customerId: v.id("customers"),
-    storeId: v.string(),
-    sareeId: v.id("sarees"),
-  },
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("kioskTrialCart")
-      .withIndex("by_customer_store_saree", (q) =>
-        q.eq("customerId", args.customerId).eq("storeId", args.storeId).eq("sareeId", args.sareeId),
-      )
-      .unique();
-    if (row) await ctx.db.delete(row._id);
-  },
-});
-
-export const clearTrialCart = mutation({
-  args: { customerId: v.id("customers"), storeId: v.string() },
-  handler: async (ctx, args) => {
-    const rows = await ctx.db
-      .query("kioskTrialCart")
-      .withIndex("by_customer_store", (q) =>
-        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
-      )
-      .collect();
-    for (const r of rows) await ctx.db.delete(r._id);
-  },
-});
-
-export const listTrialCart = query({
-  args: { customerId: v.id("customers"), storeId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("kioskTrialCart")
-      .withIndex("by_customer_store", (q) =>
-        q.eq("customerId", args.customerId).eq("storeId", args.storeId),
-      )
-      .order("desc")
-      .collect();
   },
 });
 

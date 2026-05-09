@@ -345,13 +345,34 @@ export default defineSchema({
     isFav: v.optional(v.boolean()),
     isWished: v.optional(v.boolean()),
     imageFileId: v.optional(v.id("_storage")),
-    grad: v.optional(v.array(v.string())), // placeholder gradient
-    createdAt: v.number(), // timestamp
+    // Background-removed copy of imageFileId, produced client-side in the
+    // kiosk via @imgly/background-removal. Used ONLY by the kiosk trial-room
+    // preview; other surfaces (/c/looks, /c/wardrobe, kiosk Wardrobe screen)
+    // continue to use imageFileId. Optional — fall back to imageFileId on
+    // failure or for pre-existing rows.
+    imageNoBgFileId: v.optional(v.id("_storage")),
+    grad: v.optional(v.array(v.string())),
+    createdAt: v.number(),
+
+    // Try-on lifecycle (added 2026-05-03 — see specs/2026-05-03-kiosk-runpod-tryon-design.md)
+    status: v.optional(v.string()),
+    // "queued" | "processing" | "completed" | "failed"
+    runpodJobId: v.optional(v.string()),
+    runpodEndpointId: v.optional(v.string()),
+    personFileId: v.optional(v.id("_storage")),
+    garmentFileId: v.optional(v.id("_storage")),
+    errorCode: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    pollAttempts: v.optional(v.number()),
+    costPaise: v.optional(v.number()),
   })
     .index("by_customerId", ["customerId"])
     .index("by_storeId", ["storeId"])
     .index("by_sessionId", ["sessionId"])
-    .index("by_customerPhone", ["customerPhone"]),
+    .index("by_customerPhone", ["customerPhone"])
+    .index("by_customerId_and_createdAt", ["customerId", "createdAt"]),
 
   // ============================
   // SHORTLIST (tablet shortlist during session)
@@ -718,23 +739,17 @@ export default defineSchema({
     accessories: v.optional(v.array(v.string())),
     neckline: v.optional(v.string()),
     price: v.optional(v.number()),
+    // Pointer to the AI try-on look that was active when the customer
+    // moved this saree from trial → wardrobe. listWardrobeByCustomer
+    // resolves this to look.imageFileId so /c/wardrobe + kiosk wardrobe
+    // show the customer-on-saree render instead of the catalog photo.
+    // Optional because rows from before this field shipped don't have it,
+    // and because the move can happen before the AI render completes.
+    lookId: v.optional(v.id("looks")),
     addedAt: v.number(),
   })
     .index("by_sessionId", ["sessionId"])
     .index("by_customerId", ["customerId"]),
-
-  // ============================
-  // KIOSK TRIAL CART (per-customer-per-store persistent trial room)
-  // Retains items the customer had in their kiosk trial room across visits.
-  // ============================
-  kioskTrialCart: defineTable({
-    customerId: v.id("customers"),
-    storeId: v.string(),
-    sareeId: v.id("sarees"),
-    addedAt: v.number(),
-  })
-    .index("by_customer_store", ["customerId", "storeId"])
-    .index("by_customer_store_saree", ["customerId", "storeId", "sareeId"]),
 
   // ============================
   // KIOSK CART (per-customer-per-store persistent checkout cart)

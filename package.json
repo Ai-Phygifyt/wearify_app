@@ -4,19 +4,24 @@
   "private": true,
   "scripts": {
     "dev": "npm-run-all --parallel dev:frontend dev:backend",
-    "dev:frontend": "next dev",
+    "dev:frontend": "next dev --turbopack",
     "dev:backend": "convex dev",
     "predev": "convex dev --until-success && convex dashboard",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint . --ignore-pattern \"convex/_generated/**\"",
     "type-check": "tsc --noEmit -p .",
     "format": "prettier --write \"**/*.{ts,tsx,md}\" --ignore-path .gitignore",
     "seed": "convex run seed:seedAll '{}'",
-    "seed:relational": "convex run seed:seedRelational '{}'"
+    "seed:relational": "convex run seed:seedRelational '{}'",
+    "seed:saree-images": "node scripts/backfill-saree-images.mjs",
+    "seed:catelog21": "node scripts/seed-catelog21.mjs",
+    "cleanup:flatlay-less": "node scripts/cleanup-flatlay-less-sarees.mjs"
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.11.4",
+    "@imgly/background-removal": "^1.7.0",
+    "@serwist/next": "^9.5.10",
     "better-auth": "^1.5.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -26,6 +31,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "recharts": "^3.8.1",
+    "serwist": "^9.5.10",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
@@ -38,13 +44,15 @@
     "eslint-config-next": "16.1.6",
     "npm-run-all2": "^8.0.4",
     "prettier": "^3.8.1",
+    "sharp": "^0.33.5",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "@tailwindcss/oxide"
+      "@tailwindcss/oxide",
+      "sharp"
     ]
   }
 }

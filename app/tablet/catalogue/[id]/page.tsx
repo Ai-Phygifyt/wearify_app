@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge, Btn, PageLoading } from "@/components/ui/wearify-ui";
-import { SareeThumb } from "@/components/SareeThumb";
+import { SareeImageGallery } from "@/components/SareeImageGallery";
 import { Id } from "@/convex/_generated/dataModel";
 
 export default function SareeDetailPage() {
@@ -59,10 +59,19 @@ export default function SareeDetailPage() {
 
   const handleAddToShortlist = async () => {
     if (!sessionId || !storeId || addedToShortlist) return;
+    if ((shortlistItems?.length ?? 0) >= 10) {
+      alert("Shortlist full — remove an item to add more (max 10).");
+      return;
+    }
     try {
       await addToShortlist({ sessionId, sareeId, storeId });
       setAddedToShortlist(true);
-    } catch { /* ignore */ }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.startsWith("SHORTLIST_FULL:")) {
+        alert("Shortlist full — remove an item to add more (max 10).");
+      }
+    }
   };
 
   const handleSendToMirror = async () => {
@@ -70,6 +79,10 @@ export default function SareeDetailPage() {
     try {
       // Add to shortlist if not already
       if (!addedToShortlist) {
+        if ((shortlistItems?.length ?? 0) >= 10) {
+          alert("Shortlist full — remove an item to add more (max 10).");
+          return;
+        }
         await addToShortlist({ sessionId, sareeId, storeId });
         setAddedToShortlist(true);
       }
@@ -79,7 +92,12 @@ export default function SareeDetailPage() {
         await markSentToMirror({ shortlistId: item._id, sessionId });
       }
       setSentToMirror(true);
-    } catch { /* ignore */ }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.startsWith("SHORTLIST_FULL:")) {
+        alert("Shortlist full — remove an item to add more (max 10).");
+      }
+    }
   };
 
   if (!saree) {
@@ -114,9 +132,9 @@ export default function SareeDetailPage() {
         {/* Left: Image (or gradient placeholder if none) */}
         <div className="w-1/3 flex-shrink-0">
           <div className="w-full aspect-[3/4] rounded-xl relative overflow-hidden">
-            <SareeThumb
+            <SareeImageGallery
               name={saree.name}
-              fileId={saree.imageIds?.[0]}
+              imageIds={saree.imageIds}
               grad={saree.grad}
               emoji={saree.emoji}
               emojiSize={80}

@@ -6,6 +6,8 @@ import { useCustomer } from "../layout";
 import { clearToken, getToken } from "@/lib/phoneAuth";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useConvexUrl } from "@/lib/ConvexImage";
+import { Id } from "@/convex/_generated/dataModel";
 import {
   User,
   Settings,
@@ -49,6 +51,8 @@ export default function MePage() {
 
   const displayName = user?.name || (customer?.name as string) || "Customer";
   const initials = displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const photoFileId = (customer as Record<string, unknown> | undefined)?.photoFileId as Id<"_storage"> | undefined;
+  const photoUrl = useConvexUrl(photoFileId ?? null);
   const maskedPhone = phone ? `${phone.slice(0, 8)} XXXXX` : "";
   const loyaltyTier = (customer?.loyaltyTier as string) || "Regular";
   const loyaltyPoints = (customer?.loyaltyPoints as number) || 0;
@@ -93,20 +97,21 @@ export default function MePage() {
 
   return (
     <div className="cx-pageIn cx-page">
-      {/* Hero */}
-      <div className="cx-hero cx-noise cx-paisley">
-        <div className="cx-brand-row cx-slideDown" style={{ marginBottom: 14 }}>
-          <Flower size={16} color="var(--cx-gold-l)" />
-          <span className="cx-serif cx-gold-shimmer" style={{ fontSize: 17, fontWeight: 700, fontStyle: "italic" }}>
+      {/* Hero — compacted: smaller avatar, tighter brand row, no zari decoration
+          below; reclaims ~40px so more menu rows fit above the fold on phones. */}
+      <div className="cx-hero cx-noise cx-paisley" style={{ paddingTop: 16, paddingBottom: 16 }}>
+        <div className="cx-brand-row cx-slideDown" style={{ marginBottom: 10 }}>
+          <Flower size={14} color="var(--cx-gold-l)" />
+          <span className="cx-serif cx-gold-shimmer" style={{ fontSize: 15, fontWeight: 700, fontStyle: "italic" }}>
             Wearify
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <div
             style={{
-              width: 64,
-              height: 64,
+              width: 56,
+              height: 56,
               borderRadius: "50%",
               background: "rgba(184, 134, 11, .18)",
               border: "2px solid rgba(184, 134, 11, .4)",
@@ -114,21 +119,31 @@ export default function MePage() {
               alignItems: "center",
               justifyContent: "center",
               fontWeight: 700,
-              fontSize: 22,
+              fontSize: 19,
               color: "var(--cx-gold-l)",
               fontFamily: "Cormorant Garamond, serif",
               fontStyle: "italic",
               flexShrink: 0,
+              overflow: "hidden",
             }}
           >
-            {initials}
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt={displayName}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                loading="lazy"
+              />
+            ) : (
+              initials
+            )}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "var(--cx-on-dark)", fontStyle: "italic", lineHeight: 1.2 }}>
+            <div className="cx-serif" style={{ fontSize: 20, fontWeight: 700, color: "var(--cx-on-dark)", fontStyle: "italic", lineHeight: 1.2 }}>
               {displayName}
             </div>
-            <div style={{ fontSize: 12, color: "var(--cx-on-dark-ghost)", marginTop: 3 }}>{maskedPhone}</div>
-            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12, color: "var(--cx-on-dark-ghost)", marginTop: 2 }}>{maskedPhone}</div>
+            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
               <span className="cx-badge cx-badge-glass-gold">
                 <Crown size={11} strokeWidth={2.4} />
                 {loyaltyTier}
@@ -140,8 +155,6 @@ export default function MePage() {
           </div>
         </div>
       </div>
-
-      <div className="cx-zari" />
 
       {/* Stats row */}
       <div className="cx-stats">

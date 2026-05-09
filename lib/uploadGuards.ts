@@ -26,6 +26,9 @@ export const GUARDS = {
   customerPhoto:  { maxBytes: 4 * MB,  accept: ["image/"],                        label: "Profile photo" },
   kycDocument:    { maxBytes: 10 * MB, accept: ["image/", "application/pdf"],     label: "KYC document" },
   bodyScan:       { maxBytes: 10 * MB, accept: ["image/"],                        label: "Body scan photo" },
+  // Background-removed AI try-on render. PNG with transparency, produced
+  // client-side in the kiosk by @imgly/background-removal.
+  lookCutout:     { maxBytes: 5 * MB,  accept: ["image/png"],                     label: "Cutout image" },
 } as const satisfies Record<string, UploadGuard>;
 
 /**

@@ -6,6 +6,79 @@ import { useCustomer } from "../../layout";
 import { useRouter, useParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 
+// Renders an actual stored image when a fileId resolves; null otherwise so
+// the parent's gradient/silhouette decoration shows through as fallback.
+function StoredImage({ fileId, alt }: { fileId: Id<"_storage">; alt: string }) {
+  const url = useQuery(api.files.getUrl, { fileId });
+  if (!url) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={alt}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+    />
+  );
+}
+
+// Fullscreen lightbox — dark backdrop, contains image at object-fit: contain
+// so the whole frame is visible (vs the hero crop which is object-fit: cover).
+// Tap backdrop or close button to dismiss; body scroll is locked while open.
+function ImageLightbox({ fileId, alt, onClose }: { fileId: Id<"_storage">; alt: string; onClose: () => void }) {
+  const url = useQuery(api.files.getUrl, { fileId });
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0, 0, 0, 0.92)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px)",
+        animation: "cx-fadeIn 0.2s ease",
+      }}
+    >
+      <button
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        aria-label="Close"
+        className="cx-press"
+        style={{
+          position: "absolute",
+          top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+          right: 12,
+          width: 40, height: 40, borderRadius: "50%",
+          background: "rgba(255,255,255,.14)",
+          backdropFilter: "blur(8px)",
+          border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#fff", fontSize: 22, fontWeight: 300,
+          zIndex: 2,
+        }}
+      >
+        ×
+      </button>
+      {url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={alt}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            maxWidth: "100%", maxHeight: "100%",
+            objectFit: "contain",
+            borderRadius: 6,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 /* ── colour tokens (inline) ──────────────────────────────────────── */
 const P = {
   plum: "#8B2E2B", plumD: "#5E1A18", plumL: "#A94540", plumGhost: "#F5E6E3",
@@ -65,6 +138,13 @@ const WhatsAppIcon = () => (
   </svg>
 );
 
+const TrashIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 /* silk shimmer overlay */
 const SilkOverlay = () => (
   <div style={{
@@ -84,6 +164,7 @@ export default function LookDetailPage() {
   const lookId = params.id as Id<"looks">;
   const { customerId } = useCustomer();
   const [shared, setShared] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const allLooks = useQuery(
     api.sessionOps.listByCustomer,
@@ -95,8 +176,11 @@ export default function LookDetailPage() {
   );
   const addToWishlist = useMutation(api.customers.addToWishlist);
   const removeFromWishlist = useMutation(api.customers.removeFromWishlist);
+  const deleteLookMut = useMutation(api.sessionOps.deleteLook);
 
   const [toast, setToast] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const showToast = React.useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 2000);
@@ -151,6 +235,9 @@ export default function LookDetailPage() {
   }
 
   const grad = look.grad || ["#71221D", "#D4A843"];
+  // Priority: AI try-on render → saree catalog photo → gradient placeholder.
+  // Mirrors the /c/looks list-page chain so detail and list stay consistent.
+  const heroImageFileId = (look.imageFileId ?? look.sareeImageId) as Id<"_storage"> | undefined;
   const shareMessage = encodeURIComponent(
     `Check out this beautiful ${look.sareeName} saree I tried on at Wearify! ${look.price ? fmt(look.price) : ""}`
   );
@@ -185,49 +272,79 @@ export default function LookDetailPage() {
     setTimeout(() => setShared(false), 2000);
   }
 
+  async function handleDelete() {
+    if (!customerId || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteLookMut({ lookId: lookRow._id, customerId });
+      // Replace, not push: prevents Back from landing on a now-404 detail page.
+      router.replace("/c/looks");
+    } catch (err) {
+      console.error(err);
+      showToast("Couldn't delete — try again");
+      setDeleting(false);
+      setDeleteConfirmOpen(false);
+    }
+  }
+
   return (
     <div className="cx-pageIn" style={{ background: P.ivory, minHeight: "100%" }}>
 
-      {/* ── 1. Full-bleed gradient hero ─────────────────────────── */}
-      <div style={{
-        height: 300, position: "relative", overflow: "hidden",
-        background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
-      }}>
-        <SilkOverlay />
+      {/* ── 1. Full-bleed hero — image when available, gradient fallback ──
+          Tall enough (520px) to show the full saree drape head-to-hem on a
+          typical phone screen without cropping at the knees. */}
+      <div
+        onClick={heroImageFileId ? () => setLightboxOpen(true) : undefined}
+        style={{
+          height: 520, position: "relative", overflow: "hidden",
+          background: `linear-gradient(145deg, ${grad[0]}, ${grad[1] || grad[0]})`,
+          cursor: heroImageFileId ? "zoom-in" : "default",
+        }}
+      >
+        {/* Real image (AI try-on render or catalog photo). Falls through to
+            the gradient + decorations if fileId doesn't resolve. Tap to open
+            in a fullscreen lightbox. */}
+        {heroImageFileId && <StoredImage fileId={heroImageFileId} alt={look.sareeName} />}
 
-        {/* cross-hatch SVG overlay */}
-        <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.14, pointerEvents: "none" }}>
-          <defs>
-            <pattern id="hero-hatch" width="14" height="14" patternUnits="userSpaceOnUse">
-              <path d="M0 14L14 0M-3 3L3 -3M11 17L17 11" stroke="#fff" strokeWidth=".6" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hero-hatch)" />
-        </svg>
+        {/* Decorations (silk shimmer, cross-hatch, silhouette) only show on
+            the placeholder path — would obscure a real image. */}
+        {!heroImageFileId && (
+          <>
+            <SilkOverlay />
+            <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.14, pointerEvents: "none" }}>
+              <defs>
+                <pattern id="hero-hatch" width="14" height="14" patternUnits="userSpaceOnUse">
+                  <path d="M0 14L14 0M-3 3L3 -3M11 17L17 11" stroke="#fff" strokeWidth=".6" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#hero-hatch)" />
+            </svg>
+            <svg
+              viewBox="0 0 120 160" width="90" height="120"
+              style={{
+                position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+                opacity: 0.22, pointerEvents: "none",
+              }}
+            >
+              <path d="M60 5 C30 5 20 35 20 65 C20 95 32 135 60 155 C88 135 100 95 100 65 C100 35 90 5 60 5Z" fill={P.goldL} />
+              <ellipse cx="60" cy="48" rx="10" ry="16" fill="none" stroke={P.goldL} strokeWidth="1.5" />
+              <circle cx="60" cy="36" r="3" fill={P.goldL} opacity=".5" />
+            </svg>
+          </>
+        )}
 
-        {/* saree silhouette */}
-        <svg
-          viewBox="0 0 120 160" width="90" height="120"
-          style={{
-            position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
-            opacity: 0.22, pointerEvents: "none",
-          }}
-        >
-          <path d="M60 5 C30 5 20 35 20 65 C20 95 32 135 60 155 C88 135 100 95 100 65 C100 35 90 5 60 5Z" fill={P.goldL} />
-          <ellipse cx="60" cy="48" rx="10" ry="16" fill="none" stroke={P.goldL} strokeWidth="1.5" />
-          <circle cx="60" cy="36" r="3" fill={P.goldL} opacity=".5" />
-        </svg>
-
-        {/* dark-to-transparent gradient at bottom */}
+        {/* dark-to-transparent gradient at bottom — keep on both paths so
+            the title overlay text stays legible against any image. */}
         <div style={{
-          position: "absolute", bottom: 0, left: 0, right: 0, height: 120,
-          background: "linear-gradient(to top, rgba(58, 15, 13, .7) 0%, transparent 100%)",
+          position: "absolute", bottom: 0, left: 0, right: 0, height: 140,
+          background: "linear-gradient(to top, rgba(28, 17, 8, .75) 0%, transparent 100%)",
           pointerEvents: "none",
         }} />
 
-        {/* back button (top-left) */}
+        {/* back button (top-left). stopPropagation so tapping it doesn't
+            also open the hero lightbox. */}
         <button
-          onClick={() => router.back()}
+          onClick={(e) => { e.stopPropagation(); router.back(); }}
           className="cx-press"
           style={{
             position: "absolute", top: 16, left: 16,
@@ -240,10 +357,11 @@ export default function LookDetailPage() {
           <BackArrow />
         </button>
 
-        {/* fav + share buttons (top-right) */}
+        {/* fav + share buttons (top-right) — stopPropagation for the same
+            reason as the back button. */}
         <div style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 10, zIndex: 5 }}>
           <button
-            onClick={toggleWishlist}
+            onClick={(e) => { e.stopPropagation(); toggleWishlist(); }}
             className="cx-press"
             aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
             style={{
@@ -257,7 +375,7 @@ export default function LookDetailPage() {
             <HeartIcon filled={wished} />
           </button>
           <button
-            onClick={handleShare}
+            onClick={(e) => { e.stopPropagation(); handleShare(); }}
             className="cx-press"
             style={{
               width: 38, height: 38, borderRadius: "50%", border: "none",
@@ -386,6 +504,28 @@ export default function LookDetailPage() {
         </button>
       </div>
 
+      {/* Delete this look — destructive, ghost-styled so it doesn't fight
+          for attention with the wishlist/share/tailor CTAs above. Confirms
+          via modal because the storage delete is irreversible. */}
+      <div style={{ padding: "10px 20px 0" }}>
+        <button
+          onClick={() => setDeleteConfirmOpen(true)}
+          className="cx-press"
+          style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+            padding: "11px 10px", borderRadius: P.r,
+            border: `1px solid ${P.error}40`,
+            background: "transparent",
+            color: P.error,
+            fontSize: 12, fontWeight: 600, cursor: "pointer",
+            transition: "all .2s",
+          }}
+        >
+          <TrashIcon />
+          Delete this look
+        </button>
+      </div>
+
       {/* ── Zari divider ────────────────────────────────────────── */}
       <div className="cx-zari" style={{ margin: "20px 20px 0" }} />
 
@@ -470,31 +610,37 @@ export default function LookDetailPage() {
             {similarLooks.map((sl, idx) => {
               const slGrad = sl.grad || ["#71221D", "#D4A843"];
               const delayClass = `cx-d${(idx % 6) + 1}`;
+              const slImageFileId = (sl.imageFileId ?? sl.sareeImageId) as Id<"_storage"> | undefined;
               return (
                 <div
                   key={sl._id}
                   className={`cx-scaleIn ${delayClass} cx-hover-lift cx-silk`}
                   onClick={() => router.push(`/c/looks/${sl._id}`)}
                   style={{
-                    flexShrink: 0, width: 130, borderRadius: P.r,
+                    flexShrink: 0, width: 150, borderRadius: P.r,
                     overflow: "hidden", cursor: "pointer",
                     background: P.white, boxShadow: P.shadow,
                   }}
                 >
                   <div style={{
-                    height: 100, position: "relative",
+                    height: 210, position: "relative",
                     background: `linear-gradient(135deg, ${slGrad[0]}, ${slGrad[1] || slGrad[0]})`,
                   }}>
-                    <SilkOverlay />
-                    {/* cross-hatch */}
-                    <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.08, pointerEvents: "none" }}>
-                      <defs>
-                        <pattern id={`sl-${sl._id}`} width="10" height="10" patternUnits="userSpaceOnUse">
-                          <path d="M0 10L10 0M-2 2L2 -2M8 12L12 8" stroke="#fff" strokeWidth=".5" />
-                        </pattern>
-                      </defs>
-                      <rect width="100%" height="100%" fill={`url(#sl-${sl._id})`} />
-                    </svg>
+                    {slImageFileId ? (
+                      <StoredImage fileId={slImageFileId} alt={sl.sareeName} />
+                    ) : (
+                      <>
+                        <SilkOverlay />
+                        <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.08, pointerEvents: "none" }}>
+                          <defs>
+                            <pattern id={`sl-${sl._id}`} width="10" height="10" patternUnits="userSpaceOnUse">
+                              <path d="M0 10L10 0M-2 2L2 -2M8 12L12 8" stroke="#fff" strokeWidth=".5" />
+                            </pattern>
+                          </defs>
+                          <rect width="100%" height="100%" fill={`url(#sl-${sl._id})`} />
+                        </svg>
+                      </>
+                    )}
                   </div>
                   <div style={{ padding: "8px 9px 10px" }}>
                     <div style={{
@@ -525,6 +671,81 @@ export default function LookDetailPage() {
           padding: "10px 18px", borderRadius: 100, background: P.plum, color: P.white,
           fontSize: 13, fontWeight: 600, boxShadow: P.shadowMd, zIndex: 50,
         }}>{toast}</div>
+      )}
+
+      {lightboxOpen && heroImageFileId && (
+        <ImageLightbox
+          fileId={heroImageFileId}
+          alt={look.sareeName}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
+
+      {/* Delete confirm modal — backdrop dismiss, explicit Cancel + Delete.
+          The destructive action requires an explicit second tap because
+          the storage blobs are irrecoverable after deletion. */}
+      {deleteConfirmOpen && (
+        <div
+          onClick={() => !deleting && setDeleteConfirmOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 999,
+            background: "rgba(28, 17, 8, .55)",
+            backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+            animation: "cx-fadeIn .18s ease",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 340,
+              background: P.white, borderRadius: 18,
+              padding: "22px 22px 18px",
+              boxShadow: P.shadowMd,
+            }}
+          >
+            <div className="cx-serif" style={{
+              fontSize: 19, fontWeight: 600, fontStyle: "italic", color: P.text,
+              marginBottom: 6,
+            }}>
+              Delete this look?
+            </div>
+            <div style={{ fontSize: 13, color: P.textMid, lineHeight: 1.5, marginBottom: 18 }}>
+              The AI render will be removed from your history. This can&apos;t be undone.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                disabled={deleting}
+                className="cx-press"
+                style={{
+                  flex: 1, padding: "11px 10px", borderRadius: P.r,
+                  border: `1.5px solid ${P.plumGhost}`,
+                  background: P.white, color: P.text,
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="cx-press"
+                style={{
+                  flex: 1, padding: "11px 10px", borderRadius: P.r,
+                  border: "none",
+                  background: P.error, color: P.white,
+                  fontSize: 13, fontWeight: 700, cursor: deleting ? "wait" : "pointer",
+                  opacity: deleting ? 0.7 : 1,
+                  transition: "opacity .2s",
+                }}
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
