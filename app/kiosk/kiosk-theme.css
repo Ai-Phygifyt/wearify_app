@@ -4423,24 +4423,16 @@
   margin: 0 auto;
 }
 
-/* The bg-removed customer cutout sits above the bg, anchored to the
- * TOP edge of the podium disc so the customer reads as "standing on"
- * the stage. The bottom value is tuned to where the disc's visual
- * top falls inside the .k-trial-v2-podium box: at 38vh container
- * with the disc occupying roughly the upper half + the 10px lift,
- * the disc top sits ~21vh from the stage bottom. */
+/* The bg-removed customer cutout fills the full stage so the generated
+ * image renders as large as possible. The dock pills + subhead float
+ * over the lower / upper portions of the cutout in their own z-layer. */
 .k-trial-v2-cutout {
-  /* Feet anchor to the disc TOP. Podium asset's disc occupies roughly
-   * the bottom ~30% of its 433x577 frame; with the podium container at
-   * 70vh tall + height-anchored image, the disc top sits ~21vh from
-   * the floor. The +30px lift on the podium pushes that another ~2vh
-   * up, hence 23vh here. Tune this and the podium height together if
-   * the asset is ever swapped. */
   position: absolute;
   left: 50%;
-  bottom: 23vh;
+  bottom: 0;
   transform: translateX(-50%);
-  height: 78%;
+  height: 100%;
+  width: 100%;
   z-index: 2;
   display: flex; align-items: flex-end; justify-content: center;
   pointer-events: none;
@@ -4767,11 +4759,13 @@
 }
 
 /* While the cutout is still being generated, show the wave inside the
- * cutout slot at the same dimensions. */
+ * cutout slot. Sized to a portrait-ish band that fills most of the
+ * stage height — matches the full-screen scale of the final cutout. */
 .k-trial-v2-cutout-wave {
   position: relative;
-  height: 100%;
-  width: 320px;
+  height: 90%;
+  aspect-ratio: 3 / 4;
+  max-width: 60%;
   border-radius: 24px;
   overflow: hidden;
   pointer-events: none;
