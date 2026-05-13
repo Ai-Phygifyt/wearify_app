@@ -1285,6 +1285,7 @@ export default function KioskPage() {
                 }
                 setCartItems((prev) => [...prev, { ...saree, qty: 1 }]);
                 showToast("Added to cart", "success");
+                navigate("order");
               }
             }}
             onRemoveFromWardrobe={(saree) => {
@@ -3560,12 +3561,14 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
     window.open(`https://wa.me/${phone ? phone.replace(/[^\d]/g, "") : ""}?text=${msg}`, "_blank");
   };
 
-  // Add the currently-active (right-panel-visible) saree to wardrobe.
-  // Single-item add — count is always 1 unless extended later.
+  // Add the currently-active (right-panel-visible) saree to wardrobe,
+  // then redirect into the wardrobe so the customer lands where the
+  // item just went.
   const addActiveToWardrobe = () => {
     if (!current) return;
     onAddToWardrobe([current]);
     showToast("Added to wardrobe", "success");
+    onGoToWardrobe();
   };
 
   if (items.length === 0) return (
