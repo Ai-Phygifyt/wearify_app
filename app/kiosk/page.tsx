@@ -3850,7 +3850,6 @@ function WardrobeScreen({ items, lookImages, lookCutouts, sareeLookIds, cartItem
   storeName?: string; storeLogoFileId?: Id<"_storage">;
 }) {
   const [selIdx, setSelIdx] = useState(0);
-  const shelfRef = useRef<HTMLDivElement>(null);
   const safeIdx = Math.min(selIdx, Math.max(0, items.length - 1));
   const active = items[safeIdx];
 
@@ -3861,15 +3860,13 @@ function WardrobeScreen({ items, lookImages, lookCutouts, sareeLookIds, cartItem
   const activeLook = useQuery(api.tryOn.getLook, activeLookId ? { lookId: activeLookId } : "skip");
   const activeLiveCutout = activeLook?.status === "completed" ? activeLook.imageNoBgFileId ?? undefined : undefined;
   const activeLiveRender = activeLook?.status === "completed" ? activeLook.imageFileId ?? undefined : undefined;
-  const activeShowcaseFileId = active
-    ? activeLiveCutout
-      ?? lookCutouts[active._id]
-      ?? activeLiveRender
-      ?? lookImages[active._id]
-      ?? active.imageIds?.[3]
-      ?? active.imageIds?.[2]
-      ?? active.imageIds?.[0]
-    : undefined;
+  // Use plain render (with bg) for the carousel — bg-removed cutouts look
+  // ghostly inside a glass-frame card.
+  void activeLiveCutout;
+  void activeLiveRender;
+
+  const prev = () => setSelIdx((i) => Math.max(0, i - 1));
+  const next = () => setSelIdx((i) => Math.min(items.length - 1, i + 1));
 
   return (
     <div className="k-ward-shell">
@@ -3884,113 +3881,117 @@ function WardrobeScreen({ items, lookImages, lookCutouts, sareeLookIds, cartItem
         storeLogoFileId={storeLogoFileId}
       />
 
-      <div className="k-ward-actions">
-        <button onClick={goHome} className="k-ward-back k-press" aria-label="Back">
-          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
-        </button>
-        <div className="k-ward-pill">
-          My Wardrobe <Heart size={20} fill="var(--k-maroon)" color="var(--k-maroon)" />
-        </div>
-        <button onClick={goHome} className="k-ward-home k-press" aria-label="Home">
-          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
-        </button>
-      </div>
-
       <div className="k-ward-stage">
-        {/* Full-bleed wardrobe background — covers the whole stage */}
+        {/* Full-bleed warm wardrobe background + dark glass cover */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/kiosk/wardrobe.svg" alt="" aria-hidden className="k-ward-bg" />
+        <img src="/kiosk/wardrobe/background.svg" alt="" aria-hidden className="k-ward-bg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/kiosk/wardrobe/background-cover.svg" alt="" aria-hidden className="k-ward-bg-cover" />
+        <div className="k-ward-bg-overlay" aria-hidden />
 
-        <div className="k-ward-content">
-          {/* Left — small saree cards stacked on the wardrobe shelves */}
-          <div className="k-ward-left">
-            <button
-              className="k-ward-scroll-btn"
-              onClick={() => shelfRef.current?.scrollBy({ top: -200, behavior: "smooth" })}
-              aria-label="Scroll up"
-            >
-              <ChevronUp size={18} strokeWidth={2.25} />
-            </button>
-            <div ref={shelfRef} className="k-ward-shelf k-no-scroll">
-              {items.length === 0 ? (
-                <div style={{ padding: "20px 12px", textAlign: "center", color: "var(--k-text-muted)", fontSize: 12 }}>
-                  No sarees in wardrobe yet
-                </div>
-              ) : (
-                items.map((saree, i) => {
-                  const inCart = cartItemIds.has(saree._id);
-                  return (
-                    <div
-                      key={saree._id}
-                      className={`k-ward-card${i === safeIdx ? " is-active" : ""}`}
-                      onClick={() => setSelIdx(i)}
-                    >
-                      <div className="k-ward-card-img">
-                        <WardrobeCardImg
-                          saree={saree}
-                          lookId={sareeLookIds[saree._id]}
-                          serverLookFileId={lookImages[saree._id]}
-                          serverCutoutFileId={lookCutouts[saree._id]}
-                        />
-                      </div>
-                      <div className="k-ward-card-info">
-                        <div className="k-ward-card-name">{saree.name}</div>
-                        <div className="k-ward-card-price">₹{fmtPrice(saree.price)}</div>
-                        <div className="k-ward-card-actions">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onToggleInCart(saree); }}
-                            className={`k-ward-card-btn k-ward-card-btn-cart k-press${inCart ? " is-in-cart" : ""}`}
-                          >
-                            {inCart ? <Check size={9} strokeWidth={3} /> : <ShoppingBag size={9} strokeWidth={2.5} />}
-                            {inCart ? "In Cart" : "Add To Cart"}
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onRemoveFromWardrobe(saree); }}
-                            className="k-ward-card-btn k-ward-card-btn-remove k-press"
-                          >
-                            <Trash2 size={9} strokeWidth={2.25} /> Remove
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-            <button
-              className="k-ward-scroll-btn"
-              onClick={() => shelfRef.current?.scrollBy({ top: 200, behavior: "smooth" })}
-              aria-label="Scroll down"
-            >
-              <ChevronDown size={18} strokeWidth={2.25} />
-            </button>
+        <div className="k-ward-actions">
+          <button onClick={goHome} className="k-ward-back k-press" aria-label="Back">
+            <ChevronLeft size={22} color="var(--k-maroon)" strokeWidth={2.5} />
+          </button>
+          <div className="k-ward-pill">
+            My Wardrobe <Heart size={16} fill="var(--k-maroon)" color="var(--k-maroon)" />
           </div>
-
-          {/* Center — model standing on the wardrobe podium */}
-          <div className="k-ward-center">
-            {active ? (
-              <div className="k-ward-look">
-                <SareeThumb
-                  name={active.name}
-                  fileId={activeShowcaseFileId}
-                  grad={active.grad}
-                  emoji={active.emoji}
-                  emojiSize={64}
-                  gradientAngle={135}
-                  style={{ objectFit: "contain", objectPosition: "center bottom" }}
-                />
-              </div>
-            ) : (
-              <div className="k-ward-empty">
-                <Heart size={48} strokeWidth={1.6} color="var(--k-maroon)" />
-                <div style={{ fontSize: 16, color: "var(--k-text)", fontWeight: 600 }}>Your wardrobe is empty</div>
-                <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press" style={{ marginTop: 6 }}>
-                  Browse Sarees <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
-          </div>
+          <button onClick={goHome} className="k-ward-home k-press" aria-label="Home">
+            <Home size={20} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+          </button>
         </div>
+
+        {items.length === 0 ? (
+          <div className="k-ward-empty">
+            <Heart size={48} strokeWidth={1.6} color="#fff" />
+            <div style={{ fontSize: 16, color: "#fff", fontWeight: 600 }}>Your wardrobe is empty</div>
+            <button onClick={goHome} className="k-btn k-btn-primary k-btn-pill k-press" style={{ marginTop: 6 }}>
+              Browse Sarees <ChevronRight size={16} />
+            </button>
+          </div>
+        ) : (
+          <div className="k-ward-carousel">
+            {items.map((saree, i) => {
+              const offset = i - safeIdx;
+              const abs = Math.abs(offset);
+              if (abs > 2) return null;
+              const inCart = cartItemIds.has(saree._id);
+              const translateX = offset * 135;
+              const scale = abs === 0 ? 1 : abs === 1 ? 0.82 : 0.66;
+              const opacity = abs === 0 ? 1 : abs === 1 ? 0.88 : 0.65;
+              const filterStr = "none";
+              const rotateY = offset * -8;
+              const zIndex = 10 - abs;
+              return (
+                <div
+                  key={saree._id}
+                  className={`k-ward-fcard${i === safeIdx ? " is-active" : ""}`}
+                  style={{
+                    transform: `translateX(${translateX}px) scale(${scale}) rotateY(${rotateY}deg)`,
+                    opacity,
+                    zIndex,
+                    filter: filterStr,
+                  }}
+                  onClick={() => setSelIdx(i)}
+                >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRemoveFromWardrobe(saree); }}
+                    className="k-ward-fcard-x"
+                    aria-label="Remove"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/kiosk/wardrobe/remove.svg" alt="" aria-hidden />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); /* share via whatsapp */ }}
+                    className="k-ward-fcard-wa"
+                    aria-label="Share on WhatsApp"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/kiosk/wardrobe/whatsapp.svg" alt="" aria-hidden />
+                  </button>
+                  <div className="k-ward-fcard-img">
+                    <WardrobeCardImg
+                      saree={saree}
+                      lookId={sareeLookIds[saree._id]}
+                      serverLookFileId={lookImages[saree._id]}
+                      serverCutoutFileId={lookCutouts[saree._id]}
+                    />
+                  </div>
+                  <div className="k-ward-fcard-info">
+                    <div className="k-ward-fcard-name">{saree.name}</div>
+                    <div className="k-ward-fcard-price">₹{fmtPrice(saree.price)}</div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onToggleInCart(saree); }}
+                      className={`k-ward-fcard-cart k-press${inCart ? " is-in-cart" : ""}`}
+                      aria-label={inCart ? "In Cart" : "Add To Cart"}
+                    >
+                      {inCart ? (
+                        <>
+                          <Check size={12} strokeWidth={3} /> In Cart
+                        </>
+                      ) : (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src="/kiosk/wardrobe/add-to-cart.svg" alt="" aria-hidden />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {items.length > 1 && (
+          <div className="k-ward-nav">
+            <button onClick={prev} disabled={safeIdx === 0} className="k-press" aria-label="Previous">
+              <ChevronLeft size={18} strokeWidth={2.5} />
+            </button>
+            <button onClick={next} disabled={safeIdx >= items.length - 1} className="k-press" aria-label="Next">
+              <ChevronRight size={18} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
 
         {/* Floating CTA — Move to Cart pill */}
         {active && (
@@ -3999,11 +4000,19 @@ function WardrobeScreen({ items, lookImages, lookCutouts, sareeLookIds, cartItem
               onClick={() => onToggleInCart(active)}
               className="k-ward-cta k-press"
               disabled={cartItemIds.has(active._id)}
+              aria-label={cartItemIds.has(active._id) ? "In Cart" : "Move to Cart"}
             >
-              <span className="k-ward-cta-icon">
-                <ShoppingBag size={16} color="#fff" strokeWidth={2.25} />
-              </span>
-              {cartItemIds.has(active._id) ? "In Cart" : "Move to Cart"}
+              {cartItemIds.has(active._id) ? (
+                <>
+                  <span className="k-ward-cta-icon">
+                    <Check size={16} color="#fff" strokeWidth={2.5} />
+                  </span>
+                  In Cart
+                </>
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src="/kiosk/wardrobe/move-to-cart.svg" alt="" aria-hidden />
+              )}
             </button>
           </div>
         )}
@@ -4353,7 +4362,11 @@ function TailorScreen({
       />
 
       <div className="k-tailor-actions">
-        <button onClick={onBack} className="k-tailor-back k-press" aria-label="Back">
+        <button
+          onClick={viewing ? () => setViewing(null) : onBack}
+          className="k-tailor-back k-press"
+          aria-label="Back"
+        >
           <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
         </button>
         <div className="k-tailor-pill">Expert Tailor</div>
@@ -4362,6 +4375,7 @@ function TailorScreen({
         </button>
       </div>
 
+      {!viewing && (
       <div className="k-tailor-filters">
         <button
           onClick={() => setFilter("sort")}
@@ -4387,35 +4401,39 @@ function TailorScreen({
           </button>
         ))}
       </div>
+      )}
 
       <div className="k-tailor-content">
-        {!tailors ? (
-          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--k-text-muted)" }}>
-            <Loader2 size={28} className="k-spin" style={{ color: "var(--k-maroon)" }} />
+        {viewing ? (
+          <TailorDetailModal
+            tailor={viewing}
+            connecting={connecting === viewing._id}
+            onConnect={async () => {
+              const target = viewing;
+              setViewing(null);
+              await handleConnect(target);
+            }}
+          />
+        ) : !tailors ? (
+          <div className="k-tailor-empty">
+            <Loader2 size={28} className="k-spin" />
           </div>
         ) : tailors.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "64px 0", color: "var(--k-text-muted)" }}>
-            <div style={{
-              width: 80, height: 80, margin: "0 auto 12px",
-              borderRadius: "50%", background: "rgba(104,38,42,.08)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "var(--k-maroon)",
-            }}>
+          <div className="k-tailor-empty">
+            <div className="k-tailor-empty-icon">
               <Scissors size={34} strokeWidth={1.6} />
             </div>
-            <div style={{ fontSize: 14 }}>No tailors found in this area</div>
+            <div>No tailors found in this area</div>
           </div>
         ) : (
           <>
             {visibleTailors.map((t, i) => {
               const liked = likedIds.has(t._id);
-              // Mock portfolio — pull 3 catalog images, rotated per tailor index
-              // so each card shows a distinct trio. This is a UI-only stand-in
-              // until real portfolio uploads land on the tailor schema.
               const portfolio = [0, 1, 2].map((k) => allSarees[(i * 3 + k) % Math.max(allSarees.length, 1)]);
               const initial = (t.name || "?").trim().charAt(0).toUpperCase();
               const happy = t.referrals ?? t.reviewCount ?? 0;
               const happyLabel = happy >= 1000 ? `${Math.round(happy / 100) / 10}k+` : happy >= 100 ? `${Math.floor(happy / 100) * 100}+` : `${happy}`;
+              const distanceKm = (1.2 + i * 0.4).toFixed(1);
               return (
                 <div
                   key={t._id}
@@ -4423,7 +4441,6 @@ function TailorScreen({
                   onClick={() => setViewing(t)}
                   role="button"
                   tabIndex={0}
-                  style={{ cursor: "pointer" }}
                 >
                   <div className="k-tailorx-portfolio">
                     {portfolio.map((s, k) => (
@@ -4438,41 +4455,54 @@ function TailorScreen({
                             gradientAngle={135}
                           />
                         ) : (
-                          <div style={{ width: "100%", height: "100%", background: "var(--k-bg-warm)" }} />
+                          <div className="k-tailorx-portfolio-fallback" />
                         )}
                       </div>
                     ))}
-                    <span className="k-tailorx-map-pill">📍 Show on Map</span>
+                    <span className="k-tailorx-distance-pill">
+                      <MapPin size={11} color="var(--k-maroon)" strokeWidth={2.4} />
+                      {distanceKm}km away
+                    </span>
                     <button
                       className="k-tailorx-heart"
                       onClick={(e) => { e.stopPropagation(); toggleLike(t._id); }}
                       aria-label={liked ? "Unlike" : "Like"}
                     >
-                      <Heart size={14} fill={liked ? "#E53935" : "transparent"} color={liked ? "#E53935" : "var(--k-text-mid)"} strokeWidth={2} />
+                      <Heart size={16} fill={liked ? "#E53935" : "transparent"} color={liked ? "#E53935" : "var(--k-text-mid)"} strokeWidth={2} />
                     </button>
                   </div>
 
                   <div className="k-tailorx-info">
-                    <div className="k-tailorx-avatar">{initial}</div>
-                    <div className="k-tailorx-meta">
-                      <div className="k-tailorx-name">{t.name}</div>
-                      <div className="k-tailorx-spec">{t.specialties?.join(" & ") || "General"}</div>
-                    </div>
-                    <div className="k-tailorx-stats">
-                      <div className="k-tailorx-stat">
-                        <Star size={12} fill="var(--k-gold)" color="var(--k-gold)" strokeWidth={0} />
-                        <span className="k-tailorx-stat-val">{(t.rating ?? 0).toFixed(1)}</span>
-                        <span className="k-tailorx-stat-label">Rating</span>
+                    <div className="k-tailorx-info-top">
+                      <div className="k-tailorx-info-left">
+                        <div className="k-tailorx-avatar">{initial}</div>
+                        <div className="k-tailorx-meta">
+                          <div className="k-tailorx-name">{t.name}</div>
+                          <div className="k-tailorx-spec">{t.specialties?.join(" & ") || "General"}</div>
+                        </div>
                       </div>
-                      <div className="k-tailorx-stat">
-                        <Users size={12} color="var(--k-maroon)" strokeWidth={2.4} />
-                        <span className="k-tailorx-stat-val">{happyLabel}</span>
-                        <span className="k-tailorx-stat-label">Happy Clients</span>
-                      </div>
-                      <div className="k-tailorx-stat">
-                        <MapPin size={12} color="var(--k-maroon)" strokeWidth={2.4} />
-                        <span className="k-tailorx-stat-val">{t.city}</span>
-                        <span className="k-tailorx-stat-label">{t.area || "—"}</span>
+                      <div className="k-tailorx-stats">
+                        <div className="k-tailorx-stat">
+                          <span className="k-tailorx-stat-val">
+                            <Star size={10} fill="var(--k-gold)" color="var(--k-gold)" strokeWidth={0} />
+                            {(t.rating ?? 0).toFixed(1)}
+                          </span>
+                          <span className="k-tailorx-stat-label">Rating</span>
+                        </div>
+                        <div className="k-tailorx-stat">
+                          <span className="k-tailorx-stat-val">
+                            <Users size={10} color="var(--k-maroon)" strokeWidth={2.4} />
+                            {happyLabel}
+                          </span>
+                          <span className="k-tailorx-stat-label">Happy Clients</span>
+                        </div>
+                        <div className="k-tailorx-stat">
+                          <span className="k-tailorx-stat-val">
+                            <MapPin size={10} color="var(--k-maroon)" strokeWidth={2.4} />
+                            {distanceKm}km
+                          </span>
+                          <span className="k-tailorx-stat-label">{t.city || t.area || "—"}</span>
+                        </div>
                       </div>
                     </div>
                     <button
@@ -4500,18 +4530,6 @@ function TailorScreen({
         © Copyright PHYGIFY TECHNO SERVICES PVT. LTD .
       </div>
 
-      {viewing && (
-        <TailorDetailModal
-          tailor={viewing}
-          onClose={() => setViewing(null)}
-          connecting={connecting === viewing._id}
-          onConnect={async () => {
-            const target = viewing;
-            setViewing(null);
-            await handleConnect(target);
-          }}
-        />
-      )}
     </div>
   );
 }
