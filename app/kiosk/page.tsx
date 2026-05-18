@@ -3916,7 +3916,7 @@ function WardrobeScreen({ items, lookImages, lookCutouts, sareeLookIds, cartItem
               const abs = Math.abs(offset);
               if (abs > 2) return null;
               const inCart = cartItemIds.has(saree._id);
-              const translateX = offset * 135;
+              const translateX = offset * 210;
               const scale = abs === 0 ? 1 : abs === 1 ? 0.82 : 0.66;
               const opacity = abs === 0 ? 1 : abs === 1 ? 0.88 : 0.65;
               const filterStr = "none";
