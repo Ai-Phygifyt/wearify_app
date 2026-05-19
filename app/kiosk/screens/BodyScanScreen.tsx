@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Home, SwitchCamera } from "lucide-react";
+import { LogOut, SwitchCamera } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -96,10 +96,11 @@ export function BodyScanScreen({
       <div className="k-scan-actions">
         <button onClick={onBack} className="k-scan-action-btn" aria-label="Back">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kiosk/backward.svg" alt="" aria-hidden width={44} />
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={56} />
         </button>
         <button onClick={onHome} className="k-scan-action-btn" aria-label="Home">
-          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/home.svg" alt="" aria-hidden width={56} />
         </button>
       </div>
 
