@@ -2190,7 +2190,8 @@ function KioskHeader({ trialCount, wardrobeCount, cartCount, goHome, triggerLogo
     }}>
       {onBack ? (
         <button onClick={onBack} className="k-iconbtn k-press" aria-label="Back">
-          <ChevronLeft size={22} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={44} />
         </button>
       ) : (
         <StoreBrand storeName={storeName ?? ""} logoFileId={storeLogoFileId} />
@@ -2830,10 +2831,12 @@ function ProductDetailScreen({ product, allSarees, isInTrial, isInWardrobe, onAd
         {/* Back / Home row */}
         <div className="k-detail-actions">
           <button onClick={onBack} className="k-detail-action-btn k-detail-home-btn k-press" aria-label="Back">
-            <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kiosk/backward.svg" alt="" aria-hidden width={56} />
           </button>
           <button onClick={goHome} className="k-detail-action-btn k-detail-home-btn k-press" aria-label="Home">
-            <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kiosk/home.svg" alt="" aria-hidden width={56} />
           </button>
         </div>
 
@@ -3645,7 +3648,8 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
           aria-label="Back"
           className="k-trial-v2-iconbtn"
         >
-          <ChevronLeft size={20} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={44} />
         </button>
         <div className="k-trial-v2-subhead-center">
           <div className="k-trial-v2-pill">Trial Room</div>
@@ -3891,13 +3895,15 @@ function WardrobeScreen({ items, lookImages, lookCutouts, sareeLookIds, cartItem
 
         <div className="k-ward-actions">
           <button onClick={goHome} className="k-ward-back k-press" aria-label="Back">
-            <ChevronLeft size={22} color="var(--k-maroon)" strokeWidth={2.5} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kiosk/backward.svg" alt="" aria-hidden width={44} />
           </button>
           <div className="k-ward-pill">
             My Wardrobe <Heart size={16} fill="var(--k-maroon)" color="var(--k-maroon)" />
           </div>
           <button onClick={goHome} className="k-ward-home k-press" aria-label="Home">
-            <Home size={20} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kiosk/home.svg" alt="" aria-hidden width={44} />
           </button>
         </div>
 
@@ -4060,7 +4066,8 @@ function OrderScreen({ cart, recentlyViewed, onUpdateQty, onRemoveItem, onChecko
 
       <div className="k-cart-actions">
         <button onClick={onBack} className="k-cart-back k-press" aria-label="Back">
-          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={56} />
         </button>
         <div className="k-cart-title-wrap">
           <div className="k-cart-title">Your Cart</div>
@@ -4071,7 +4078,8 @@ function OrderScreen({ cart, recentlyViewed, onUpdateQty, onRemoveItem, onChecko
           </div>
         </div>
         <button onClick={goHome} className="k-cart-home k-press" aria-label="Home">
-          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/home.svg" alt="" aria-hidden width={56} />
         </button>
       </div>
 
@@ -4367,11 +4375,13 @@ function TailorScreen({
           className="k-tailor-back k-press"
           aria-label="Back"
         >
-          <ChevronLeft size={26} color="var(--k-maroon)" strokeWidth={2.25} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/backward.svg" alt="" aria-hidden width={52} />
         </button>
         <div className="k-tailor-pill">Expert Tailor</div>
         <button onClick={goHome} className="k-tailor-home k-press" aria-label="Home">
-          <Home size={22} color="var(--k-maroon)" strokeWidth={2.25} fill="var(--k-maroon)" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/home.svg" alt="" aria-hidden width={52} />
         </button>
       </div>
 
