@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wearify — Complete Presentation</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: "Noto Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: #2c2a28; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* maroon #7B1D1D · gold #C9941A · ivory #FBF7F0 · Azure blue #1167B1 · green #2f7d4f */
+
+  .page { width: 297mm; height: 210mm; page-break-after: always; overflow: hidden;
+          display: flex; flex-direction: column; }
+
+  .top { height: 12mm; flex-shrink: 0; display: flex; align-items: center;
+         justify-content: space-between; padding: 0 14mm; border-bottom: 1px solid #E3D9C8; }
+  .top .mk { font-weight: 800; letter-spacing: 3px; font-size: 11pt; color: #7B1D1D; }
+  .top .mk span { color: #C9941A; }
+  .top .pg { font-size: 9pt; letter-spacing: 1px; color: #9a917f; }
+
+  .slide { flex: 1; padding: 13mm 17mm 14mm; display: flex; flex-direction: column; }
+  .kicker { font-size: 11pt; font-weight: 800; letter-spacing: 3px;
+            text-transform: uppercase; color: #C9941A; }
+  .kicker.az { color: #1167B1; }
+  .s-title { font-size: 30pt; font-weight: 800; color: #7B1D1D; line-height: 1.1;
+             margin: 6px 0 7px; }
+  .s-rule { width: 46mm; height: 3.5px; background: #C9941A; }
+  .s-rule.az { background: #1167B1; }
+  .body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+
+  /* TITLE SLIDE */
+  .title-slide { flex: 1; background: #7B1D1D; color: #FDF8F2;
+                 display: flex; flex-direction: column; justify-content: center; padding: 0 30mm; }
+  .title-slide .t-word { font-size: 44pt; font-weight: 800; letter-spacing: 12px; }
+  .title-slide .t-word span { color: #E9B949; }
+  .title-slide .t-sub { font-size: 11pt; letter-spacing: 4px; color: #E7C9A5;
+                        text-transform: uppercase; margin-top: 7px; }
+  .title-slide .t-main { font-size: 33pt; font-weight: 800; margin-top: 26mm; line-height: 1.2; }
+  .title-slide .t-main .g { color: #E9B949; }
+  .title-slide .t-line { font-size: 14pt; color: #EBD9C2; margin-top: 13px; }
+
+  .lead { font-size: 21pt; font-weight: 700; color: #2c2a28; line-height: 1.32; }
+  .lead .hl { color: #7B1D1D; }
+  .lead .azhl { color: #1167B1; }
+  .sub { font-size: 13.5pt; color: #6c665d; margin-top: 4px; }
+
+  /* numbered list */
+  .nlist { display: flex; flex-direction: column; gap: 13px; }
+  .nrow { display: flex; align-items: center; gap: 17px; }
+  .nbig { width: 16mm; height: 16mm; flex-shrink: 0; border-radius: 8px; background: #7B1D1D;
+          color: #fff; font-weight: 800; font-size: 19pt; display: flex;
+          align-items: center; justify-content: center; }
+  .nbig.az { background: #1167B1; }
+  .ntext { font-size: 16.5pt; }
+  .ntext b { color: #7B1D1D; font-weight: 800; }
+  .ntext .azb { color: #1167B1; font-weight: 800; }
+  .ntext span { display: block; font-size: 11.5pt; color: #7a7367; font-weight: 400; margin-top: 2px; }
+
+  .pts { display: flex; flex-direction: column; gap: 13px; margin-top: 14px; }
+  .pt { display: flex; gap: 13px; font-size: 15pt; align-items: flex-start; line-height: 1.4; }
+  .pt .dot { color: #C9941A; font-weight: 800; font-size: 17pt; line-height: 1.1; }
+  .pt .azdot { color: #1167B1; }
+  .pt b { color: #7B1D1D; }
+
+  /* surface cards */
+  .cards { display: flex; gap: 11px; }
+  .card { flex: 1; border: 1px solid #E3D9C8; border-top: 5px solid #C9941A;
+          border-radius: 8px; background: #FCFAF5; padding: 14px 9px; text-align: center; }
+  .card .c-tag { font-weight: 800; color: #7B1D1D; font-size: 15pt; }
+  .card .c-name { font-size: 11.5pt; font-weight: 700; margin-top: 6px; }
+  .card .c-desc { font-size: 10pt; color: #8a8378; margin-top: 5px; line-height: 1.35; }
+
+  .archbox { border: 2.5px solid #7B1D1D; background: #FBF1EE; border-radius: 10px;
+             text-align: center; padding: 17px; font-weight: 800; color: #7B1D1D;
+             font-size: 17pt; max-width: 175mm; margin: 0 auto; }
+  .archbox span { display: block; font-weight: 400; font-size: 11.5pt; color: #8a8378; margin-top: 4px; }
+  .downarrow { width: 0; height: 0; margin: 11px auto;
+               border-left: 12px solid transparent; border-right: 12px solid transparent;
+               border-top: 15px solid #C9941A; }
+  .downarrow.az { border-top-color: #1167B1; }
+  .downarrow.sm { margin: 7px auto; border-left-width: 9px; border-right-width: 9px; border-top-width: 11px; }
+
+  /* two-column compare */
+  .twocol { display: flex; gap: 18px; }
+  .colbox { flex: 1; border-radius: 10px; padding: 20px 22px; }
+  .colbox.bad { background: #F4ECEC; border: 1.5px solid #DBC4C4; }
+  .colbox.good { background: #ECF3EC; border: 2px solid #B9D3B9; }
+  .colbox h4 { font-size: 16pt; margin-bottom: 9px; }
+  .colbox.bad h4 { color: #9a4a3a; }
+  .colbox.good h4 { color: #3f7a3f; }
+  .colbox p { font-size: 13pt; line-height: 1.5; color: #4a4640; }
+
+  /* AI inputs */
+  .aieq { display: flex; align-items: center; gap: 13px; }
+  .aibox { flex: 1; border-radius: 10px; padding: 22px 14px; text-align: center;
+           border: 2px solid #C9941A; background: #FBF7F0; }
+  .aibox.out { border: 2.5px solid #7B1D1D; background: #7B1D1D; color: #FDF8F2; }
+  .aibox .ai-h { font-weight: 800; font-size: 15pt; color: #7B1D1D; }
+  .aibox.out .ai-h { color: #fff; }
+  .aibox .ai-d { font-size: 11pt; color: #8a8378; margin-top: 7px; line-height: 1.4; }
+  .aibox.out .ai-d { color: #EBD9C2; }
+  .opx { font-size: 30pt; font-weight: 800; color: #C9941A; flex-shrink: 0; }
+  .opx.az { color: #1167B1; }
+
+  /* pipeline */
+  .pipe { display: flex; align-items: stretch; gap: 7px; }
+  .pstep { flex: 1; border: 1.5px solid #E3D9C8; background: #FCFAF5; border-radius: 8px;
+           padding: 16px 8px; text-align: center; display: flex; flex-direction: column;
+           justify-content: center; }
+  .pstep.hot { border: 2.5px solid #7B1D1D; background: #FBF1EE; }
+  .pstep .ps-h { font-weight: 800; color: #7B1D1D; font-size: 13pt; }
+  .pstep .ps-d { font-size: 9.7pt; color: #8a8378; margin-top: 6px; line-height: 1.35; }
+  .rarrow { flex-shrink: 0; align-self: center; width: 0; height: 0;
+            border-top: 9px solid transparent; border-bottom: 9px solid transparent;
+            border-left: 12px solid #C9941A; }
+
+  /* flow steps */
+  .flow { display: flex; align-items: stretch; gap: 7px; }
+  .fstep { flex: 1; border: 1.5px solid #E3D9C8; border-radius: 9px; background: #FCFAF5; padding: 15px 12px; }
+  .fstep .f-n { width: 12mm; height: 12mm; border-radius: 7px; background: #7B1D1D;
+                color: #fff; font-weight: 800; font-size: 15pt; display: flex;
+                align-items: center; justify-content: center; margin-bottom: 9px; }
+  .fstep .f-h { font-weight: 800; color: #7B1D1D; font-size: 13pt; }
+  .fstep .f-d { font-size: 10pt; color: #6c665d; margin-top: 5px; line-height: 1.4; }
+
+  /* ELABORATED TECH TABLE */
+  .ttab { width: 100%; border-collapse: collapse; }
+  .ttab th { background: #7B1D1D; color: #fff; text-align: left; padding: 9px 12px;
+             font-size: 9.5pt; letter-spacing: 0.8px; text-transform: uppercase; }
+  .ttab td { border: 1px solid #E3D9C8; padding: 8px 12px; font-size: 11pt;
+             vertical-align: middle; line-height: 1.34; }
+  .ttab tr:nth-child(even) td { background: #FCFAF5; }
+  .ttab .t-name { width: 52mm; font-weight: 800; color: #7B1D1D; }
+  .ttab .t-what { width: 70mm; color: #6c665d; }
+
+  /* FLOW DIAGRAM (slide 7) */
+  .fd { display: flex; flex-direction: column; align-items: center; }
+  .fd-chips { display: flex; gap: 8px; }
+  .fd-chip { border: 1.5px solid #C9941A; background: #FBF7F0; border-radius: 6px;
+             padding: 7px 14px; font-weight: 800; color: #7B1D1D; font-size: 10.5pt; }
+  .fd-band { font-size: 9pt; font-weight: 800; letter-spacing: 1.5px; color: #9a917f;
+             text-transform: uppercase; margin: 4px 0; }
+  .fd-box { border: 1.6px solid #b9b0a0; background: #FCFAF5; border-radius: 9px;
+            padding: 11px 20px; text-align: center; }
+  .fd-box .fb-h { font-weight: 800; color: #2c2a28; font-size: 12.5pt; }
+  .fd-box .fb-s { font-size: 9.3pt; color: #8a8378; margin-top: 1px; }
+  .fd-hub { border: 2.5px solid #7B1D1D; background: #FBF1EE; border-radius: 10px;
+            padding: 12px 16px; width: 188mm; }
+  .fd-hub .hub-h { font-weight: 800; color: #7B1D1D; font-size: 14pt; text-align: center;
+                   margin-bottom: 8px; }
+  .fd-hub .hub-cells { display: flex; gap: 8px; }
+  .fd-hub .hub-cell { flex: 1; border: 1.3px solid #d8b9b3; background: #fff;
+                      border-radius: 6px; padding: 7px 5px; text-align: center; }
+  .fd-hub .hub-cell b { color: #7B1D1D; font-size: 10pt; }
+  .fd-hub .hub-cell span { display: block; font-size: 8pt; color: #8a8378; margin-top: 1px; }
+  .fd-two { display: flex; gap: 16px; width: 188mm; }
+  .fd-ext { flex: 1; border: 1.6px solid #b9b0a0; background: #FCFAF5; border-radius: 9px;
+            padding: 11px 14px; text-align: center; }
+  .fd-ext .fe-h { font-weight: 800; color: #2c2a28; font-size: 11.5pt; }
+  .fd-ext .fe-s { font-size: 9pt; color: #8a8378; margin-top: 2px; }
+  .fd-cap { margin-top: 11px; font-size: 11pt; color: #4a4640; text-align: center;
+            background: #F1F7FC; border: 1px solid #cfe0f1; border-radius: 7px;
+            padding: 9px 16px; max-width: 215mm; line-height: 1.45; }
+  .fd-cap b { color: #1167B1; }
+
+  /* migration table */
+  .mtab { width: 100%; border-collapse: collapse; }
+  .mtab th { background: #7B1D1D; color: #fff; text-align: left; padding: 8px 12px;
+             font-size: 9.5pt; letter-spacing: 0.8px; text-transform: uppercase; }
+  .mtab th.az { background: #1167B1; }
+  .mtab td { border: 1px solid #E3D9C8; padding: 7px 12px; font-size: 12pt; }
+  .mtab tr:nth-child(even) td { background: #FCFAF5; }
+  .mtab .now { color: #8a8378; width: 36%; }
+  .mtab .nw { font-weight: 800; color: #1167B1; }
+  .mtab .kept { font-weight: 800; color: #7B1D1D; }
+
+  /* A/B */
+  .abrow { display: flex; gap: 16px; }
+  .abcol { flex: 1; border-radius: 10px; padding: 19px 22px; }
+  .abcol.a { border: 1.5px solid #D8C9A8; background: #FBF7F0; }
+  .abcol.b { border: 2.5px solid #1167B1; background: #EAF2FB; }
+  .abcol .ab-k { font-size: 10pt; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+  .abcol.a .ab-k { color: #a08f6a; }
+  .abcol.b .ab-k { color: #1167B1; }
+  .abcol .ab-t { font-size: 18pt; font-weight: 800; margin: 4px 0 8px; }
+  .abcol.a .ab-t { color: #6c665d; }
+  .abcol.b .ab-t { color: #1167B1; }
+  .abcol .ab-l { font-size: 12pt; color: #4a4640; line-height: 1.5; }
+  .abcol .ab-l b { color: #7B1D1D; }
+  .abcol .ab-pick { margin-top: 10px; font-size: 11.5pt; font-weight: 800; color: #2f7d4f; }
+
+  /* swap + stats */
+  .swap { display: flex; align-items: center; gap: 17px; }
+  .swapbox { flex: 1; border-radius: 10px; padding: 17px; text-align: center; }
+  .swapbox.from { border: 1.5px solid #D8C9A8; background: #FBF7F0; }
+  .swapbox.to { border: 2.5px solid #1167B1; background: #EAF2FB; }
+  .swapbox .sw-k { font-size: 10pt; letter-spacing: 1.8px; text-transform: uppercase; font-weight: 800; }
+  .swapbox.from .sw-k { color: #a08f6a; }
+  .swapbox.to .sw-k { color: #1167B1; }
+  .swapbox .sw-n { font-weight: 800; font-size: 18pt; margin-top: 5px; }
+  .swapbox.from .sw-n { color: #6c665d; }
+  .swapbox.to .sw-n { color: #1167B1; }
+  .stats { display: flex; gap: 12px; margin-top: 16px; }
+  .stat { flex: 1; border: 1.5px solid #CFE0F1; border-top: 5px solid #1167B1;
+          border-radius: 9px; background: #EFF5FB; padding: 15px 14px; }
+  .stat .s-h { font-weight: 800; color: #1167B1; font-size: 13.5pt; }
+  .stat .s-d { font-size: 10.5pt; color: #4a4640; margin-top: 5px; line-height: 1.42; }
+
+  /* phases */
+  .phgrid { display: flex; flex-wrap: wrap; gap: 11px; }
+  .ph { flex: 1 1 30%; border: 1.5px solid #E3D9C8; border-left: 5px solid #1167B1;
+        border-radius: 8px; background: #FCFAF5; padding: 14px 17px; }
+  .ph .ph-n { font-size: 9.5pt; font-weight: 800; letter-spacing: 1px; color: #1167B1; }
+  .ph .ph-t { font-weight: 800; color: #7B1D1D; font-size: 13.5pt; margin-top: 2px; }
+  .ph .ph-d { font-size: 10pt; color: #6c665d; margin-top: 4px; line-height: 1.38; }
+
+  /* reasons */
+  .reasons { display: flex; gap: 12px; }
+  .reason { flex: 1; border: 1.5px solid #CFE0F1; border-top: 5px solid #1167B1;
+            border-radius: 9px; background: #EFF5FB; padding: 17px 14px; }
+  .reason .r-h { font-weight: 800; color: #1167B1; font-size: 14pt; }
+  .reason .r-d { font-size: 10.7pt; color: #4a4640; margin-top: 7px; line-height: 1.45; }
+
+  /* cost formula */
+  .fbox { border: 2.5px solid #1167B1; background: #EAF2FB; border-radius: 11px;
+          padding: 22px; text-align: center; }
+  .fbox .fx { font-size: 18pt; line-height: 1.6; }
+  .fbox .fx b { color: #7B1D1D; }
+  .fbox .fx .v { color: #1167B1; font-weight: 800; }
+  .fvtwo { display: flex; gap: 16px; margin-top: 16px; }
+  .fvb { flex: 1; border-radius: 10px; padding: 17px 20px; }
+  .fvb.fx-fixed { border: 2px solid #cfc6b3; background: #FAF6EE; }
+  .fvb.fx-var { border: 2px solid #9cc3e6; background: #EFF5FB; }
+  .fvb h4 { font-size: 14pt; margin-bottom: 6px; }
+  .fvb.fx-fixed h4 { color: #6c665d; }
+  .fvb.fx-var h4 { color: #1167B1; }
+  .fvb p { font-size: 11.5pt; color: #4a4640; line-height: 1.46; }
+  .fvb .amt { font-size: 21pt; font-weight: 800; margin-top: 7px; }
+  .fvb.fx-fixed .amt { color: #6c665d; }
+  .fvb.fx-var .amt { color: #1167B1; }
+
+  /* big number */
+  .bsignum { display: flex; align-items: center; gap: 26px; }
+  .bignum-v { font-size: 76pt; font-weight: 800; color: #1167B1; line-height: 1; }
+  .bignum-x { font-size: 15pt; color: #4a4640; line-height: 1.55; }
+  .bignum-x b { color: #7B1D1D; }
+  .scaleline { margin-top: 20px; font-size: 13.5pt; color: #34302b; background: #E7F2E9;
+               border: 1.5px solid #B9D3B9; border-radius: 9px; padding: 14px 19px; }
+  .scaleline b { color: #2f7d4f; }
+
+  /* runway matrix */
+  .rwx { width: 100%; border-collapse: collapse; }
+  .rwx th { background: #1167B1; color: #fff; padding: 9px 10px; font-size: 10.5pt;
+            text-transform: uppercase; letter-spacing: 0.5px; }
+  .rwx th.c { background: #7B1D1D; text-align: left; }
+  .rwx td { border: 1px solid #E3D9C8; padding: 14px 10px; text-align: center;
+            font-size: 15pt; font-weight: 800; }
+  .rwx td.c { text-align: left; font-size: 13pt; color: #7B1D1D; background: #FCFAF5; }
+  .rwx td.s { background: #F6E4E1; color: #b0473a; }
+  .rwx td.m { background: #FBF1DC; color: #9a7415; }
+  .rwx td.l { background: #E7F2E9; color: #2f7d4f; }
+
+  /* thank-you line */
+  .ty { margin-top: 16px; font-size: 13pt; font-weight: 700; color: #1167B1; }
+
+  /* Q&A appendix */
+  .qa-grid { display: flex; flex-wrap: wrap; gap: 12px 22px; }
+  .qa { flex: 1 1 44%; }
+  .qa .q { font-weight: 800; color: #7B1D1D; font-size: 12pt; }
+  .qa .q .qm { color: #C9941A; }
+  .qa .a { font-size: 11pt; color: #4a4640; line-height: 1.45; margin-top: 2px; }
+  .qa .a b { color: #1167B1; }
+</style>
+</head>
+<body>
+
+<!-- ===== 1 · TITLE ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">01 / 20</div></div>
+  <div class="title-slide">
+    <div>
+      <div class="t-word">WEAR<span>I</span>FY</div>
+      <div class="t-sub">AI Virtual Try-On Platform · Indian Saree Retail</div>
+    </div>
+    <div class="t-main">The Platform, the Move to <span class="g">Azure</span>,<br>and What It Costs</div>
+    <div class="t-line">A complete walkthrough — the product, the architecture, the AI, the migration, and the budget.</div>
+  </div>
+</div>
+
+<!-- ===== 2 · AGENDA ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">02 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Our Journey Today</div>
+    <div class="s-title">What We'll Cover — Five Parts</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="nlist">
+        <div class="nrow"><div class="nbig">1</div><div class="ntext"><b>What Wearify is</b><span>The product and the six kinds of people who use it</span></div></div>
+        <div class="nrow"><div class="nbig">2</div><div class="ntext"><b>How it's built</b><span>The architecture, the technologies, and how they work together</span></div></div>
+        <div class="nrow"><div class="nbig">3</div><div class="ntext"><b>The AI try-on</b><span>How the "magic" actually works</span></div></div>
+        <div class="nrow"><div class="nbig az">4</div><div class="ntext"><span class="azb">Moving to Microsoft Azure</span><span>Why, how, and the migration plan</span></div></div>
+        <div class="nrow"><div class="nbig az">5</div><div class="ntext"><span class="azb">What it costs</span><span>The budget, the per-use cost, and our Azure credits</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 3 · WHAT IS WEARIFY ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">03 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 1 · The Product</div>
+    <div class="s-title">What is Wearify?</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="lead">An <span class="hl">AI virtual try-on platform</span> for Indian saree retailers.</div>
+      <div class="pts">
+        <div class="pt"><span class="dot">&#9656;</span><div><b>The problem:</b> trying on saree after saree in a shop is slow and tiring.</div></div>
+        <div class="pt"><span class="dot">&#9656;</span><div><b>The solution:</b> a customer stands at a smart mirror, picks any saree, and instantly sees a photorealistic image of themselves wearing it.</div></div>
+        <div class="pt"><span class="dot">&#9656;</span><div><b>The scope:</b> built for saree stores across India — one platform serving six different kinds of users.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 4 · SIX SURFACES ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">04 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 1 · The Product</div>
+    <div class="s-title">One Platform, Six Users</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="lead" style="font-size:16pt;margin-bottom:20px;">Six different apps — all built from <span class="hl">one codebase</span>.</div>
+      <div class="cards">
+        <div class="card"><div class="c-tag">Admin</div><div class="c-name">Mission Control</div><div class="c-desc">Wearify operations</div></div>
+        <div class="card"><div class="c-tag">Store</div><div class="c-name">Retailer Dashboard</div><div class="c-desc">Shop owners</div></div>
+        <div class="card"><div class="c-tag">Tablet</div><div class="c-name">Sales Tablet</div><div class="c-desc">In-store staff</div></div>
+        <div class="card"><div class="c-tag">Kiosk</div><div class="c-name">Smart Mirror</div><div class="c-desc">Customer, in-store</div></div>
+        <div class="card"><div class="c-tag">Customer</div><div class="c-name">Mobile App</div><div class="c-desc">Customer, at home</div></div>
+        <div class="card"><div class="c-tag">Tailor</div><div class="c-name">Tailor Portal</div><div class="c-desc">Stitching partners</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 5 · ARCHITECTURE ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">05 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 2 · How It's Built</div>
+    <div class="s-title">One App, One Backend</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="archbox">ONE Next.js application &nbsp;+&nbsp; ONE Convex backend<span>holds all the data — 46 tables</span></div>
+      <div class="downarrow"></div>
+      <div class="cards">
+        <div class="card"><div class="c-tag" style="font-size:13pt;">Admin</div></div>
+        <div class="card"><div class="c-tag" style="font-size:13pt;">Store</div></div>
+        <div class="card"><div class="c-tag" style="font-size:13pt;">Tablet</div></div>
+        <div class="card"><div class="c-tag" style="font-size:13pt;">Kiosk</div></div>
+        <div class="card"><div class="c-tag" style="font-size:13pt;">Customer</div></div>
+        <div class="card"><div class="c-tag" style="font-size:13pt;">Tailor</div></div>
+      </div>
+      <div class="sub" style="text-align:center;margin-top:18px;">Improve something shared — the data, a feature, a fix — and it reaches <b style="color:#7B1D1D;">all six surfaces at once</b>.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 6 · TECHNOLOGY STACK (ELABORATED) ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">06 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 2 · How It's Built</div>
+    <div class="s-title">The Technologies We Use Today</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <table class="ttab">
+        <tr><th>Technology</th><th>What it is</th><th>How Wearify uses it</th></tr>
+        <tr><td class="t-name">TypeScript &amp; React</td><td class="t-what">The programming language &amp; UI library</td><td>Every screen and all the logic across the six surfaces is written in it</td></tr>
+        <tr><td class="t-name">Next.js 16</td><td class="t-what">A modern web framework</td><td>Builds and serves all six surfaces from a single codebase</td></tr>
+        <tr><td class="t-name">Convex</td><td class="t-what">A backend platform — database, server logic &amp; real-time</td><td>Stores all 46 tables of data, runs the server functions, and pushes live updates</td></tr>
+        <tr><td class="t-name">ComfyUI + Qwen models</td><td class="t-what">An AI image-generation pipeline</td><td>Generates the virtual try-on image — the customer wearing the saree</td></tr>
+        <tr><td class="t-name">RunPod</td><td class="t-what">A serverless GPU cloud</td><td>Provides the graphics hardware (GPU) the AI pipeline runs on</td></tr>
+        <tr><td class="t-name">TailwindCSS</td><td class="t-what">A styling toolkit</td><td>Gives each of the six surfaces its distinct look and theme</td></tr>
+        <tr><td class="t-name">@imgly background-removal</td><td class="t-what">An in-browser AI tool</td><td>Cleans the background off the finished try-on image, on the device</td></tr>
+        <tr><td class="t-name">SendGrid &amp; Twilio</td><td class="t-what">Email &amp; messaging providers</td><td>Send email, SMS / OTP and WhatsApp messages to customers</td></tr>
+        <tr><td class="t-name">Netlify</td><td class="t-what">A web hosting platform</td><td>Serves the web app to users — fast, worldwide</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 7 · FLOW DIAGRAM ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">07 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 2 · How It's Built</div>
+    <div class="s-title">How the Technologies Work Together</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="fd">
+        <div class="fd-band">The six surfaces &mdash; on users' devices</div>
+        <div class="fd-chips">
+          <div class="fd-chip">Admin</div><div class="fd-chip">Store</div><div class="fd-chip">Tablet</div>
+          <div class="fd-chip">Kiosk</div><div class="fd-chip">Customer</div><div class="fd-chip">Tailor</div>
+        </div>
+        <div class="downarrow sm"></div>
+        <div class="fd-box"><div class="fb-h">Next.js web app</div><div class="fb-s">the frontend — hosted today on Netlify</div></div>
+        <div class="downarrow sm"></div>
+        <div class="fd-hub">
+          <div class="hub-h">CONVEX BACKEND &mdash; the hub</div>
+          <div class="hub-cells">
+            <div class="hub-cell"><b>Database</b><span>46 tables of data</span></div>
+            <div class="hub-cell"><b>File Storage</b><span>images &amp; documents</span></div>
+            <div class="hub-cell"><b>Real-time Engine</b><span>pushes live updates</span></div>
+            <div class="hub-cell"><b>Scheduler</b><span>background jobs</span></div>
+          </div>
+        </div>
+        <div class="downarrow sm"></div>
+        <div class="fd-two">
+          <div class="fd-ext"><div class="fe-h">RunPod GPU &mdash; ComfyUI + Qwen</div><div class="fe-s">runs the AI try-on and returns the image</div></div>
+          <div class="fd-ext"><div class="fe-h">SendGrid + Twilio</div><div class="fe-s">send email, SMS / OTP and WhatsApp</div></div>
+        </div>
+        <div class="fd-cap">Convex is the <b>hub</b>: it stores the data, runs the logic, calls the AI and messaging services &mdash; and <b>pushes every change straight back to all six surfaces, live</b>.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 8 · LIVE DATA ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">08 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 2 · How It's Built</div>
+    <div class="s-title">The Big Idea: Live Data</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="lead" style="font-size:17pt;margin-bottom:20px;">The screen never has to ask <span class="hl">"is it ready yet?"</span></div>
+      <div class="twocol">
+        <div class="colbox bad"><h4>&#10007;&nbsp; Most apps</h4>
+          <p>The screen keeps <b>asking</b> the server — "any updates? any updates?" It feels slow and laggy.</p></div>
+        <div class="colbox good"><h4>&#10003;&nbsp; Wearify</h4>
+          <p>The moment data changes, the server <b>pushes</b> it to every screen instantly — the mirror, the tablet and the phone all update together.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 9 · AI WHAT IT DOES ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">09 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 3 · The AI Try-On</div>
+    <div class="s-title">What the AI Actually Does</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="aieq">
+        <div class="aibox"><div class="ai-h">Photo of the customer</div><div class="ai-d">a body scan at the mirror</div></div>
+        <div class="opx">+</div>
+        <div class="aibox"><div class="ai-h">Flat photo of a saree</div><div class="ai-d">a plain catalogue image</div></div>
+        <div class="opx">=</div>
+        <div class="aibox out"><div class="ai-h">The customer wearing that saree</div><div class="ai-d">photorealistic — right border, colour &amp; drape</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 10 · AI PIPELINE ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">10 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 3 · The AI Try-On</div>
+    <div class="s-title">It's a Pipeline, Not One Model</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="lead" style="font-size:15pt;margin-bottom:20px;">A team of <span class="hl">specialist AI models</span>, passing work down a line — on a GPU.</div>
+      <div class="pipe">
+        <div class="pstep"><div class="ps-h">1. Resize</div><div class="ps-d">prepare the two photos</div></div>
+        <div class="rarrow"></div>
+        <div class="pstep"><div class="ps-h">2. Understand</div><div class="ps-d">Qwen-2.5-VL reads photos + instructions</div></div>
+        <div class="rarrow"></div>
+        <div class="pstep hot"><div class="ps-h">3. Generate</div><div class="ps-d">Qwen-Image-Edit + LoRA paints the saree on</div></div>
+        <div class="rarrow"></div>
+        <div class="pstep"><div class="ps-h">4. Decode</div><div class="ps-d">turn it into a normal photo</div></div>
+        <div class="rarrow"></div>
+        <div class="pstep"><div class="ps-h">5. Clean up</div><div class="ps-d">remove background, in the browser</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 11 · TRY-ON FLOW ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">11 / 20</div></div>
+  <div class="slide">
+    <div class="kicker">Part 3 · The AI Try-On</div>
+    <div class="s-title">One Try-On, End to End</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="flow">
+        <div class="fstep"><div class="f-n">1</div><div class="f-h">Customer taps</div><div class="f-d">"Try On" at the smart mirror.</div></div>
+        <div class="fstep"><div class="f-n">2</div><div class="f-h">App sends it</div><div class="f-d">the request goes to the backend.</div></div>
+        <div class="fstep"><div class="f-n">3</div><div class="f-h">Backend checks</div><div class="f-d">safety checks, then hands it to the GPU.</div></div>
+        <div class="fstep"><div class="f-n">4</div><div class="f-h">GPU generates</div><div class="f-d">the AI pipeline runs and makes the image.</div></div>
+        <div class="fstep"><div class="f-n">5</div><div class="f-h">Live result</div><div class="f-d">pushed back — the mirror updates by itself.</div></div>
+      </div>
+      <div class="sub" style="text-align:center;margin-top:20px;">A few seconds, start to finish — everything in between is invisible to the customer.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 12 · WHY AZURE ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">12 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">Part 4 · Moving to Microsoft Azure</div>
+    <div class="s-title">Why Move to Azure?</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="reasons">
+        <div class="reason"><div class="r-h">Data stays in India</div><div class="r-d">Azure's Central India region keeps customer data in-country — for the DPDP Act 2023.</div></div>
+        <div class="reason"><div class="r-h">One cloud</div><div class="r-d">Replaces several separate providers with a single cloud, one bill.</div></div>
+        <div class="reason"><div class="r-h">Enterprise-grade</div><div class="r-d">Proven security, scaling and reliability as Wearify grows.</div></div>
+        <div class="reason"><div class="r-h">Credits-funded</div><div class="r-d">Microsoft startup credits cover the early journey (Part 5).</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 13 · TWO WAYS ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">13 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">Part 4 · Moving to Microsoft Azure</div>
+    <div class="s-title">Two Ways to Migrate — and Our Choice</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="abrow">
+        <div class="abcol a">
+          <div class="ab-k">Approach A</div>
+          <div class="ab-t">Decompose</div>
+          <div class="ab-l">Break Convex into <b>six separate Azure services</b> and rebuild that part of the app. Powerful, but a re-architecture.</div>
+        </div>
+        <div class="abcol b">
+          <div class="ab-k">Approach B</div>
+          <div class="ab-t">Self-Host Convex</div>
+          <div class="ab-l">Keep Convex exactly as it is and <b>run it ourselves on Azure</b>. Nothing in the app is rewritten.</div>
+          <div class="ab-pick">&#10003; OUR CHOICE — lower risk, faster, no rewrite</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 14 · MIGRATION MAP ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">14 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">Part 4 · Moving to Microsoft Azure</div>
+    <div class="s-title">The Migration Map</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <table class="mtab">
+        <tr><th>Layer</th><th class="now" style="color:#fff;">Today</th><th class="az">On Microsoft Azure</th></tr>
+        <tr><td>Web app hosting</td><td class="now">Next.js on Netlify</td><td class="nw">Azure App Service</td></tr>
+        <tr><td>Backend &amp; real-time</td><td class="now">Convex Cloud</td><td class="kept">Convex — self-hosted on Azure</td></tr>
+        <tr><td>Database (under Convex)</td><td class="now">managed by Convex</td><td class="nw">Azure Database for PostgreSQL</td></tr>
+        <tr><td>File storage</td><td class="now">Convex File Storage</td><td class="nw">Azure Blob Storage</td></tr>
+        <tr><td>AI try-on (GPU)</td><td class="now">ComfyUI + Qwen on RunPod</td><td class="nw">Azure GPU — NVIDIA H100</td></tr>
+        <tr><td>Sign-in</td><td class="now">Better Auth / phone-OTP</td><td class="nw">Microsoft Entra ID / External ID</td></tr>
+        <tr><td>Email, SMS &amp; WhatsApp</td><td class="now">SendGrid + Twilio</td><td class="nw">Azure Communication Services</td></tr>
+        <tr><td>Region</td><td class="now">US-based providers</td><td class="nw">Central India (Pune)</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 15 · AI ON AZURE ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">15 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">Part 4 · Moving to Microsoft Azure</div>
+    <div class="s-title">The AI on Azure — H100</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="lead" style="font-size:16pt;margin-bottom:16px;">The AI models <span class="azhl">do not change.</span> The GPU steps up to the H100.</div>
+      <div class="swap">
+        <div class="swapbox from"><div class="sw-k">Today</div><div class="sw-n">NVIDIA A100 (RunPod)</div></div>
+        <div class="opx az">&#10142;</div>
+        <div class="swapbox to"><div class="sw-k">On Azure</div><div class="sw-n">NVIDIA H100</div></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="s-h">Native FP8</div><div class="s-d">Our models are FP8 — the H100 accelerates FP8 in hardware; the A100 cannot.</div></div>
+        <div class="stat"><div class="s-h">Faster renders</div><div class="s-d">Higher throughput — shorter try-on times.</div></div>
+        <div class="stat"><div class="s-h">Room to scale</div><div class="s-d">More concurrent try-ons per GPU as traffic grows.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 16 · MIGRATION PLAN ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">16 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">Part 4 · Moving to Microsoft Azure</div>
+    <div class="s-title">How We'll Do It — Five Phases</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="phgrid">
+        <div class="ph"><div class="ph-n">PHASE 1</div><div class="ph-t">Azure foundation</div><div class="ph-d">Set up Azure in the Central India region.</div></div>
+        <div class="ph"><div class="ph-n">PHASE 2</div><div class="ph-t">Self-hosted Convex</div><div class="ph-d">Stand up Convex on Azure + PostgreSQL.</div></div>
+        <div class="ph"><div class="ph-n">PHASE 3</div><div class="ph-t">AI pipeline on H100</div><div class="ph-d">Move the try-on to Azure H100 GPUs.</div></div>
+        <div class="ph"><div class="ph-n">PHASE 4</div><div class="ph-t">Frontend, sign-in &amp; messaging</div><div class="ph-d">Move the web app, auth and messaging.</div></div>
+        <div class="ph"><div class="ph-n">PHASE 5</div><div class="ph-t">Cutover</div><div class="ph-d">Run both side by side, switch, decommission.</div></div>
+      </div>
+      <div class="sub" style="text-align:center;margin-top:18px;">Not one big switch — each phase is testable on its own.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 17 · COST MODEL ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">17 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">Part 5 · What It Costs</div>
+    <div class="s-title">The Cost Model — Two Parts</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="fbox">
+        <div class="fx"><b>Monthly cost</b> = <span class="v">Fixed baseline (~$450)</span> + ( renders &times; <span class="v">$0.05</span> ) + messaging + storage</div>
+      </div>
+      <div class="fvtwo">
+        <div class="fvb fx-fixed"><h4>FIXED — always on</h4><p>Keeps the platform switched on, even with zero customers.</p><div class="amt">~$450 / month</div></div>
+        <div class="fvb fx-var"><h4>VARIABLE — scales with use</h4><p>Grows with how many try-ons customers actually run.</p><div class="amt">~$0.05 / try-on</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 18 · COST PER USE ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">18 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">Part 5 · What It Costs</div>
+    <div class="s-title">Cost Per Use — the Unit Economics</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="bsignum">
+        <div class="bignum-v">$0.05</div>
+        <div class="bignum-x"><b>per AI try-on</b> &mdash; about &#8377;4.<br>One customer visit (~4 try-ons) &#8776; <b>$0.20 / &#8377;17</b>.<br>SMS, email, storage &mdash; rounding errors next to this.</div>
+      </div>
+      <div class="scaleline"><b>Economies of scale:</b> at low volume a render effectively costs 20&cent;+; as volume grows it drops toward the 5&cent; floor. <b>The platform rewards usage.</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 19 · CREDITS & RUNWAY ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">19 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">Part 5 · What It Costs</div>
+    <div class="s-title">Azure Credits — Burn Rate &amp; Runway</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="lead" style="font-size:14pt;margin-bottom:14px;">Runway = Azure credits &divide; monthly burn. &nbsp;How long the credits last:</div>
+      <table class="rwx">
+        <tr><th class="c">Azure credits</th><th>Pilot &nbsp;~$725/mo</th><th>Growth &nbsp;~$1,550/mo</th><th>Scale &nbsp;~$6,000/mo</th></tr>
+        <tr><td class="c">$5,000</td><td class="m">~7 months</td><td class="s">~3 months</td><td class="s">under 1 month</td></tr>
+        <tr><td class="c">$25,000</td><td class="l">~3 years</td><td class="m">~16 months</td><td class="s">~4 months</td></tr>
+        <tr><td class="c">$150,000</td><td class="l">~17 years</td><td class="l">~8 years</td><td class="m">~2 years</td></tr>
+      </table>
+      <div class="sub" style="text-align:center;margin-top:14px;">Credits also expire (~1 year after activation) — so we use them deliberately, not hoard them.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 20 · TAKEAWAYS ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">20 / 20</div></div>
+  <div class="slide">
+    <div class="kicker az">In Closing</div>
+    <div class="s-title">Five Things to Remember</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="nlist">
+        <div class="nrow"><div class="nbig">1</div><div class="ntext"><b>Wearify is an AI virtual try-on platform</b><span>one codebase, six surfaces, one shared live database</span></div></div>
+        <div class="nrow"><div class="nbig">2</div><div class="ntext"><b>The AI is a pipeline of models on a GPU</b><span>and it does not change when we move to Azure</span></div></div>
+        <div class="nrow"><div class="nbig az">3</div><div class="ntext"><span class="azb">We keep Convex — self-hosted on Azure</span><span>a relocation, not a rewrite</span></div></div>
+        <div class="nrow"><div class="nbig az">4</div><div class="ntext"><span class="azb">H100 GPUs, in Central India</span><span>faster AI, and DPDP Act 2023 compliant</span></div></div>
+        <div class="nrow"><div class="nbig az">5</div><div class="ntext"><span class="azb">~$450 fixed + ~$0.05 per try-on</span><span>and our Azure credits fund the journey</span></div></div>
+      </div>
+      <div class="ty">Thank you &mdash; questions welcome.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== APPENDIX · LIKELY QUESTIONS ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">APPENDIX</div></div>
+  <div class="slide">
+    <div class="kicker az">Appendix</div>
+    <div class="s-title">Likely Questions</div>
+    <div class="s-rule az"></div>
+    <div class="body">
+      <div class="qa-grid">
+        <div class="qa"><div class="q"><span class="qm">Q.</span> How long will the migration take?</div>
+          <div class="a">Five phases, each independently testable. A firm timeline comes after Phase 1 scoping; self-hosting Convex keeps it shorter than a full rebuild.</div></div>
+        <div class="qa"><div class="q"><span class="qm">Q.</span> Will the AI quality change on Azure?</div>
+          <div class="a">No. The same models and pipeline run on Azure — only the GPU changes. <b>Same input, same output.</b></div></div>
+        <div class="qa"><div class="q"><span class="qm">Q.</span> Why H100 and not A100?</div>
+          <div class="a">Our models are FP8, and the H100 accelerates FP8 in hardware — the A100 can't. Faster renders, and headroom to scale.</div></div>
+        <div class="qa"><div class="q"><span class="qm">Q.</span> Why keep Convex instead of native Azure services?</div>
+          <div class="a">It avoids a rewrite. Self-hosting Convex is a relocation — lower risk, faster, and the live-data behaviour keeps working for free.</div></div>
+        <div class="qa"><div class="q"><span class="qm">Q.</span> Will there be downtime for customers?</div>
+          <div class="a">No big-bang switch — old and new run side by side, and we cut over only when Azure is verified stable.</div></div>
+        <div class="qa"><div class="q"><span class="qm">Q.</span> How long do the Azure credits last?</div>
+          <div class="a">Depends on usage — see slide 19. At pilot usage a $25,000 grant lasts ~3 years; at growth usage, ~16 months.</div></div>
+        <div class="qa"><div class="q"><span class="qm">Q.</span> What happens when the credits run out?</div>
+          <div class="a">We plan to be revenue-generating or funded before then. The cost is predictable — ~$450 fixed + ~$0.05 per try-on.</div></div>
+        <div class="qa"><div class="q"><span class="qm">Q.</span> Is the AI a third-party API, like ChatGPT?</div>
+          <div class="a">No — we self-host open Qwen models in our own pipeline, so we control it fully. That's why it runs on our own GPUs.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

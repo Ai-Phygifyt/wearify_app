@@ -925,5 +925,52 @@ Seed customers/stores/tailors all continue to work with OTP `123456`. See sectio
 
 **Maintenance:** when modules, tables, or major flows change materially, update the relevant section here so future sessions stay accurate. Append to section 12 when solving a non-obvious bug or making a design decision that future-you (or a new Claude session) would otherwise have to re-derive from scratch.
 
+---
 
-changes
+## Trial-room model sizing — attempts log
+
+**Problem.** In the kiosk trial room ([app/kiosk/page.tsx](app/kiosk/page.tsx) → `TrialHeroCutout` + `.k-trial-v2-cutout` in [app/kiosk/kiosk-theme.css](app/kiosk/kiosk-theme.css)), the AI-generated model appears too small and floats above the podium disc instead of standing on it. The reference design ("MAUVE SAREES" Mauve mock) shows a large model whose feet rest on the disc's top surface.
+
+**Root cause (unsolved).** `@imgly/background-removal` (used in [lib/bgRemovalQueue.ts](lib/bgRemovalQueue.ts)) outputs a PNG at the original AI-render dimensions (~2300×2300) with `alpha=0` everywhere outside the person. The visible person occupies an unpredictable fraction of the canvas — anywhere from ~40% to ~80% vertically, with variable padding above/below feet/head — because the Qwen workflow's framing depends on the input scan. CSS `<img height: 100%>` therefore renders the *whole canvas*, making the person look small and float wherever the bg-removed silhouette happens to sit.
+
+**Attempts (all reverted as of 2026-05-23).**
+
+1. **Hard-coded CSS offsets** — `bottom: 6vh`, `bottom: calc(30px + 22vh)`, `height: 118%`, etc. on `.k-trial-v2-cutout`. Eyeballed values that work for one specific cutout but break for the next because each render has different padding.
+
+2. **`transform: scale(1.35)` with `transform-origin: bottom center`.** Made the *whole canvas* bigger (including all the empty transparent area), didn't actually move feet to podium because the scale anchor is the canvas bottom, not the person's feet.
+
+3. **Tightened body-scan capture to `FIT_RECT` crop + 2% padding** in [app/kiosk/screens/BodyScanScreen.tsx](app/kiosk/screens/BodyScanScreen.tsx). Cropped the camera capture before upload to force the AI input to a known portrait window. Didn't help — the RunPod Qwen workflow re-frames the person in its output regardless of input crop, and the cropped+mirrored upload at one point caused renders to silently break.
+
+4. **Server-side bbox crop in the bg-removal queue** — added `cropToOpaqueBBox()` in [lib/bgRemovalQueue.ts](lib/bgRemovalQueue.ts) to trim the PNG to the bounding box of opaque pixels before upload. This only applies to *new* looks; existing storage cutouts stayed unchanged, and even for new ones the resulting tightness didn't visibly land the model on the podium because container sizing was still guess-based.
+
+5. **Client-side `useImageBBox` hook + per-render inline-style positioning** in `TrialHeroCutout`. Loaded each cutout to a canvas, scanned alpha for the visible bbox, then computed `height: 100%/bbox.h` + `top: -bbox.y/bbox.h * 100%` so the visible person should fill the container and feet land at container bottom. In practice the result stretched/clipped — likely because horizontal positioning assumed the person is centered in the canvas (often not true) and because `overflow: hidden` on the container interacted with the oversized image.
+
+6. **180% height + `translateY(22%)` "let it overflow" hack.** Image extended way past stage edges, looked stretched / head off-screen.
+
+**Final reverted state (current).** `.k-trial-v2-cutout` is back to its pre-experiment baseline:
+
+```css
+.k-trial-v2-cutout {
+  position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  height: 100%; width: 100%; z-index: 2;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.k-trial-v2-cutout img { height: 100%; width: auto; object-fit: contain; ... }
+```
+
+Body-scan capture is back to full-frame, un-mirrored, with the silhouette guide kept purely as visual UX feedback. The pose-detection auto-capture flow ([lib/useBodyPose.ts](lib/useBodyPose.ts) + `BodyScanScreen.tsx`) was *not* reverted — it stays as a usability improvement.
+
+**Debug aid (removed after collecting samples).** A dev-only image dump was added then reverted once representative cutouts were captured:
+
+- One pre/post pair lives in [public/debug/](public/debug/) (`pre-bgremoval-<lookId>.jpg` = raw RunPod render, `post-bgremoval-<lookId>.png` = after `@imgly`). Inspect those to see exactly what padding/canvas shape we're fighting in CSS.
+- The dump mechanism (`devSaveBlob` in bgRemovalQueue + `app/api/debug-save-image/route.ts`) was removed once samples were captured. To re-add temporarily for a new sample, the diff is roughly:
+  - In `runOne()`, after `srcBlob` and after `cutoutBlob`, POST each blob (multipart `file` + `filename`) to an `/api/debug-save-image` route that writes under `public/debug/`.
+  - Hard-gate both the call and the route to `NODE_ENV !== "production"`.
+
+**Next ideas (not yet tried).**
+
+- **Tune RunPod workflow output framing.** If we can prompt Qwen to produce consistent person framing (head at 10% from top, feet at 90% from top of canvas), the existing CSS would Just Work. See [convex/runpod.ts:96](convex/runpod.ts#L96) `buildSareeWorkflow` — `QwenEditAdaptiveLongestEdge max_size: 2300` is the only known sizing knob.
+- **Server-side bbox crop done in the Convex action, not client.** Run it once at look completion and patch `imageNoBgFileId` to point at the cropped version. Avoids the WASM client-side bbox detect entirely, and the crop persists across browser sessions.
+- **Use MediaPipe pose on the AI-render output** to find anatomical feet position (not just opaque-pixel bbox) and align based on that — more robust to AI hallucinations (extra hair, dress trains).
+- **Stop fighting it in CSS** — overlay a podium asset that visually wraps under the model's feet, hiding any small gap. Less correct but more forgiving.
+- **Use a fixed-size letterbox overlay** that shrinks the displayed cutout to fit a target aspect, then position that letterbox at the podium. Loses some flexibility but is deterministic.
