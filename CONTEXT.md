@@ -974,3 +974,20 @@ Body-scan capture is back to full-frame, un-mirrored, with the silhouette guide 
 - **Use MediaPipe pose on the AI-render output** to find anatomical feet position (not just opaque-pixel bbox) and align based on that — more robust to AI hallucinations (extra hair, dress trains).
 - **Stop fighting it in CSS** — overlay a podium asset that visually wraps under the model's feet, hiding any small gap. Less correct but more forgiving.
 - **Use a fixed-size letterbox overlay** that shrinks the displayed cutout to fit a target aspect, then position that letterbox at the podium. Loses some flexibility but is deterministic.
+
+## Kiosk idle-screen background: image → video
+
+The "Touch to Start" idle screen ([app/kiosk/page.tsx](app/kiosk/page.tsx) — `IdleScreen`, ~L1494) previously rendered a static blurred photo (`public/kiosk/first-page/background.jpg`) under the white-wash SVG overlay (`ideal-screen-2.svg`). Replaced with a looping muted video (`public/kiosk/first-page/videobg.mp4`).
+
+Implementation notes:
+
+- `<video autoPlay loop muted playsInline preload="auto">` with a child `<source type="video/mp4">`. `muted` + `playsInline` is required so browser autoplay policy doesn't block it; `<source>` (instead of `src` attr) sets MIME explicitly and is the most universally accepted form.
+- Reuses the existing `.k-idle-img active` class — same `position: absolute; inset: 0; width/height: 100%; object-fit: cover` and the existing `filter: blur(6px) saturate(1.25); transform: scale(1.015)` apply identically to the video, so the visual treatment matches what the photo had.
+- The `.k-idle-overlay` SVG on top is a 50%-white wash + 25px backdrop-blur — it heavily diffuses whatever's underneath. Worth knowing if the video ever appears washed out: the wash is intentional UX styling, not a video bug.
+- `onError` / `onCanPlay` console handlers were left in place to surface decode/network failures (e.g. a Chromium build without H.264). Cheap, dev-only signal — fine to keep.
+
+## Vercel build fix: pnpm lockfile drift
+
+Vercel build was failing on `main` with `ERR_PNPM_OUTDATED_LOCKFILE` because `@mediapipe/tasks-vision@^0.10.35` was added to `package.json` but `pnpm-lock.yaml` was never regenerated. Vercel runs `pnpm install --frozen-lockfile` in CI, so any spec drift hard-fails the install step.
+
+Fix: regenerated `pnpm-lock.yaml` via `npx -y pnpm@10 install` (pnpm isn't in the local shell PATH; npx route avoids a global install). The lockfile now contains the `@mediapipe/tasks-vision@0.10.35` resolution. Any future "added a dep, didn't run install" drift produces the same Vercel failure — same fix.
