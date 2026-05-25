@@ -1,10 +1,62 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LogOut, SwitchCamera } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import {
+  POSE_LANDMARKS,
+  landmarksFitInRect,
+  useBodyPose,
+} from "@/lib/useBodyPose";
+
+// =========================================================================
+// Fit region — normalized rect inside the video frame (0..1 coords).
+// Must be kept in sync with the CSS .k-scan-guide-rect inset values:
+//   left: 25% / right: 25% / top: 5% / bottom: 5%
+// → x=0.25, w=0.50, y=0.05, h=0.90
+//
+// Currently used ONLY for the on-screen fit check (does the user's
+// body sit inside the green silhouette?). The captured photo is
+// uploaded FULL-FRAME, un-mirrored — earlier attempts at cropping it
+// to FIT_RECT for "deterministic model size" did not help the trial-
+// room layout enough to justify the change, and the loose 5%/5% rect
+// is more forgiving for users to actually fit into.
+//
+// This rect serves two purposes:
+//   1. On-screen fit check — does the user's body sit inside the
+//      green silhouette? (drives auto-capture trigger)
+//   2. The captured photo is cropped to this rect before upload, so
+//      every saved scan has the model at the same scale and position
+//      in the frame. The trial-room cutout sizing relies on that
+//      determinism — see .k-trial-v2-cutout in kiosk-theme.css.
+//
+// Mirror is intentionally NOT applied — the RunPod Qwen workflow was
+// trained on un-mirrored frames, and pose-conditioned generation can
+// flip left/right details (drape direction, hand placement) if the
+// input orientation is reversed.
+// =========================================================================
+const FIT_RECT = { x: 0.25, y: 0.05, w: 0.50, h: 0.90 };
+
+// Landmarks that must all lie inside FIT_RECT for the scan to "lock in".
+// Head + shoulders + hips + ankles cover full-body framing; knees are
+// implicit. Hands/face detail is intentionally ignored — a person with
+// hands at their side or by their face should still register as in-frame.
+const FIT_LANDMARKS = [
+  POSE_LANDMARKS.NOSE,
+  POSE_LANDMARKS.LEFT_SHOULDER,
+  POSE_LANDMARKS.RIGHT_SHOULDER,
+  POSE_LANDMARKS.LEFT_HIP,
+  POSE_LANDMARKS.RIGHT_HIP,
+  POSE_LANDMARKS.LEFT_ANKLE,
+  POSE_LANDMARKS.RIGHT_ANKLE,
+] as const;
+
+// How long the user has to stay inside the rect before the auto-fire
+// kicks in, then a brief visible countdown so the user can hold still.
+const FIT_HOLD_MS = 900;
+const AUTO_CAPTURE_COUNTDOWN_SEC = 3;
 
 export function BodyScanScreen({
   storeName,
@@ -28,11 +80,60 @@ export function BodyScanScreen({
   triggerLogout?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // The screen has two distinct phases:
+  //   scanning=false → original splash UI (blurred bg + avatar silhouette
+  //                    + "Capture My Look" button). No webcam visible.
+  //   scanning=true  → live webcam, green/red fit guide, auto-capture
+  //                    once the user holds the pose for FIT_HOLD_MS.
+  // The user taps "Capture My Look" to move from splash → scanning.
+  const [scanning, setScanning] = useState(false);
+
+  // Pose detection only spins up once the user is actually scanning,
+  // so the splash screen doesn't pay the WASM/model download cost.
+  const poseEnabled = scanning && !!stream;
+  const { ready: poseReady, landmarks, error: poseError } = useBodyPose(
+    videoRef,
+    { enabled: poseEnabled },
+  );
+
+  // "fit" = current frame's landmarks satisfy FIT_RECT for all required points.
+  const isFit = useMemo(
+    () => landmarksFitInRect(landmarks, FIT_RECT, FIT_LANDMARKS),
+    [landmarks],
+  );
+
+  // Locked state + auto-capture countdown collapsed into a single
+  // transition so the hold-timer effect never has to call setState
+  // synchronously in its body.
+  const fitSinceRef = useRef<number | null>(null);
+  const [locked, setLocked] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
-  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
+  const lockAndStartCountdown = useCallback(() => {
+    setLocked(true);
+    setCountdown(AUTO_CAPTURE_COUNTDOWN_SEC);
+  }, []);
 
+  // Hold-timer: while isFit is true, schedule the lock for FIT_HOLD_MS
+  // out. If the user leaves the rect before then, the cleanup clears
+  // the timer and the next fit starts a fresh hold.
+  useEffect(() => {
+    if (!scanning || locked) return;
+    if (!isFit) {
+      fitSinceRef.current = null;
+      return;
+    }
+    if (fitSinceRef.current === null) fitSinceRef.current = performance.now();
+    const armedAt = fitSinceRef.current;
+    const remaining = Math.max(0, FIT_HOLD_MS - (performance.now() - armedAt));
+    const t = setTimeout(() => {
+      if (fitSinceRef.current === armedAt) lockAndStartCountdown();
+    }, remaining);
+    return () => clearTimeout(t);
+  }, [scanning, isFit, locked, lockAndStartCountdown]);
+
+  // Attach stream to video element when it changes.
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
@@ -40,6 +141,9 @@ export function BodyScanScreen({
     if (!stream && el.srcObject) el.srcObject = null;
   }, [stream]);
 
+  // Countdown driver — when it reaches 0, snap the full video frame.
+  // No crop, no mirror — matches the original pre-pose-detection flow.
+  // The RunPod Qwen workflow expects the un-altered camera frame.
   useEffect(() => {
     if (countdown === null) return;
     if (countdown <= 0) {
@@ -64,11 +168,27 @@ export function BodyScanScreen({
       );
       return;
     }
-    const t = setTimeout(() => setCountdown((v) => (v === null ? null : v - 1)), 1000);
+    const t = setTimeout(
+      () => setCountdown((v) => (v === null ? null : v - 1)),
+      1000,
+    );
     return () => clearTimeout(t);
   }, [countdown, onCapture]);
 
-  const capturing = countdown !== null;
+  const logoUrl = useQuery(api.files.getUrl, storeLogoFileId ? { fileId: storeLogoFileId } : "skip");
+  const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
+
+  // Hint text — only shown during scanning; pre-capture splash has its
+  // own subtitle ("Stand inside the frame for a quick scan").
+  const hintText = poseError
+    ? "Detection unavailable — tap the button below"
+    : !poseReady
+      ? "Loading body detection…"
+      : locked
+        ? "Hold still…"
+        : isFit
+          ? "Almost there…"
+          : "Step inside the frame";
 
   return (
     <div className="k-shell k-scan-shell">
@@ -107,76 +227,94 @@ export function BodyScanScreen({
       {/* Title + subtitle */}
       <div className="k-scan-heading">
         <h1 className="k-scan-title">Create Your Digital Look</h1>
-        <p className="k-scan-subtitle">Stand inside the Frame for a quick scan</p>
+        <p className="k-scan-subtitle">Stand inside the frame for a quick scan</p>
       </div>
 
-      {/* Camera frame */}
-      <div className={`k-scan-frame-wrap ${capturing ? "is-capturing" : ""}`}>
-        {!capturing && (
+      {/* Camera frame. Two phases:
+       *   scanning=false → original splash (blurred bg + avatar + button)
+       *   scanning=true  → live webcam with the fit guide on top
+       *
+       * The <video> element is conditionally rendered (vs always mounted)
+       * because we don't want it to start ticking frames behind the
+       * splash screen — pose detection only spins up after this swap. */}
+      <div className={`k-scan-frame-wrap ${scanning ? "is-capturing" : ""}`}>
+        {!scanning && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/try-on/bg.svg" alt="" aria-hidden className="k-scan-bg" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/try-on/blur.svg" alt="" aria-hidden className="k-scan-blur" />
-          </>
-        )}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="k-scan-video"
-          style={{
-            display: capturing ? "block" : "none",
-          }}
-        />
-
-        {!capturing && (
-          <div className="k-scan-avatar">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/try-on/avatar.svg" alt="" aria-hidden />
-          </div>
-        )}
-
-        {capturing ? (
-          <>
-            <div className="k-scan-corner tl" />
-            <div className="k-scan-corner tr" />
-            <div className="k-scan-corner bl" />
-            <div className="k-scan-corner br" />
-          </>
-        ) : (
-          <>
+            <div className="k-scan-avatar">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/try-on/avatar.svg" alt="" aria-hidden />
+            </div>
             <Corner pos="tl" />
             <Corner pos="tr" />
             <Corner pos="bl" />
             <Corner pos="br" />
+            <button onClick={() => setScanning(true)} className="k-scan-capture" aria-label="Capture my look">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/try-on/button.svg" alt="Capture My Look" />
+            </button>
           </>
         )}
 
-        {capturing && (
+        {scanning && (
           <>
-            <div className="k-scan-line" />
-            <div className="k-scan-countdown">{countdown}s</div>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="k-scan-video"
+            />
+
+            {/* Fit guide — red until landmarks fall in the rect, green
+                when they do, pulsing while locked into the countdown. */}
+            <div
+              className={`k-scan-guide${isFit ? " is-fit" : ""}${locked ? " is-locked" : ""}`}
+            >
+              <div className="k-scan-guide-rect">
+                <div className="k-scan-guide-figure">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/try-on/avatar.svg" alt="" aria-hidden />
+                </div>
+              </div>
+              <div className="k-scan-guide-hint">{hintText}</div>
+              {countdown !== null && countdown > 0 && (
+                <div className="k-scan-guide-countdown">{countdown}</div>
+              )}
+            </div>
+
+            {/* Viewfinder corner ticks. */}
+            <div className="k-scan-corner tl" />
+            <div className="k-scan-corner tr" />
+            <div className="k-scan-corner bl" />
+            <div className="k-scan-corner br" />
+
+            {/* Camera flip — hidden once the countdown is running so it
+                can't disrupt the in-flight capture. */}
+            {countdown === null && onSwitchCamera && (
+              <button
+                onClick={onSwitchCamera}
+                className="k-scan-flip"
+                aria-label={cameraFacing === "user" ? "Switch to back camera" : "Switch to front camera"}
+                title={cameraFacing === "user" ? "Switch to back camera" : "Switch to front camera"}
+              >
+                <SwitchCamera size={18} strokeWidth={2.25} />
+              </button>
+            )}
+
+            {/* Manual capture — always visible while not actively
+                counting down, as a guaranteed escape hatch if pose
+                detection is slow to load or fails to find a fit. */}
+            {countdown === null && (
+              <button onClick={lockAndStartCountdown} className="k-scan-capture" aria-label="Capture my look">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/try-on/button.svg" alt="Capture My Look" />
+              </button>
+            )}
           </>
-        )}
-
-        {!capturing && onSwitchCamera && (
-          <button
-            onClick={onSwitchCamera}
-            className="k-scan-flip"
-            aria-label={cameraFacing === "user" ? "Switch to back camera" : "Switch to front camera"}
-            title={cameraFacing === "user" ? "Switch to back camera" : "Switch to front camera"}
-          >
-            <SwitchCamera size={18} strokeWidth={2.25} />
-          </button>
-        )}
-
-        {!capturing && (
-          <button onClick={() => setCountdown(10)} className="k-scan-capture" aria-label="Capture my look">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/try-on/button.svg" alt="Capture My Look" />
-          </button>
         )}
       </div>
     </div>

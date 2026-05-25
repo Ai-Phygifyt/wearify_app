@@ -1494,15 +1494,21 @@ function KioskToast({ msg, type, onClose }: { msg: string; type: string; onClose
 function IdleScreen({ storeName: _storeName, onStart }: { storeName: string; onStart: () => void }) {
   return (
     <div onClick={onStart} className="k-shell k-idle-shell" style={{ cursor: "pointer" }}>
-      {/* Background image */}
+      {/* Background video */}
       <div className="k-idle-stage">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/kiosk/first-page/background.jpg"
-          alt=""
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
           aria-hidden
           className="k-idle-img active"
-        />
+          onError={(e) => console.error("[idle video] error", e.currentTarget.error)}
+          onCanPlay={() => console.log("[idle video] canplay")}
+        >
+          <source src="/kiosk/first-page/videobg.mp4" type="video/mp4" />
+        </video>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/kiosk/ideal-screen-2.svg"
@@ -3641,7 +3647,11 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
         </div>
       )}
 
-      {/* Subhead — back-arrow / Trial Room pill + timer / retake camera */}
+      {/* Subhead row — back-arrow / Trial Room pill / retake camera. The
+          timer pill sits in its own row below, centered, per the reference
+          design. Splitting these into two rows keeps the pill perfectly
+          centered (3 equal-weight children) and gives the timer breathing
+          room from the row's icon buttons. */}
       <div className="k-trial-v2-subhead">
         <button
           onClick={onGoHome}
@@ -3651,12 +3661,7 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/kiosk/backward.svg" alt="" aria-hidden width={44} />
         </button>
-        <div className="k-trial-v2-subhead-center">
-          <div className="k-trial-v2-pill">Trial Room</div>
-          <div className="k-trial-v2-timer" style={{ color: timer <= 30 ? "var(--k-red)" : undefined }}>
-            {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
-          </div>
-        </div>
+        <div className="k-trial-v2-pill">Trial Room</div>
         <button
           onClick={() => setRetakeOpen(true)}
           aria-label="Retake body scan"
@@ -3665,6 +3670,11 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
         >
           <Camera size={20} />
         </button>
+      </div>
+      <div className="k-trial-v2-timer-row">
+        <div className="k-trial-v2-timer" style={{ color: timer <= 30 ? "var(--k-red)" : undefined }}>
+          {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
+        </div>
       </div>
 
       {/* Left rail — Selected Sarees */}
@@ -3709,24 +3719,35 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
         />
       )}
 
-      {/* Bottom dock — two stacked CTAs centered above the podium */}
+      {/* Bottom dock — two stacked CTA pills centered above the podium.
+          Both pills are rendered from designer-provided SVG assets so the
+          backdrop-blur glass, badge, and arrow chip match the reference
+          exactly. The button itself is just a transparent wrapper. */}
       <div className="k-trial-v2-dock">
         <button
-          className="k-trial-v2-dock-pill is-light"
+          className="k-trial-v2-dock-btn k-press"
           onClick={addActiveToWardrobe}
           disabled={!current}
+          aria-label="Add to Wardrobe"
         >
-          <ShoppingBag size={18} style={{ marginRight: 10 }} />
-          Add to Wardrobe
-          <span className="badge">1</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/trail-room/add-to-wardrobe.svg" alt="" aria-hidden />
+          {/* Count chip — overlaid on the right edge of the pill. Lives
+              outside the SVG so the number stays live (currently always
+              1 because only the active saree is added; bind to a real
+              counter if multi-add is reintroduced). */}
+          <span className="k-trial-v2-dock-badge" aria-hidden>1</span>
         </button>
         <button
-          className="k-trial-v2-dock-pill is-dark"
+          className="k-trial-v2-dock-btn k-press"
           onClick={onGoToWardrobe}
+          aria-label="Go to Wardrobe"
         >
-          Go to Wardrobe
-          <span className="arrow">
-            <ChevronRight size={18} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kiosk/trail-room/go-to-wardrobe.svg" alt="" aria-hidden />
+          {/* Arrow chip — overlaid on the right edge of the pill. */}
+          <span className="k-trial-v2-dock-arrow" aria-hidden>
+            <ArrowRight size={20} strokeWidth={2.5} />
           </span>
         </button>
       </div>

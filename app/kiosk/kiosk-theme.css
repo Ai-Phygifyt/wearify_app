@@ -2062,6 +2062,136 @@
   filter: drop-shadow(0 8px 22px rgba(104, 38, 42, 0.32));
 }
 
+/* ────────────────────────────────────────────────────────────────────
+ * Body-fit silhouette guide
+ *
+ * Overlay drawn on top of the live camera while pose detection is
+ * running. Defines the rectangle the person must stand inside so the
+ * captured frame can be cropped to a known fixed area — which is what
+ * keeps every model render the same size in the trial room.
+ *
+ * The CSS values (top/left/right/bottom) MUST match the normalized
+ * rect used by BodyScanScreen.tsx (FIT_RECT). Keep them in sync.
+ *
+ * State:
+ *   .is-fit  →  all required landmarks are inside the rect → green
+ *   default  →  person not in frame yet → red, "Step inside" hint
+ *   .is-locked → fit has held long enough; freeze visuals during the
+ *                 short auto-capture countdown so the green doesn't
+ *                 flicker if the user shifts a hair before the shot.
+ * ──────────────────────────────────────────────────────────────────── */
+.k-scan-guide {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* The rectangle itself — top/right/bottom/left match FIT_RECT
+ * (x: 0.25, y: 0.05, w: 0.50, h: 0.90 in normalized coords). */
+.k-scan-guide-rect {
+  position: absolute;
+  top: 5%;
+  bottom: 5%;
+  left: 25%;
+  right: 25%;
+  border-radius: 24px;
+  border: 3px dashed rgba(255, 80, 80, 0.85);
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.28),
+    inset 0 0 24px rgba(255, 80, 80, 0.22);
+  transition: border-color .25s ease, box-shadow .25s ease;
+}
+
+.k-scan-guide.is-fit .k-scan-guide-rect {
+  border-color: rgba(50, 215, 110, 0.95);
+  border-style: solid;
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.22),
+    inset 0 0 28px rgba(50, 215, 110, 0.35),
+    0 0 22px rgba(50, 215, 110, 0.45);
+}
+
+.k-scan-guide.is-locked .k-scan-guide-rect {
+  border-color: rgba(50, 215, 110, 1);
+  animation: k-scan-pulse 0.8s ease-in-out infinite;
+}
+@keyframes k-scan-pulse {
+  0%, 100% { box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.22),
+    inset 0 0 28px rgba(50, 215, 110, 0.45),
+    0 0 22px rgba(50, 215, 110, 0.55); }
+  50% { box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.22),
+    inset 0 0 38px rgba(50, 215, 110, 0.6),
+    0 0 32px rgba(50, 215, 110, 0.75); }
+}
+
+/* Silhouette hint inside the rect — translucent person outline so the
+ * user knows what pose to take. Uses the same avatar asset that the
+ * pre-capture screen showed; tints with the same red→green cue. */
+.k-scan-guide-figure {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.k-scan-guide-figure img {
+  height: 90%;
+  width: auto;
+  opacity: 0.35;
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.5));
+  transition: opacity .25s ease;
+}
+.k-scan-guide.is-fit .k-scan-guide-figure img {
+  opacity: 0.18;
+}
+
+/* Status hint above the rect — "Step inside the frame" / "Hold still…" */
+.k-scan-guide-hint {
+  position: absolute;
+  top: 5%;
+  left: 50%;
+  transform: translate(-50%, -130%);
+  padding: 10px 22px;
+  border-radius: 999px;
+  font-family: "Montserrat", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: rgba(255, 80, 80, 0.95);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  transition: background .25s ease;
+}
+.k-scan-guide.is-fit .k-scan-guide-hint {
+  background: rgba(50, 175, 95, 0.95);
+}
+
+/* Auto-capture countdown badge — replaces the manual capture button
+ * while the lock-in timer ticks down. */
+.k-scan-guide-countdown {
+  position: absolute;
+  bottom: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: rgba(50, 175, 95, 0.95);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Roboto Mono", monospace;
+  font-size: 36px;
+  font-weight: 700;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
 /* Camera flip button — small circular toggle in the top-right corner of
  * the scan frame. Switches between "user" (front) and "environment"
  * (back) facingMode via the parent's getUserMedia handler. Hidden once
@@ -3247,7 +3377,10 @@
 .k-ward-nav {
   position: absolute;
   left: 50%;
-  bottom: 110px;
+  /* Sit above the Move-to-Cart pill (top edge at bottom:36 + height:84
+   * = 120px from the stage bottom) with a generous gap, so the arrows
+   * land roughly midway between the card and the CTA. */
+  bottom: 180px;
   transform: translateX(-50%);
   z-index: 5;
   display: flex;
@@ -4681,9 +4814,31 @@
   margin: 0 auto;
 }
 
-/* The bg-removed customer cutout fills the full stage so the generated
- * image renders as large as possible. The dock pills + subhead float
- * over the lower / upper portions of the cutout in their own z-layer. */
+/* The bg-removed customer cutout.
+ *
+ * Now that the body-scan capture is cropped to a fixed FIT_RECT (see
+ * BodyScanScreen.tsx), every AI render arrives at the same aspect and
+ * the model occupies the same portion of its image. So we can size
+ * the trial-room cutout deterministically:
+ *
+ *   • Container spans from the stage top down to the podium disc's
+ *     top surface (calc(30px + 22vh) — the podium is bottom:30 +
+ *     height:70vh, and the disc's flat top sits ~32% up the asset =
+ *     22vh of viewport).
+ *   • Image fills the container's height, anchored at flex-end so
+ *     its bottom edge lands exactly on the disc top — i.e. the
+ *     model's feet stand on the podium.
+ *   • max-width caps the image so on narrow stages it scales down
+ *     proportionally rather than overflowing the rails.
+ *
+ * Because the crop is deterministic, the model now stays at the same
+ * physical scale regardless of how the user posed for the camera. */
+/* Reverted to the pre-experiment baseline. We tried scale transforms,
+ * height: 180% hacks, server-side bbox cropping, and client-side bbox
+ * detection (useImageBBox); none gave a consistently "model standing
+ * on podium" result across the variable padding bg-removal produces.
+ * See CONTEXT.md → "Trial-room model sizing — attempts log" for the
+ * full history and next ideas. */
 .k-trial-v2-cutout {
   position: absolute;
   left: 50%;
@@ -4715,9 +4870,22 @@
   pointer-events: none; /* let children re-enable */
 }
 .k-trial-v2-subhead > * { pointer-events: auto; }
-.k-trial-v2-subhead-center {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+
+/* Timer pill — its own centered row directly below the subhead row.
+ * Splitting out from the subhead lets the "Trial Room" pill sit truly
+ * centered between back-arrow / camera, and the timer sits centered
+ * on its own line below (matches reference design). */
+.k-trial-v2-timer-row {
+  position: absolute;
+  top: 74px;
+  left: 0; right: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
 }
+.k-trial-v2-timer-row > * { pointer-events: auto; }
+
 .k-trial-v2-pill {
   background: rgba(255, 255, 255, .85);
   backdrop-filter: blur(10px) saturate(1.4);
@@ -4757,12 +4925,15 @@
 }
 .k-trial-v2-iconbtn:active { transform: scale(.94); }
 
-/* Left rail — Selected Sarees */
+/* Left rail — Selected Sarees. Top: clears the subhead row (top:18 +
+ * iconbtn 44 = 62) AND the timer row below it (top:74 + pill ~30 =
+ * 104), with ~16px breathing room → 120px. Both rails use the same
+ * top so they line up horizontally. */
 .k-trial-v2-left {
   position: absolute;
-  top: 110px; left: 28px;
+  top: 120px; left: 28px;
   width: 184px;
-  max-height: calc(100% - 200px);
+  max-height: calc(100% - 220px);
   z-index: 4;
   display: flex; flex-direction: column;
   background: rgba(34, 17, 8, .42);
@@ -4869,13 +5040,18 @@
   color: #fff;
 }
 
-/* Right rail — saree detail */
+/* Right rail — saree detail. Anchored to the top and sized to its
+ * content (max-height caps it well above the dock). It must NOT set
+ * `bottom`, or top+bottom force a full-height panel that — sitting at
+ * z-index 4, above the z-index-2 cutout — covers the model's body.
+ * Top matches the left rail so the two rails align horizontally and
+ * both clear the subhead + timer rows above. */
 .k-trial-v2-right {
   position: absolute;
-  top: 96px;
-  bottom: 200px;
+  top: 120px;
   right: 10px;
   width: 200px;
+  max-height: calc(100% - 280px);
   z-index: 4;
   background: rgba(34, 17, 8, .42);
   backdrop-filter: blur(20px) saturate(1.3);
@@ -4962,58 +5138,87 @@
  * bottom edge, sitting just above the podium disc. */
 .k-trial-v2-dock {
   position: absolute;
-  bottom: 24vh;
+  bottom: 18vh;
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: 2px;
   align-items: center;
 }
-.k-trial-v2-dock-pill {
+/* Dock CTA — transparent wrapper. The glass morphism lives on the
+ * ::before pseudo-element, sized via percentages to hug the visible
+ * pill graphic inside the SVG (not the SVG's transparent padding).
+ * This is what makes the blur layer follow the pill shape instead
+ * of forming a rectangular halo around the asset. */
+.k-trial-v2-dock-btn {
   position: relative;
-  display: flex; align-items: center; justify-content: center;
-  padding: 14px 56px 14px 36px;
-  border-radius: 100px;
   border: none;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 15px;
-  font-weight: 700;
+  background: transparent;
+  padding: 0;
   cursor: pointer;
-  min-width: 280px;
-  box-shadow: 0 8px 24px rgba(34, 17, 8, .18);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: transform .12s ease, filter .12s ease;
 }
-.k-trial-v2-dock-pill:active { transform: scale(.98); }
-.k-trial-v2-dock-pill:hover { filter: brightness(1.04); }
-.k-trial-v2-dock-pill.is-light {
-  background: rgba(255, 255, 255, .96);
-  color: var(--k-text, #222);
-}
-.k-trial-v2-dock-pill.is-dark {
-  background: var(--k-maroon, #68262A);
-  color: #fff;
-}
-.k-trial-v2-dock-pill .badge {
+/* The SVG viewBox is 509×147 with the pill at x=20..489, y=31..116.
+ * So pill insets from the SVG edges are 20/509 ≈ 4% horizontally and
+ * 31/147 ≈ 21% vertically. Mirroring those insets on the ::before
+ * makes the glass exactly cover the pill — no spillover. */
+.k-trial-v2-dock-btn::before {
+  content: "";
   position: absolute;
-  right: 8px; top: 50%;
+  top: 21%;
+  bottom: 21%;
+  left: 4%;
+  right: 4%;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, .14);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, .35);
+  box-shadow:
+    0 12px 28px rgba(34, 17, 8, .26),
+    0 3px 8px rgba(34, 17, 8, .12),
+    inset 0 1px 0 rgba(255, 255, 255, .35);
+  pointer-events: none;
+}
+.k-trial-v2-dock-btn:active { transform: scale(.97); }
+.k-trial-v2-dock-btn:hover { filter: brightness(1.04); }
+.k-trial-v2-dock-btn:disabled { opacity: .55; cursor: not-allowed; }
+.k-trial-v2-dock-btn img {
+  position: relative; /* keeps SVG above the ::before glass layer */
+  display: block;
+  height: 96px;
+  width: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Chips on the right end of each pill. Sit fully inside the pill
+ * (right: 22px lands the chip's right edge ~6px to the left of the
+ * pill's rounded end on a 96px-tall SVG), centered vertically. */
+.k-trial-v2-dock-badge,
+.k-trial-v2-dock-arrow {
+  position: absolute;
+  top: 50%;
+  right: 22px;
   transform: translateY(-50%);
-  width: 36px; height: 36px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: var(--k-maroon, #68262A);
   color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
   font-weight: 700;
-}
-.k-trial-v2-dock-pill .arrow {
-  position: absolute;
-  right: 8px; top: 50%;
-  transform: translateY(-50%);
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .92);
-  color: var(--k-maroon, #68262A);
-  display: flex; align-items: center; justify-content: center;
+  box-shadow:
+    0 5px 12px rgba(34, 17, 8, .3),
+    inset 0 1px 0 rgba(255, 255, 255, .18);
+  pointer-events: none;
 }
 
 /* While the cutout is still being generated, show the wave inside the
@@ -5033,8 +5238,10 @@
  * eat the hero. */
 @media (max-width: 1100px) {
   .k-trial-v2-left { width: 168px; left: 16px; }
-  .k-trial-v2-right { width: 180px; right: 8px; bottom: 180px; top: 88px; }
-  .k-trial-v2-dock-pill { min-width: 240px; padding: 12px 50px 12px 28px; font-size: 14px; }
+  .k-trial-v2-right { width: 180px; right: 8px; top: 120px; }
+  .k-trial-v2-dock-btn img { height: 82px; }
+  .k-trial-v2-dock-badge,
+  .k-trial-v2-dock-arrow { width: 42px; height: 42px; right: 18px; font-size: 14px; }
 }
 
 
