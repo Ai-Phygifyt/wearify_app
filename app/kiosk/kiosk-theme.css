@@ -4768,6 +4768,7 @@
   --tr-model-h: 100vh;
   --tr-model-bottom: calc(var(--tr-floor-lift) - 63vh);
   --tr-model-scale: 1.85;
+  --tr-model-shift-x: 3vh;
   --tr-glass-bg: rgba(60, 42, 32, 0.55);
   --tr-glass-border: rgba(255, 255, 255, 0.12);
   --tr-rail-top: 132px;
@@ -4826,7 +4827,7 @@
   position: absolute;
   left: 50%;
   bottom: var(--tr-model-bottom);
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--tr-model-shift-x)));
   width: 100%;
   height: var(--tr-model-h);
   z-index: 2;
@@ -5219,12 +5220,16 @@
   pointer-events: none;
 }
 
-/* Loading wave while the bg-removed cutout is being generated */
+/* Loading wave while the bg-removed cutout is being generated.
+ * Absolute-positioned so it ignores its parent container's model-bottom
+ * displacement and sits centered in the visible stage instead. */
 .k-trial-v2-cutout-wave {
-  position: relative;
-  height: 90%;
-  aspect-ratio: 3 / 4;
-  max-width: 60%;
+  position: absolute;
+  left: 50%;
+  top: -25vh;
+  transform: translateX(-50%);
+  width: 50vh;
+  height: 62vh;
   border-radius: 20px;
   overflow: hidden;
   pointer-events: none;
