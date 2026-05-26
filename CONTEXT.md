@@ -975,19 +975,54 @@ Body-scan capture is back to full-frame, un-mirrored, with the silhouette guide 
 - **Stop fighting it in CSS** — overlay a podium asset that visually wraps under the model's feet, hiding any small gap. Less correct but more forgiving.
 - **Use a fixed-size letterbox overlay** that shrinks the displayed cutout to fit a target aspect, then position that letterbox at the podium. Loses some flexibility but is deterministic.
 
-## Kiosk idle-screen background: image → video
+---
 
-The "Touch to Start" idle screen ([app/kiosk/page.tsx](app/kiosk/page.tsx) — `IdleScreen`, ~L1494) previously rendered a static blurred photo (`public/kiosk/first-page/background.jpg`) under the white-wash SVG overlay (`ideal-screen-2.svg`). Replaced with a looping muted video (`public/kiosk/first-page/videobg.mp4`).
+## Trial-room v2 redesign (2026-05-26)
 
-Implementation notes:
+Full rewrite of the trial-room layout to match the new reference mock (cream stage, glass rails left/right, floral podium, two glass dock pills). Replaces the layout/CSS described in section above; the "attempts log" history still applies as cautionary context, but the **current shipping approach is what's documented below**.
 
-- `<video autoPlay loop muted playsInline preload="auto">` with a child `<source type="video/mp4">`. `muted` + `playsInline` is required so browser autoplay policy doesn't block it; `<source>` (instead of `src` attr) sets MIME explicitly and is the most universally accepted form.
-- Reuses the existing `.k-idle-img active` class — same `position: absolute; inset: 0; width/height: 100%; object-fit: cover` and the existing `filter: blur(6px) saturate(1.25); transform: scale(1.015)` apply identically to the video, so the visual treatment matches what the photo had.
-- The `.k-idle-overlay` SVG on top is a 50%-white wash + 25px backdrop-blur — it heavily diffuses whatever's underneath. Worth knowing if the video ever appears washed out: the wash is intentional UX styling, not a video bug.
-- `onError` / `onCanPlay` console handlers were left in place to surface decode/network failures (e.g. a Chromium build without H.264). Cheap, dev-only signal — fine to keep.
+**What changed**
 
-## Vercel build fix: pnpm lockfile drift
+1. **Cleared all prior `.k-trial-v2-*` and `.k-trial-card-v2-*` rules** in [app/kiosk/kiosk-theme.css](app/kiosk/kiosk-theme.css) and rebuilt from scratch. JSX in [TrialRoomScreen](app/kiosk/page.tsx#L3506) was *not* touched — same classNames, new styles only.
 
-Vercel build was failing on `main` with `ERR_PNPM_OUTDATED_LOCKFILE` because `@mediapipe/tasks-vision@^0.10.35` was added to `package.json` but `pnpm-lock.yaml` was never regenerated. Vercel runs `pnpm install --frozen-lockfile` in CI, so any spec drift hard-fails the install step.
+2. **All trial-room geometry consolidated into CSS variables on `.k-trial-v2-shell`** — single place to tune the layout. Knobs:
 
-Fix: regenerated `pnpm-lock.yaml` via `npx -y pnpm@10 install` (pnpm isn't in the local shell PATH; npx route avoids a global install). The lockfile now contains the `@mediapipe/tasks-vision@0.10.35` resolution. Any future "added a dep, didn't run install" drift produces the same Vercel failure — same fix.
+   | Variable | Purpose |
+   |---|---|
+   | `--tr-floor-lift` | Lifts podium + model together up off the stage floor |
+   | `--tr-podium-h` | Visible podium height |
+   | `--tr-podium-bottom` | Podium's offset from stage floor (negative = clipped off bottom) |
+   | `--tr-model-h` | Model `<img>` element height (drives natural aspect width) |
+   | `--tr-model-scale` | `transform: scale()` multiplier — the real size knob |
+   | `--tr-model-bottom` | Where the model bitmap's bottom edge lands |
+
+3. **Solved the "model standing on podium, same size every time" problem** that the attempts log above failed to resolve. The working approach:
+
+   - **Determinism comes from FIT_RECT** (still in [BodyScanScreen.tsx](app/kiosk/screens/BodyScanScreen.tsx)). Every cutout PNG has the same aspect ratio and same model-occupies-X-fraction-of-bitmap, so a fixed `<img>` size = same visible model.
+   - **Size via `transform: scale(var(--tr-model-scale))` with `transform-origin: bottom center`** on the `<img>`, not via height alone. Height alone hits the bitmap-padding ceiling (~60% of IMG is transparent), so raising `--tr-model-h` past stage size has no visible effect.
+   - **`flex-shrink: 0` on the cutout `<img>`** is the critical non-obvious bit. Without it, the flex container shrinks the calculated `width: auto` when it exceeds the container width, which (per CSS replaced-element rules) re-projects onto height and distorts the bitmap. With `flex-shrink: 0`, the image keeps its aspect-correct width and overflow gets clipped by `.k-trial-v2-stage { overflow: hidden }`.
+   - **Caveat about `transform-origin: bottom center`** — the pivot is the IMG box bottom edge, *not* the model's feet. The cutout PNG has transparent padding below the feet, so as `--tr-model-scale` increases, the feet drift *upward* off the podium. Compensated by making `--tr-model-bottom` go strongly negative (currently `calc(var(--tr-floor-lift) - 63vh)`). If anyone changes the scale, `--tr-model-bottom` likely needs re-tuning.
+
+4. **Visual updates to match the reference mock**:
+   - Glassmorphism dock pills via `::before` pseudo with `backdrop-filter: blur(28px) saturate(1.8)` + translucent white. The SVG assets themselves ([public/kiosk/trail-room/](public/kiosk/trail-room/)) already have built-in `foreignObject` blur, so don't add a solid background underneath them.
+   - Dock gap shrunk to 2px and pills enlarged (img height 92px, chip 46px).
+   - Rails inset from edges (`left/right: 38px` desktop, `30px` tablet) instead of edge-hugging.
+   - Back/home icon buttons grown to 54px.
+   - Trial Room pill and timer widened with thinner font-weight (400) for a lighter feel.
+
+**Current tuned values (2026-05-26 visual sign-off)** — these are the on-disk values that visually match the reference on the target kiosk hardware:
+
+```
+--tr-floor-lift: 18vh;
+--tr-podium-h: 72vh;
+--tr-podium-bottom: -2vh;
+--tr-model-h: 100vh;
+--tr-model-scale: 1.85;
+--tr-model-bottom: calc(var(--tr-floor-lift) - 63vh);
+```
+
+**What stops being true if these break**
+
+- If anyone touches `FIT_RECT` in BodyScanScreen, every cutout's model-fraction changes → `--tr-model-bottom` will need re-tuning.
+- If the bg-removal pipeline changes (different padding behaviour), same story.
+- If the dock SVG assets are re-exported without the `foreignObject` blur, the glass effect collapses to whatever the CSS `::before` provides alone.
