@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LogOut, SwitchCamera } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -62,8 +62,6 @@ export function BodyScanScreen({
   storeName,
   storeLogoFileId,
   stream,
-  cameraFacing,
-  onSwitchCamera,
   onCapture,
   onBack,
   onHome,
@@ -72,6 +70,8 @@ export function BodyScanScreen({
   storeName: string;
   storeLogoFileId?: Id<"_storage">;
   stream: MediaStream | null;
+  // cameraFacing / onSwitchCamera are still accepted from the parent but no
+  // longer used — the camera-flip control was removed (single usable camera).
   cameraFacing?: "user" | "environment";
   onSwitchCamera?: () => void;
   onCapture: (blob: Blob) => void;
@@ -81,13 +81,12 @@ export function BodyScanScreen({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // The screen has two distinct phases:
-  //   scanning=false → original splash UI (blurred bg + avatar silhouette
-  //                    + "Capture My Look" button). No webcam visible.
-  //   scanning=true  → live webcam, green/red fit guide, auto-capture
-  //                    once the user holds the pose for FIT_HOLD_MS.
-  // The user taps "Capture My Look" to move from splash → scanning.
-  const [scanning, setScanning] = useState(false);
+  // The screen has two phases, driven purely by whether the camera stream
+  // is ready (no tap required — the customer sees themselves immediately):
+  //   no stream  → splash UI (blurred bg + avatar silhouette) while we wait.
+  //   has stream → live webcam, green/red fit guide, auto-capture once the
+  //                user holds the pose for FIT_HOLD_MS.
+  const scanning = !!stream;
 
   // Pose detection only spins up once the user is actually scanning,
   // so the splash screen doesn't pay the WASM/model download cost.
@@ -133,11 +132,17 @@ export function BodyScanScreen({
     return () => clearTimeout(t);
   }, [scanning, isFit, locked, lockAndStartCountdown]);
 
-  // Attach stream to video element when it changes.
+  // Attach stream to video element when it changes. We now auto-start the
+  // preview (no "Capture My Look" tap precedes it), so explicitly call play()
+  // — without the prior user gesture some browsers won't autoplay on their
+  // own, which would leave videoWidth at 0 and make the capture fail.
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (stream && el.srcObject !== stream) el.srcObject = stream;
+    if (stream && el.srcObject !== stream) {
+      el.srcObject = stream;
+      el.play().catch(() => { /* autoplay blocked — frame still arrives muted */ });
+    }
     if (!stream && el.srcObject) el.srcObject = null;
   }, [stream]);
 
@@ -147,26 +152,38 @@ export function BodyScanScreen({
   useEffect(() => {
     if (countdown === null) return;
     if (countdown <= 0) {
-      const video = videoRef.current;
-      if (!video || !video.videoWidth) {
-        onCapture(new Blob([], { type: "image/jpeg" }));
-        return;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        onCapture(new Blob([], { type: "image/jpeg" }));
-        return;
-      }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(
-        (blob) => onCapture(blob ?? new Blob([], { type: "image/jpeg" })),
-        "image/jpeg",
-        0.9,
-      );
-      return;
+      // Try to snap the current frame. Returns false if the video isn't
+      // ready yet (no dimensions) so the caller can wait and retry.
+      const grab = (): boolean => {
+        const video = videoRef.current;
+        if (!video || !video.videoWidth || !video.videoHeight) return false;
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return false;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => onCapture(blob ?? new Blob([], { type: "image/jpeg" })),
+          "image/jpeg",
+          0.9,
+        );
+        return true;
+      };
+      if (grab()) return;
+      // Frame not ready (e.g. the stream is still warming up). Poll briefly
+      // instead of failing the scan outright with an empty blob.
+      let tries = 0;
+      const iv = setInterval(() => {
+        tries += 1;
+        if (grab()) {
+          clearInterval(iv);
+        } else if (tries >= 25) {
+          clearInterval(iv);
+          onCapture(new Blob([], { type: "image/jpeg" }));
+        }
+      }, 100);
+      return () => clearInterval(iv);
     }
     const t = setTimeout(
       () => setCountdown((v) => (v === null ? null : v - 1)),
@@ -252,10 +269,6 @@ export function BodyScanScreen({
             <Corner pos="tr" />
             <Corner pos="bl" />
             <Corner pos="br" />
-            <button onClick={() => setScanning(true)} className="k-scan-capture" aria-label="Capture my look">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/try-on/button.svg" alt="Capture My Look" />
-            </button>
           </>
         )}
 
@@ -292,18 +305,10 @@ export function BodyScanScreen({
             <div className="k-scan-corner bl" />
             <div className="k-scan-corner br" />
 
-            {/* Camera flip — hidden once the countdown is running so it
-                can't disrupt the in-flight capture. */}
-            {countdown === null && onSwitchCamera && (
-              <button
-                onClick={onSwitchCamera}
-                className="k-scan-flip"
-                aria-label={cameraFacing === "user" ? "Switch to back camera" : "Switch to front camera"}
-                title={cameraFacing === "user" ? "Switch to back camera" : "Switch to front camera"}
-              >
-                <SwitchCamera size={18} strokeWidth={2.25} />
-              </button>
-            )}
+            {/* Camera-flip button intentionally removed: the kiosk's only
+                usable camera faces the customer, and the alternate facing
+                mode resolves to a blank/virtual device on this hardware, so
+                switching just dropped the preview. */}
 
             {/* Manual capture — always visible while not actively
                 counting down, as a guaranteed escape hatch if pose
