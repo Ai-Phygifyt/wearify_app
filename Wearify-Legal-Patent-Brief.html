@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wearify — Legal &amp; Patent Review Brief</title>
+<style>
+  @page { size: A4; margin: 14mm 13mm 16mm 13mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: "Noto Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.3pt; line-height: 1.55; color: #2c2a28;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  /* maroon #7B1D1D · gold #C9941A · ivory #FBF7F0 · Azure blue #1167B1
+     red #b0473a · amber #C9941A · green #2f7d4f */
+
+  /* COVER */
+  .cover { height: 258mm; display: flex; flex-direction: column; page-break-after: always; }
+  .cover-band { background: #7B1D1D; color: #FDF8F2;
+                padding: 17mm 14mm 13mm 14mm; margin: -14mm -13mm 0 -13mm; }
+  .wordmark { font-size: 27pt; font-weight: 800; letter-spacing: 7px; }
+  .wordmark span { color: #E9B949; }
+  .cover-tag { margin-top: 6px; font-size: 8.5pt; letter-spacing: 3.5px;
+               text-transform: uppercase; color: #E7C9A5; }
+  .cover-body { flex: 1; padding: 22mm 6mm 0 6mm; }
+  .cover-kicker { font-size: 9pt; letter-spacing: 3px; text-transform: uppercase;
+                  color: #b0473a; font-weight: 700; }
+  .cover-title { font-size: 30pt; font-weight: 800; color: #7B1D1D;
+                 line-height: 1.13; margin: 10px 0 5px 0; }
+  .cover-line2 { font-size: 14pt; font-weight: 800; color: #1167B1; }
+  .rules { display: flex; gap: 6px; margin: 13px 0 16px 0; }
+  .rules div:first-child { width: 40mm; height: 3px; background: #C9941A; }
+  .rules div:last-child { width: 22mm; height: 3px; background: #b0473a; }
+  .priv { background: #F6E4E1; border: 1.5px solid #DBB3AC; border-radius: 6px;
+          padding: 8px 12px; margin-top: 6px; font-size: 9.5pt; color: #7c3326;
+          max-width: 130mm; }
+  .priv b { color: #7B1D1D; }
+  .cover-sub { font-size: 11.5pt; color: #5c574f; max-width: 156mm; line-height: 1.6;
+               margin-top: 11px; }
+  .toc { margin-top: 13mm; border: 1px solid #E3D9C8; border-left: 4px solid #7B1D1D;
+         background: #FBF7F0; padding: 6mm 8mm; max-width: 148mm; }
+  .toc h3 { font-size: 8.5pt; letter-spacing: 2px; text-transform: uppercase;
+            color: #7B1D1D; margin-bottom: 7px; }
+  .toc-col { display: flex; gap: 14mm; }
+  .toc-c { flex: 1; }
+  .toc-item { display: flex; font-size: 9.2pt; padding: 1.5px 0; color: #3a3733; }
+  .toc-num { color: #7B1D1D; font-weight: 800; width: 8mm; }
+  .cover-meta { padding: 6px 6mm 0; font-size: 8.5pt; color: #8a8378;
+                letter-spacing: 0.5px; border-top: 1px solid #E3D9C8; }
+
+  /* SECTIONS */
+  .section { page-break-before: always; }
+  .sec-head { display: flex; align-items: center; gap: 11px;
+              border-bottom: 2px solid #7B1D1D; padding-bottom: 7px; margin-bottom: 11px; }
+  .sec-badge { background: #7B1D1D; color: #fff; font-weight: 800; font-size: 13pt;
+               width: 10mm; height: 10mm; border-radius: 5px; flex-shrink: 0;
+               display: flex; align-items: center; justify-content: center; }
+  .sec-title { font-size: 15.5pt; font-weight: 800; color: #7B1D1D; }
+
+  p { margin-bottom: 7px; }
+  strong { color: #7B1D1D; }
+  em { color: #5c574f; font-style: italic; }
+  .explain { font-size: 9.6pt; color: #4a4640; margin-bottom: 5px; }
+  .subhead { font-size: 11pt; font-weight: 800; color: #7B1D1D; margin: 13px 0 5px; }
+  .subhead .dot { color: #C9941A; }
+  code { font-family: "Cascadia Code", "Consolas", monospace; background: #F0E8D8;
+         border-radius: 3px; padding: 0 4px; font-size: 8.4pt; color: #6a4a10; }
+
+  /* callouts */
+  .callout { border: 1px solid #E3D9C8; border-left: 4px solid #7B1D1D;
+             background: #FBF7F0; padding: 8px 12px; margin: 10px 0; font-size: 9.4pt;
+             line-height: 1.5; }
+  .callout.crit { border-left-color: #b0473a; background: #F8EBE7; }
+  .callout.warn { border-left-color: #C9941A; background: #FCF4E2; }
+  .callout.info { border-left-color: #1167B1; background: #F1F7FC; }
+  .callout.ok { border-left-color: #2f7d4f; background: #EEF6F0; }
+  .callout .tag { display: block; font-size: 7.5pt; letter-spacing: 1.5px;
+                  text-transform: uppercase; font-weight: 800; margin-bottom: 3px;
+                  color: #C9941A; }
+  .callout.crit .tag { color: #b0473a; }
+  .callout.info .tag { color: #1167B1; }
+  .callout.ok .tag { color: #2f7d4f; }
+
+  /* tables */
+  .tb { width: 100%; border-collapse: collapse; margin: 6px 0 3px; page-break-inside: avoid; }
+  .tb th { background: #7B1D1D; color: #fff; text-align: left; padding: 5px 8px;
+           font-size: 7.6pt; letter-spacing: 0.5px; text-transform: uppercase; }
+  .tb td { border: 1px solid #E3D9C8; padding: 4.5px 8px; font-size: 8.7pt;
+           vertical-align: top; line-height: 1.36; }
+  .tb tr:nth-child(even) td { background: #FCFAF5; }
+  .tb td.k { font-weight: 700; color: #7B1D1D; }
+  .tb td.note { font-size: 8pt; color: #6c665d; }
+  .tb td.code { font-family: "Cascadia Code", "Consolas", monospace; font-size: 8pt;
+                color: #6a4a10; }
+  .tb .sensitive td { background: #FBF1EE; }
+  .tb .sensitive td.k { color: #b0473a; }
+
+  /* risk pills */
+  .pill { display: inline-block; font-size: 7.4pt; padding: 1px 6px; border-radius: 9px;
+          font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+  .pill.high { background: #F6E4E1; color: #b0473a; }
+  .pill.med { background: #FBF1DC; color: #9a7415; }
+  .pill.low { background: #E7F2E9; color: #2f7d4f; }
+
+  /* gap table */
+  .gaps { width: 100%; border-collapse: collapse; }
+  .gaps th { background: #b0473a; color: #fff; padding: 6px 9px; font-size: 8pt;
+             text-align: left; text-transform: uppercase; letter-spacing: 0.5px; }
+  .gaps td { border: 1px solid #E3D9C8; padding: 6px 9px; font-size: 8.7pt; vertical-align: top;
+             line-height: 1.4; }
+  .gaps tr:nth-child(even) td { background: #FCFAF5; }
+  .gaps td.gn { font-weight: 800; color: #7B1D1D; width: 50mm; }
+  .gaps td.rs { width: 18mm; text-align: center; }
+  .gaps td.rec { color: #1167B1; font-weight: 600; }
+
+  .docfooter { position: fixed; bottom: 4mm; left: 0; right: 0; text-align: center;
+               font-size: 7.5pt; letter-spacing: 1.2px; color: #a59c8c;
+               border-top: 1px solid #E3D9C8; padding-top: 3px; margin: 0 7mm; }
+  .docfooter b { color: #7B1D1D; }
+</style>
+</head>
+<body>
+
+<div class="docfooter"><b>WEARIFY</b> &nbsp;·&nbsp; Legal &amp; Patent Review Brief &nbsp;·&nbsp; Privileged &amp; Confidential — Prepared for Counsel</div>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-band">
+    <div class="wordmark">WEAR<span>I</span>FY</div>
+    <div class="cover-tag">AI Virtual Try-On Platform · Indian Saree Retail</div>
+  </div>
+  <div class="cover-body">
+    <div class="cover-kicker">Pre-Launch · Legal &amp; Patent Preparation</div>
+    <div class="cover-title">Legal &amp; Patent Review Brief</div>
+    <div class="cover-line2">Customer Data Inventory · DPDP Compliance · Patent Surface</div>
+    <div class="rules"><div></div><div></div></div>
+    <div class="priv"><b>Privileged &amp; Confidential.</b> Prepared for legal counsel in connection with pre-launch DPDP Act 2023 review and patent filing assessment. Contains technical descriptions of proprietary systems.</div>
+    <div class="cover-sub">
+      A complete, sourced inventory of every place customer personal data is collected,
+      stored, processed and shared in the Wearify codebase — with identified
+      compliance gaps under the Digital Personal Data Protection Act 2023 and a list
+      of technical aspects that may be patentable.
+    </div>
+    <div class="toc">
+      <h3>Contents</h3>
+      <div class="toc-col">
+        <div class="toc-c">
+          <div class="toc-item"><span class="toc-num">1</span><span>Executive Summary</span></div>
+          <div class="toc-item"><span class="toc-num">2</span><span>Personal Data Inventory — What We Collect</span></div>
+          <div class="toc-item"><span class="toc-num">3</span><span>Where Data Is Collected (UI Surfaces)</span></div>
+          <div class="toc-item"><span class="toc-num">4</span><span>Where Data Is Stored (Database &amp; Files)</span></div>
+          <div class="toc-item"><span class="toc-num">5</span><span>Third Parties That Receive Customer Data</span></div>
+          <div class="toc-item"><span class="toc-num">6</span><span>Biometric &amp; Sensitive Data — the Body Scan</span></div>
+          <div class="toc-item"><span class="toc-num">7</span><span>Children's Data (DPDP §9)</span></div>
+          <div class="toc-item"><span class="toc-num">8</span><span>Consent Mechanism (DPDP §6)</span></div>
+        </div>
+        <div class="toc-c">
+          <div class="toc-item"><span class="toc-num">&nbsp;9</span><span>Cross-Border Data Flows (DPDP §16)</span></div>
+          <div class="toc-item"><span class="toc-num">10</span><span>Security &amp; Access Controls</span></div>
+          <div class="toc-item"><span class="toc-num">11</span><span>Retention &amp; Deletion (DPDP §8(7), §12)</span></div>
+          <div class="toc-item"><span class="toc-num">12</span><span>Audit Logging</span></div>
+          <div class="toc-item"><span class="toc-num">13</span><span>KYC Data — Stores &amp; Tailors</span></div>
+          <div class="toc-item"><span class="toc-num">14</span><span>Identified Compliance Gaps</span></div>
+          <div class="toc-item"><span class="toc-num">15</span><span>Patent-Relevant Novel Aspects</span></div>
+          <div class="toc-item"><span class="toc-num">16</span><span>Questions for Counsel</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cover-meta">
+    PREPARED MAY 2026 &nbsp;|&nbsp; SCOPE: ENTIRE CODEBASE &nbsp;|&nbsp; APPLICABLE LAW: DPDP ACT 2023 (INDIA)
+  </div>
+</div>
+
+<!-- ============ SECTION 1 — EXECUTIVE SUMMARY ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">1</div><div class="sec-title">Executive Summary</div></div>
+
+  <p>
+    Wearify is an AI virtual try-on platform for Indian saree retailers. The product
+    collects, stores and processes a meaningful amount of personal data — including
+    <strong>biometric-adjacent body-scan photographs and body measurements</strong> —
+    and shares portions of that data with three United-States–based sub-processors
+    (RunPod, SendGrid, Twilio). This brief inventories every such touchpoint, identifies
+    compliance gaps under the <strong>Digital Personal Data Protection Act 2023</strong>,
+    and flags technical inventions for patent assessment.
+  </p>
+
+  <div class="callout crit">
+    <span class="tag">Headline findings — for immediate counsel attention</span>
+    <strong>1.</strong> <b>No "delete my account" flow exists</b> for customers. The
+    Right to Erasure (DPDP §12) is not implemented.<br>
+    <strong>2.</strong> <b>Consent is set to TRUE by default</b> on customer creation
+    (all four DPDP-style flags), not captured as explicit opt-in.<br>
+    <strong>3.</strong> <b>Age gate is 13+, not 18+.</b> DPDP defines a "child" as a
+    person under 18 and requires <em>verifiable parental consent</em> (§9). No
+    parental-consent mechanism exists.<br>
+    <strong>4.</strong> <b>The audit-log table is defined but never written to</b> —
+    no record of data access, KYC uploads, consent changes, or admin actions.<br>
+    <strong>5.</strong> <b>Customer body-scan images and saree images are sent in
+    base64 to RunPod (US)</b> for AI try-on. No Data Processing Agreement is visible
+    in code; cross-border transfer mechanism (DPDP §16) must be verified.
+  </div>
+
+  <div class="callout ok">
+    <span class="tag">Positive findings</span>
+    Passwords and staff PINs are hashed with <strong>PBKDF2-SHA256 (100,000 iterations,
+    per-user 16-byte salt)</strong>, with constant-time comparison. Rate-limit tables
+    exist for password, PIN, trial-code and pairing-code attempts. File uploads are
+    validated server-side (size + MIME). Cross-store data isolation is enforced via
+    device tokens and saree-ownership checks. Kiosk pairing uses ephemeral 6-digit
+    codes plus 32-byte (256-bit) long-lived device tokens.
+  </div>
+
+  <div class="callout info">
+    <span class="tag">Patent surface — for patent counsel</span>
+    Five technical areas warrant patentability review: (a) the AI try-on pipeline —
+    Qwen-Image-Edit&nbsp;2511 + Object-Adder LoRA + flat-lay garment selection;
+    (b) the kiosk pairing protocol — ephemeral codes + long-lived bearer tokens with
+    per-store rate-limiting; (c) the trial-room access-code handoff between tablet
+    and mirror; (d) body-scan cache invalidation by file-identity rather than
+    timestamp; (e) the sequential WASM background-removal queue for resource-bounded
+    edge devices. See Section&nbsp;15 for detail.
+  </div>
+</div>
+
+<!-- ============ SECTION 2 — PII INVENTORY ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">2</div><div class="sec-title">Personal Data Inventory — What We Collect</div></div>
+
+  <p class="explain">
+    Every personal-data field on the customer record, grouped by sensitivity. Source:
+    <code>convex/schema.ts</code>, lines 214&ndash;280. Sensitive rows are tinted.
+  </p>
+
+  <table class="tb">
+    <tr><th>Category</th><th>Field</th><th>Type</th><th>Notes / DPDP relevance</th></tr>
+
+    <tr><td class="k">Identity</td><td>phone</td><td class="note">string (indexed)</td><td>Primary identifier; required.</td></tr>
+    <tr><td class="k">Identity</td><td>name</td><td class="note">string</td><td>Required at registration.</td></tr>
+    <tr><td class="k">Identity</td><td>email</td><td class="note">string (optional)</td><td>Used for campaigns; sent to SendGrid.</td></tr>
+    <tr><td class="k">Identity</td><td>dateOfBirth</td><td class="note">ISO date (optional)</td><td>Used for 13+ age check. <em>Should be 18+ per DPDP §9.</em></td></tr>
+    <tr><td class="k">Identity</td><td>gender</td><td class="note">string</td><td>male / female / other / prefer_not_to_say.</td></tr>
+    <tr><td class="k">Identity</td><td>city</td><td class="note">string</td><td>Required for profile completion.</td></tr>
+
+    <tr class="sensitive"><td class="k">Body data</td><td>heightCm</td><td class="note">number 50-250</td><td>Body metric.</td></tr>
+    <tr class="sensitive"><td class="k">Body data</td><td>bust, waist, shoulder, armLength, backLength, neckDepthFront, neckDepthBack, sleeve, neck</td><td class="note">strings</td><td>Detailed body measurements. <strong>Shared with tailor partners</strong> when an order is placed (see Section 5).</td></tr>
+
+    <tr class="sensitive"><td class="k">Biometric / photo</td><td>photoFileId</td><td class="note">storage ref (4 MB cap, image/*)</td><td>Profile photo (face).</td></tr>
+    <tr class="sensitive"><td class="k">Biometric / photo</td><td>bodyScanFileId</td><td class="note">storage ref (10 MB cap, image/*)</td><td><strong>Full-body photograph</strong> of the customer. Required for AI try-on. Sent (base64) to RunPod for processing.</td></tr>
+    <tr class="sensitive"><td class="k">Biometric / photo</td><td>lastBodyScan</td><td class="note">timestamp</td><td>When the body scan was captured.</td></tr>
+
+    <tr><td class="k">Authentication</td><td>passwordHash + passwordSalt</td><td class="note">PBKDF2-SHA256 hex + 16-byte salt</td><td>Never returned to clients.</td></tr>
+
+    <tr><td class="k">Behavioural</td><td>loyaltyPoints, loyaltyTier</td><td class="note">number / string</td><td>Loyalty program data.</td></tr>
+    <tr><td class="k">Behavioural</td><td>preferredOccasions, preferredFabrics, preferredColors, budgetRange, upcomingOccasion(+Date), notifyTime</td><td class="note">strings / arrays</td><td>Personalisation preferences.</td></tr>
+    <tr><td class="k">Behavioural</td><td>language</td><td class="note">string</td><td>One of 9 Indian languages (EN/HI/MR/KN/TA/TE/BN/GU/ML).</td></tr>
+
+    <tr><td class="k">Consent</td><td>consentHistory, consentMessages, consentAiPersonal, consentPhotos, consentGrantedDate</td><td class="note">boolean × 4 + ISO date</td><td>DPDP-style consent flags. <strong>Default TRUE on creation</strong> — see Section 8.</td></tr>
+
+    <tr><td class="k">Notification prefs</td><td>notifTryOn, notifThankYou, notifFestivals, notifNewArrivals, notifBirthday, notifReengagement</td><td class="note">booleans</td><td>Per-channel notification opt-ins.</td></tr>
+  </table>
+
+  <p class="explain" style="margin-top:10px;">
+    PII-bearing fields also appear on these adjacent tables: <code>users</code>,
+    <code>userSessions</code>, <code>customerStoreLinks</code>,
+    <code>visitHistory</code>, <code>loyaltyTransactions</code>,
+    <code>customerReferrals</code>, <code>sessions</code>, <code>looks</code>,
+    <code>wardrobe</code>, <code>kioskCart</code>, <code>orders</code>,
+    <code>feedback</code>, <code>campaignSends</code>, <code>tailorReferrals</code>,
+    <code>tailorOrders</code>, <code>shortlist</code>, <code>trialRoom</code>,
+    <code>wishlist</code>. Where these tables carry customer phone or measurements,
+    they are flagged in the corresponding sections below.
+  </p>
+</div>
+
+<!-- ============ SECTION 3 — COLLECTION POINTS ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">3</div><div class="sec-title">Where Customer Data Is Collected</div></div>
+
+  <table class="tb">
+    <tr><th>Surface</th><th>File</th><th>Data captured</th><th>Mutation called</th></tr>
+    <tr>
+      <td class="k">Customer PWA — registration</td>
+      <td class="code">app/c/register/page.tsx</td>
+      <td>Phone, OTP, full name, DOB, gender, height, city, email, profile photo</td>
+      <td class="code">customers.completeProfile</td>
+    </tr>
+    <tr>
+      <td class="k">Customer PWA — login</td>
+      <td class="code">app/c/login/page.tsx</td>
+      <td>Phone, OTP / password</td>
+      <td class="code">phoneAuth.loginWithOtp / loginWithPassword</td>
+    </tr>
+    <tr>
+      <td class="k">Customer PWA — profile edit</td>
+      <td class="code">app/c/me/profile/page.tsx</td>
+      <td>Name, gender, height, city, email, photo</td>
+      <td class="code">customers.updateProfile</td>
+    </tr>
+    <tr>
+      <td class="k">Customer PWA — preferences</td>
+      <td class="code">app/c/me/preferences/page.tsx</td>
+      <td>Occasions, fabrics, colours, budget, upcoming occasion, notify time</td>
+      <td class="code">customers.updatePreferences</td>
+    </tr>
+    <tr>
+      <td class="k">Tablet — register new customer</td>
+      <td class="code">app/tablet/register/page.tsx</td>
+      <td>Phone, name, DOB, language</td>
+      <td class="code">customers.ensureByPhone</td>
+    </tr>
+    <tr>
+      <td class="k">Kiosk — new-customer capture</td>
+      <td class="code">app/kiosk/page.tsx (newCustomer screen)</td>
+      <td>Name, DOB (13+ gate enforced UI-side only)</td>
+      <td class="code">customers.ensureByPhone</td>
+    </tr>
+    <tr>
+      <td class="k">Kiosk — consent</td>
+      <td class="code">app/kiosk/screens/ConsentScreen.tsx</td>
+      <td>4 consent flags + granted date (single "Allow" toggle)</td>
+      <td class="code">customers.updateConsent</td>
+    </tr>
+    <tr>
+      <td class="k">Kiosk — body scan capture</td>
+      <td class="code">app/kiosk/screens/BodyScanScreen.tsx</td>
+      <td><strong>Full-body photograph</strong> from kiosk camera, JPEG quality 0.9</td>
+      <td class="code">customers.recordBodyScan</td>
+    </tr>
+    <tr>
+      <td class="k">Kiosk — feedback</td>
+      <td class="code">app/kiosk/screens/FeedbackScreen.tsx</td>
+      <td>Rating 1-5, quick-tag chips, free-text comment</td>
+      <td class="code">customers.submitFeedback</td>
+    </tr>
+    <tr>
+      <td class="k">Kiosk — data-save choice</td>
+      <td class="code">app/kiosk/screens/DataSaveScreen.tsx</td>
+      <td>Save / Delete decision for the session's looks</td>
+      <td class="code">sessionOps.addToWardrobe (if Save)</td>
+    </tr>
+  </table>
+
+  <div class="callout warn">
+    <span class="tag">Note</span>
+    Several surfaces collect identical fields (name, DOB, etc.). The validation logic
+    lives in <code>lib/profileHelpers.ts</code> but is enforced
+    <strong>only at the UI layer</strong>. Server mutations (e.g.
+    <code>customers.ensureByPhone</code>) accept the data without re-validating age —
+    a non-PWA path could create an under-13 record. See Sections&nbsp;7 and 14.
+  </div>
+</div>
+
+<!-- ============ SECTION 4 — STORAGE ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">4</div><div class="sec-title">Where Customer Data Is Stored</div></div>
+
+  <p class="explain">
+    All structured data sits in the Convex database. Files (photos, scans, documents)
+    sit in Convex File Storage. The Convex deployment is hosted in
+    <strong>EU-West-1 (Ireland)</strong> — see Section&nbsp;9.
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> Tables holding customer data</div>
+  <table class="tb">
+    <tr><th>Table</th><th>What it holds</th><th>PII present</th></tr>
+    <tr><td class="k">customers</td><td>The primary customer record (see Section 2)</td><td>All — incl. biometric</td></tr>
+    <tr><td class="k">users</td><td>Auth record (phone + password) for customer / store-owner / tailor / staff</td><td>Phone, name, password hash</td></tr>
+    <tr><td class="k">userSessions</td><td>Per-device session tokens</td><td>Token + userId reference</td></tr>
+    <tr><td class="k">customerStoreLinks</td><td>Customer ↔ store many-to-many; CLV, visits, segment</td><td>Customer ID, behavioural data per store</td></tr>
+    <tr><td class="k">visitHistory</td><td>Per-customer visit audit trail</td><td>Customer ID, store, date, sarees tried, purchase flag</td></tr>
+    <tr><td class="k">loyaltyTransactions</td><td>Points earn / redeem records</td><td>Customer ID, points, reason</td></tr>
+    <tr><td class="k">customerReferrals</td><td>Friend-referral records</td><td>Referrer phone, <strong>referred friend's name and phone</strong></td></tr>
+    <tr><td class="k">sessions</td><td>Mirror / tablet session context</td><td>Customer ID, phone, ratings, notes</td></tr>
+    <tr class="sensitive"><td class="k">looks</td><td>AI try-on results</td><td>Customer ID, <strong>personFileId (body-scan snapshot)</strong>, imageFileId (rendered try-on)</td></tr>
+    <tr><td class="k">wardrobe</td><td>Customer-saved looks per session</td><td>Customer ID + lookId</td></tr>
+    <tr><td class="k">kioskCart</td><td>Per-(customer, store) shopping cart</td><td>Customer ID, sarees, quantities</td></tr>
+    <tr><td class="k">orders</td><td>Purchase orders</td><td>Customer ID, phone, items, totals</td></tr>
+    <tr><td class="k">feedback</td><td>Session feedback</td><td>Customer ID, phone, rating, free-text comment</td></tr>
+    <tr><td class="k">campaignSends</td><td>Per-recipient dispatch log (email/SMS/WhatsApp)</td><td>Recipient (email or phone) <strong>in plaintext</strong></td></tr>
+    <tr><td class="k">shortlist</td><td>Staff-curated sarees per session</td><td>Customer ID</td></tr>
+    <tr><td class="k">trialRoom</td><td>Tablet→Mirror 6-digit access codes (15-min TTL)</td><td>Customer ID, phone, code</td></tr>
+    <tr><td class="k">wishlist</td><td>Customer-saved items</td><td>Customer ID + saree IDs</td></tr>
+    <tr><td class="k">tailorReferrals</td><td>Customer leads referred to tailor partners</td><td><strong>Customer name + phone shared with tailor</strong></td></tr>
+    <tr class="sensitive"><td class="k">tailorOrders</td><td>Blouse-stitching orders</td><td><strong>Customer name, phone AND all body measurements</strong> copied to the order</td></tr>
+  </table>
+
+  <div class="subhead"><span class="dot">&#9656;</span> File-storage references</div>
+  <table class="tb">
+    <tr><th>Field</th><th>What it holds</th><th>Size / type cap</th></tr>
+    <tr><td class="code">customers.photoFileId</td><td>Profile photo</td><td>4 MB, image/*</td></tr>
+    <tr class="sensitive"><td class="code">customers.bodyScanFileId</td><td><strong>Body-scan photograph</strong></td><td>10 MB, image/*</td></tr>
+    <tr><td class="code">looks.imageFileId</td><td>AI-rendered try-on PNG</td><td>10 MB</td></tr>
+    <tr><td class="code">looks.imageNoBgFileId</td><td>Background-removed cutout</td><td>5 MB, image/png</td></tr>
+    <tr><td class="code">looks.personFileId</td><td>Snapshot of body-scan used for the render</td><td>(same as bodyScan)</td></tr>
+    <tr><td class="code">stores.*FileId (×7)</td><td>Store KYC: Aadhaar, PAN, GST cert, shop license, store photos</td><td>10 MB, image/* or PDF</td></tr>
+    <tr><td class="code">tailors.*FileId (×3)</td><td>Tailor KYC: Aadhaar, PAN, address proof</td><td>10 MB, image/* or PDF</td></tr>
+  </table>
+</div>
+
+<!-- ============ SECTION 5 — THIRD PARTIES ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">5</div><div class="sec-title">Third Parties That Receive Customer Data</div></div>
+
+  <p class="explain">
+    Three external services receive customer data today. Each is a
+    <strong>data processor / sub-processor</strong> under DPDP Act §2(k) and
+    requires a data-processing agreement.
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 5.1 &nbsp; RunPod &mdash; AI try-on GPU</div>
+  <table class="tb">
+    <tr><td class="k" style="width:36mm;">Service</td><td>RunPod Serverless GPU (api.runpod.ai)</td></tr>
+    <tr><td class="k">Residency</td><td><strong>United States</strong> (configured endpoint region; transnational under DPDP §16)</td></tr>
+    <tr><td class="k">What is sent</td><td><strong>The customer's body-scan photograph (base64)</strong> and the saree catalog image (base64), in a ComfyUI workflow JSON payload</td></tr>
+    <tr><td class="k">Customer identifiers sent</td><td>None — only the binary images. No name, phone, email or customer ID is transmitted.</td></tr>
+    <tr><td class="k">Endpoint</td><td class="code">POST /v2/{endpointId}/run &nbsp;·&nbsp; GET /v2/{endpointId}/status/{jobId}</td></tr>
+    <tr><td class="k">Auth</td><td>Bearer token (<code>RUNPOD_API_KEY</code> env var, server-side only)</td></tr>
+    <tr><td class="k">Source</td><td class="code">convex/runpod.ts &nbsp;·&nbsp; convex/tryOn.ts</td></tr>
+  </table>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 5.2 &nbsp; SendGrid &mdash; email campaigns</div>
+  <table class="tb">
+    <tr><td class="k" style="width:36mm;">Service</td><td>SendGrid Email API (api.sendgrid.com)</td></tr>
+    <tr><td class="k">Residency</td><td><strong>United States</strong> (transnational under DPDP §16)</td></tr>
+    <tr><td class="k">What is sent</td><td><strong>Customer email address (plaintext)</strong>, customer name (in template variables), subject, message body</td></tr>
+    <tr><td class="k">Trigger</td><td>Store campaign dispatch (filtered by segment of <code>customerStoreLinks</code>)</td></tr>
+    <tr><td class="k">Source</td><td class="code">convex/campaignOps.ts:210-230 (sendEmail)</td></tr>
+    <tr><td class="k">Simulation</td><td>If <code>SENDGRID_API_KEY</code> not set, send is logged as "simulated" — no real API call.</td></tr>
+  </table>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 5.3 &nbsp; Twilio &mdash; SMS, OTP and WhatsApp</div>
+  <table class="tb">
+    <tr><td class="k" style="width:36mm;">Service</td><td>Twilio Messages API (api.twilio.com)</td></tr>
+    <tr><td class="k">Residency</td><td><strong>United States</strong> (transnational under DPDP §16)</td></tr>
+    <tr><td class="k">What is sent</td><td><strong>Customer phone number (plaintext)</strong>, message body (template-rendered)</td></tr>
+    <tr><td class="k">Channels</td><td>SMS, WhatsApp (via Advanced Messaging)</td></tr>
+    <tr><td class="k">Source</td><td class="code">convex/campaignOps.ts:232-254 (sendTwilio)</td></tr>
+    <tr><td class="k">Simulation</td><td>If credentials not set, send is "simulated".</td></tr>
+  </table>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 5.4 &nbsp; Tailor partners &mdash; not a SaaS, but a human recipient</div>
+  <table class="tb">
+    <tr><td class="k" style="width:36mm;">Recipient</td><td>Independent stitching partners ("tailors") with accounts in the platform</td></tr>
+    <tr><td class="k">What is shared</td><td><strong>Customer name, phone, body measurements</strong> — copied into <code>tailorReferrals</code> and <code>tailorOrders</code> rows visible to the tailor</td></tr>
+    <tr><td class="k">Consent capture</td><td><em>None at present.</em> No explicit "share with tailor" consent step. The data flows through the order pipeline.</td></tr>
+    <tr><td class="k">Source</td><td class="code">convex/tailorOps.ts (createReferral, createOrder)</td></tr>
+  </table>
+
+  <div class="callout crit">
+    <span class="tag">Action for counsel</span>
+    Confirm that <strong>data-processing agreements</strong> (DPAs) are in place
+    with Convex, RunPod, SendGrid and Twilio that meet DPDP §8(8) and §16
+    requirements. Document the legal basis for the tailor disclosure (likely
+    contractual necessity, but explicit notice / consent at the referral step is
+    safer).
+  </div>
+</div>
+
+<!-- ============ SECTION 6 — BIOMETRIC ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">6</div><div class="sec-title">Biometric &amp; Sensitive Data — the Body Scan</div></div>
+
+  <p>
+    The body-scan photograph is the single most sensitive item of personal data the
+    platform handles. Although DPDP Act 2023 does not yet enumerate "special
+    categories" of data the way GDPR does, full-body photographs combined with
+    detailed body measurements would, under most reasonable interpretations,
+    constitute <strong>highly sensitive personal data</strong> deserving of
+    heightened protection.
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> End-to-end flow of the body-scan image</div>
+  <table class="tb">
+    <tr><th style="width:44mm;">Step</th><th>What happens</th><th>Source</th></tr>
+    <tr><td class="k">1. Capture</td><td>Kiosk camera (full-frame video). Pose detection auto-triggers; manual button also available.</td><td class="code">app/kiosk/screens/BodyScanScreen.tsx</td></tr>
+    <tr><td class="k">2. Encode</td><td>Canvas-rendered JPEG at quality 0.9</td><td class="code">same file, lines ~155-168</td></tr>
+    <tr><td class="k">3. Upload</td><td>POST to Convex storage upload URL (10 MB cap, image/* MIME guard)</td><td class="code">lib/useUpload.ts</td></tr>
+    <tr><td class="k">4. Store</td><td>File ID written to <code>customers.bodyScanFileId</code>; timestamp to <code>customers.lastBodyScan</code></td><td class="code">customers.recordBodyScan</td></tr>
+    <tr><td class="k">5. Read for try-on</td><td>Server fetches blob via <code>ctx.storage.get</code>, base64-encodes</td><td class="code">convex/tryOn.ts:603-607</td></tr>
+    <tr><td class="k">6. Send to RunPod</td><td>Base64 image embedded in ComfyUI workflow JSON, POSTed to RunPod US</td><td class="code">convex/runpod.ts:399-420</td></tr>
+    <tr><td class="k">7. Snapshot</td><td>The file ID at time-of-render is copied to <code>looks.personFileId</code> for cache coherence</td><td class="code">convex/tryOn.ts (_insertQueuedLook)</td></tr>
+    <tr><td class="k">8. Result stored</td><td>RunPod returns rendered image; stored at <code>looks.imageFileId</code></td><td class="code">convex/tryOn.ts (_completeLook)</td></tr>
+  </table>
+
+  <div class="callout crit">
+    <span class="tag">Open exposure</span>
+    The body-scan image and AI renders are stored <strong>indefinitely</strong>. There
+    is no automatic deletion, no expiry, and no UI mechanism for the customer to
+    delete a stored body scan. A new scan replaces the file ID on the
+    <code>customers</code> row but the underlying storage blob is not necessarily
+    purged. See Sections 11 and 14.
+  </div>
+
+  <div class="callout warn">
+    <span class="tag">Useful note</span>
+    The body-scan cache (Section 15.4) is invalidated automatically when the customer
+    re-scans, because <code>looks.personFileId</code> stops matching the current
+    <code>customers.bodyScanFileId</code>. This is a positive design: a re-scan
+    implicitly retires every old AI render for that customer.
+  </div>
+</div>
+
+<!-- ============ SECTION 7 — CHILDREN ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">7</div><div class="sec-title">Children's Data — DPDP §9 Compliance Gap</div></div>
+
+  <p>
+    DPDP Act 2023, Section 9, requires a Data Fiduciary to <strong>obtain verifiable
+    consent of the parent or lawful guardian</strong> before processing the personal
+    data of a child. The Act defines a "child" as a person who has not completed
+    <strong>eighteen years</strong> of age (§2(f)). DPDP §9(3) further prohibits
+    tracking, behavioural monitoring, and targeted advertising directed at children.
+  </p>
+
+  <div class="callout crit">
+    <span class="tag">Critical gap</span>
+    Wearify currently uses an age gate of <strong>13 years</strong>
+    (<code>MIN_AGE_YEARS&nbsp;=&nbsp;13</code> in
+    <code>lib/profileHelpers.ts:7</code>). Customers aged 13–17 are accepted with no
+    parental-consent step. This is GDPR-aligned but <strong>not DPDP-compliant</strong>
+    for customers under 18.
+  </div>
+
+  <p>Wearify also <strong>tracks behavioural data</strong> on every customer (visit
+  history, try-on counts, wishlist/wardrobe contents, loyalty tier, preferences) and
+  runs marketing campaigns (email / SMS / WhatsApp) — both of which DPDP §9(3) restricts
+  for children.</p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> Two further gaps in the age check</div>
+  <table class="tb">
+    <tr><th>Where</th><th>Issue</th></tr>
+    <tr>
+      <td class="k">Server-side enforcement</td>
+      <td>The 13+ check exists only in the customer PWA UI (<code>app/c/register/page.tsx</code>). The Convex mutation <code>customers.ensureByPhone</code> accepts a DOB without validating it, so the tablet self-service path and any direct API caller can create an under-age customer.</td>
+    </tr>
+    <tr>
+      <td class="k">Parental consent</td>
+      <td>No mechanism exists to capture a parent's or guardian's contact details, to send a verification challenge, or to record verifiable parental consent for an under-18 customer.</td>
+    </tr>
+  </table>
+
+  <div class="callout warn">
+    <span class="tag">Recommended discussion</span>
+    Counsel should advise on (a) raising the gate to 18, or (b) implementing a
+    verifiable-parental-consent flow for 13–17 customers (e.g. parent's phone + OTP,
+    or government-ID verification), and (c) whether marketing campaigns and behavioural
+    profiling can lawfully reach any customer under 18.
+  </div>
+</div>
+
+<!-- ============ SECTION 8 — CONSENT ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">8</div><div class="sec-title">Consent Mechanism — DPDP §6 Review</div></div>
+
+  <p>
+    DPDP §6 requires consent to be <em>free, specific, informed, unconditional,
+    unambiguous and given by a clear affirmative action</em>, and to be limited to the
+    personal data necessary for a specified purpose. Wearify's current consent
+    implementation captures four flags but has structural weaknesses against this
+    standard.
+  </p>
+
+  <table class="tb">
+    <tr><th>Aspect</th><th>Current implementation</th><th>DPDP §6 alignment</th></tr>
+    <tr>
+      <td class="k">Capture surface</td>
+      <td>Kiosk modal <code>app/kiosk/screens/ConsentScreen.tsx</code> with "Allow" / "Skip" buttons; copy: <em>"We'll use the camera on this mirror to capture your look. Images are saved securely and you can delete them anytime."</em></td>
+      <td>Clear affirmative action present (Allow tap). <strong>"Skip" affordance is preserved</strong> — customer can decline without exiting.</td>
+    </tr>
+    <tr>
+      <td class="k">Granularity</td>
+      <td>Four flags (<code>consentHistory</code>, <code>consentMessages</code>, <code>consentAiPersonal</code>, <code>consentPhotos</code>) are <strong>set together by a single "Allow" tap</strong>. No per-flag checkbox.</td>
+      <td><strong>Not aligned</strong> with DPDP's <em>specific</em> requirement; treats four distinct purposes as one bundled consent.</td>
+    </tr>
+    <tr>
+      <td class="k">Default state</td>
+      <td>On new customer creation via <code>customers.ensureByPhone</code>, <strong>all four flags default to TRUE with today's date</strong>, even before any consent UI is shown.</td>
+      <td><strong>Not aligned</strong> — pre-checked / pre-granted consent does not satisfy "clear affirmative action".</td>
+    </tr>
+    <tr>
+      <td class="k">Storage</td>
+      <td>Flags + <code>consentGrantedDate</code> on the <code>customers</code> row.</td>
+      <td>Adequate as proof of consent, but no version of the notice shown is recorded.</td>
+    </tr>
+    <tr>
+      <td class="k">Withdrawal</td>
+      <td>An <code>updateConsent</code> mutation exists, but there is <strong>no customer-facing UI</strong> to view or change consent flags after the initial Allow tap.</td>
+      <td><strong>Not aligned</strong> with the right to withdraw consent (DPDP §6(4)–(6)).</td>
+    </tr>
+    <tr>
+      <td class="k">Notice / legal docs</td>
+      <td><code>legalDocs</code> table is defined to hold versioned terms / privacy notices, but no code reads it; no admin UI to upload them. The consent screen shows hard-coded copy only.</td>
+      <td><strong>Not aligned</strong> with §5 notice requirements. The required notice (purposes, rights, complaint channel, cross-border details) is not surfaced.</td>
+    </tr>
+  </table>
+
+  <div class="callout crit">
+    <span class="tag">Action items</span>
+    (1) Remove default-true consent on customer creation. (2) Replace the bundled
+    "Allow" tap with per-purpose checkboxes (or, minimum, separate the
+    "photos / AI personalisation" consent from "marketing messages"). (3) Build a
+    consent-management screen in <code>/c/me</code> where the customer can review
+    and withdraw consents. (4) Implement a notice/privacy-policy view fed by the
+    <code>legalDocs</code> table and version-stamp consent records with the policy
+    version accepted.
+  </div>
+</div>
+
+<!-- ============ SECTION 9 — CROSS-BORDER ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">9</div><div class="sec-title">Cross-Border Data Flows — DPDP §16</div></div>
+
+  <p>
+    DPDP §16 permits transfer of personal data outside India unless the Central
+    Government has restricted transfer to a particular country. All Wearify data
+    today is held or processed outside India. The Azure-migration plan
+    (separate document) addresses this by moving everything to Azure's
+    <em>Central India</em> region, but as of this brief the current state is:
+  </p>
+
+  <table class="tb">
+    <tr><th>Service</th><th>Role</th><th>Region</th><th>Customer data sent</th></tr>
+    <tr><td class="k">Convex</td><td>Primary database + file storage</td><td>EU-West-1 (Ireland)</td><td><strong>All</strong> — every PII field</td></tr>
+    <tr><td class="k">RunPod</td><td>AI try-on GPU</td><td>United States</td><td>Body-scan image (base64), saree image</td></tr>
+    <tr><td class="k">SendGrid</td><td>Email dispatch</td><td>United States</td><td>Customer email + name + message body</td></tr>
+    <tr><td class="k">Twilio</td><td>SMS / WhatsApp dispatch</td><td>United States</td><td>Customer phone + message body</td></tr>
+    <tr><td class="k">Netlify</td><td>Frontend hosting</td><td>Global CDN, primary US</td><td>Hosting traffic, no PII at rest</td></tr>
+    <tr><td class="k">Better Auth</td><td>Admin sign-in</td><td>Runs <em>inside</em> Convex (EU-West-1)</td><td>Admin email + password hash only</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <span class="tag">Discussion for counsel</span>
+    (a) Confirm the customer notice discloses these cross-border transfers, as
+    expected under §5 notice requirements. (b) Confirm DPAs are in place with each
+    sub-processor. (c) The Azure-Central-India migration (separate plan) materially
+    improves this posture by bringing primary data residency in-country; counsel may
+    wish to weigh whether to delay launch until that migration is complete, or
+    proceed with appropriate disclosures.
+  </div>
+</div>
+
+<!-- ============ SECTION 10 — SECURITY ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">10</div><div class="sec-title">Security &amp; Access Controls</div></div>
+
+  <p class="explain">Material security mechanisms present in the codebase today:</p>
+
+  <table class="tb">
+    <tr><th>Control</th><th>Implementation</th></tr>
+    <tr><td class="k">Password / PIN hashing</td><td>PBKDF2-SHA256, 100,000 iterations, per-user 16-byte salt, constant-time comparison. <em>(<code>convex/authCrypto.ts</code>)</em></td></tr>
+    <tr><td class="k">Legacy hash migration</td><td>Legacy SHA-256 rows (no per-user salt) are detected on login and rehashed transparently to the modern format.</td></tr>
+    <tr><td class="k">Rate-limiting tables</td><td>Per-phone (password), per-store (staff PIN, trial-room codes, kiosk pairing codes). Rolling-window counters.</td></tr>
+    <tr><td class="k">Kiosk device auth</td><td>32-byte (256-bit) crypto-random bearer token, validated on every kiosk request; revocation supported (<code>devices.revokedAt</code>).</td></tr>
+    <tr><td class="k">Cross-store isolation</td><td>Try-on actions verify <code>saree.storeId === session.storeId</code>; look mutations verify <code>look.storeId === device.storeId</code>.</td></tr>
+    <tr><td class="k">File-upload validation</td><td>Both client (<code>lib/uploadGuards.ts</code>) and server (<code>convex/fileValidation.ts</code>) enforce per-purpose size + MIME caps (e.g. body scan ≤ 10 MB, image/*; KYC doc ≤ 10 MB, image/* or PDF).</td></tr>
+    <tr><td class="k">PII narrowing on public surfaces</td><td>The kiosk trial-room <code>validateCode</code> query deliberately returns a narrowed customer projection — no file IDs leaked, only a boolean <code>hasBodyScanFile</code>.</td></tr>
+    <tr><td class="k">Secrets handling</td><td>RunPod, SendGrid, Twilio credentials live in Convex env vars; never reach the browser bundle.</td></tr>
+    <tr><td class="k">Encryption at rest</td><td>Relies on Convex platform-level encryption (no application-layer envelope encryption).</td></tr>
+    <tr><td class="k">Encryption in transit</td><td>All external HTTP calls are HTTPS to <code>https://</code> endpoints.</td></tr>
+  </table>
+
+  <div class="callout ok">
+    <span class="tag">Overall</span>
+    The security posture for authentication and access control is solid for a
+    pre-launch product. The main weaknesses are not in <em>what</em> is implemented
+    but in adjacent areas: retention, deletion, audit logging and consent UX (covered
+    in their own sections).
+  </div>
+</div>
+
+<!-- ============ SECTION 11 — RETENTION ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">11</div><div class="sec-title">Data Retention &amp; Deletion — DPDP §8(7) &amp; §12</div></div>
+
+  <p>
+    DPDP §8(7) requires a Data Fiduciary to erase personal data when the purpose for
+    which it was collected is no longer served. §12 provides the data principal the
+    Right to Erasure on request. Wearify's current code does not implement either.
+  </p>
+
+  <table class="tb">
+    <tr><th>Item</th><th>Current state</th></tr>
+    <tr><td class="k">Retention policies (data)</td><td>The <code>retentionPolicies</code> table is defined in <code>convex/schema.ts</code> but <strong>no code reads or enforces it</strong>. There is no scheduled job that purges data based on category.</td></tr>
+    <tr><td class="k">"Delete my account" — customer</td><td><strong>Not implemented.</strong> No mutation exists. There is no UI option in <code>/c/me</code> to request account deletion.</td></tr>
+    <tr><td class="k">Cascading delete</td><td>Even if a customer row is deleted manually, the dependent rows in <code>looks</code>, <code>wardrobe</code>, <code>visitHistory</code>, <code>loyaltyTransactions</code>, <code>customerStoreLinks</code>, <code>orders</code>, <code>tailorOrders</code> and others would be orphaned, not removed.</td></tr>
+    <tr><td class="k">File-blob purge</td><td>Storing a new body scan replaces <code>customers.bodyScanFileId</code> but does not delete the underlying storage blob. Orphaned cutout PNGs <em>are</em> cleaned up after a failed mutation (see <code>tryOn.deleteOrphanCutout</code>) but no general blob garbage collector exists.</td></tr>
+    <tr><td class="k">Session / OTP / token cleanup</td><td>Trial-room codes have a 15-minute TTL but expired rows are not purged. <code>userSessions</code> have expiry timestamps but no janitor.</td></tr>
+    <tr><td class="k">Body-scan staleness</td><td>Cache invalidation works on re-scan (Section 15.4), but the platform does not <em>require</em> re-scan or auto-delete old scans after any retention period.</td></tr>
+  </table>
+
+  <div class="callout crit">
+    <span class="tag">Highest-priority action</span>
+    Before launch, implement (1) a customer-initiated account deletion flow, with
+    cascading removal across all 19 PII-bearing tables and storage-blob cleanup,
+    (2) per-category retention windows backed by the existing
+    <code>retentionPolicies</code> table and a scheduled purge job, and (3) explicit
+    auto-purge of body-scan blobs after a defined period (e.g. 6 or 12 months).
+  </div>
+</div>
+
+<!-- ============ SECTION 12 — AUDIT LOGGING ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">12</div><div class="sec-title">Audit Logging</div></div>
+
+  <p>
+    The <code>auditLog</code> table is defined with the right shape
+    (<em>timestamp, action, user, category, details</em>) and an
+    <code>addAuditEntry</code> mutation exists at
+    <code>convex/settings.ts:73-90</code>. However, a grep of the codebase shows
+    <strong>no call site invokes it</strong>. The audit-logging infrastructure is
+    present but is not instrumented.
+  </p>
+
+  <div class="callout crit">
+    <span class="tag">Compliance gap</span>
+    DPDP §10 obliges Significant Data Fiduciaries to maintain records of processing
+    activities. Even outside SDF status, a working audit trail is necessary to
+    respond to a data principal's right to information (§11) and to support breach
+    investigation (§8(6)). At minimum, the following should be logged: customer
+    login, profile updates, consent changes, body-scan uploads, AI try-on
+    initiation, admin data access, KYC document uploads, tailor referral creation,
+    and campaign sends.
+  </div>
+</div>
+
+<!-- ============ SECTION 13 — KYC ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">13</div><div class="sec-title">KYC Data — Stores &amp; Tailors (for completeness)</div></div>
+
+  <p>
+    Although the main DPDP exposure concerns customer data, the platform also handles
+    sensitive business / personal data for store owners and tailor partners. Counsel
+    should be aware of these for completeness.
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> Store owners (collected via admin onboarding wizard)</div>
+  <ul style="font-size:9.4pt;line-height:1.55;margin-left:18px;">
+    <li>Owner name, phone, email; GSTIN, PAN, shop-license number</li>
+    <li>Bank account, IFSC, bank name</li>
+    <li>File uploads: Aadhaar, PAN card, GST certificate, shop license, exterior &amp; interior photos</li>
+    <li>Signed agreements (MSA, DPA, AUP, hardware terms, SLA) with signer name and date</li>
+  </ul>
+
+  <div class="subhead"><span class="dot">&#9656;</span> Tailor partners (collected via tailor self-registration + admin verification)</div>
+  <ul style="font-size:9.4pt;line-height:1.55;margin-left:18px;">
+    <li>Name, phone, city, services, working hours</li>
+    <li>File uploads: Aadhaar, PAN, address proof</li>
+    <li>Verification flags + admin rejection note (<code>kycRejectionReason</code>)</li>
+    <li>DPDP-style consent flags (<code>consentProfile</code>, <code>consentLocation</code>, <code>consentAnalytics</code>)</li>
+  </ul>
+
+  <p class="explain">
+    The same retention and deletion gaps identified for customer data apply equally
+    to store and tailor KYC files.
+  </p>
+</div>
+
+<!-- ============ SECTION 14 — GAPS ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">14</div><div class="sec-title">Identified Compliance Gaps</div></div>
+
+  <p class="explain">Summary table of all material gaps identified above, with risk rating and the corresponding DPDP provision.</p>
+
+  <table class="gaps">
+    <tr><th>Gap</th><th>Risk</th><th>DPDP ref.</th><th>Recommended action</th></tr>
+    <tr>
+      <td class="gn">No customer account-deletion flow</td>
+      <td class="rs"><span class="pill high">High</span></td>
+      <td>§12 (right to erasure)</td>
+      <td class="rec">Build a "delete my account" mutation with cascading delete across all PII tables and storage blobs; expose in <code>/c/me</code>.</td>
+    </tr>
+    <tr>
+      <td class="gn">Consent default-TRUE on customer creation</td>
+      <td class="rs"><span class="pill high">High</span></td>
+      <td>§6 (clear affirmative action)</td>
+      <td class="rec">Remove the default-true on <code>ensureCustomerByPhone</code>; require the consent screen to be the only place flags are set.</td>
+    </tr>
+    <tr>
+      <td class="gn">Age gate is 13+, not 18+; no parental consent</td>
+      <td class="rs"><span class="pill high">High</span></td>
+      <td>§9 (children)</td>
+      <td class="rec">Either raise gate to 18, or implement a verifiable-parental-consent flow for 13–17 customers. Suppress behavioural profiling and marketing for under-18s.</td>
+    </tr>
+    <tr>
+      <td class="gn">Bundled consent (4 flags under one "Allow")</td>
+      <td class="rs"><span class="pill med">Med</span></td>
+      <td>§6 (specific)</td>
+      <td class="rec">Split into per-purpose toggles, or at minimum split "photos / AI personalisation" from "marketing messages".</td>
+    </tr>
+    <tr>
+      <td class="gn">No consent-withdrawal UI</td>
+      <td class="rs"><span class="pill high">High</span></td>
+      <td>§6(4)–(6)</td>
+      <td class="rec">Add a consent-management screen in <code>/c/me</code> showing current flags with toggles to withdraw.</td>
+    </tr>
+    <tr>
+      <td class="gn">No retention windows enforced</td>
+      <td class="rs"><span class="pill high">High</span></td>
+      <td>§8(7)</td>
+      <td class="rec">Define retention policy per data category; write a scheduled purge that consumes the <code>retentionPolicies</code> table.</td>
+    </tr>
+    <tr>
+      <td class="gn">Body-scan images stored indefinitely</td>
+      <td class="rs"><span class="pill high">High</span></td>
+      <td>§8(7), purpose-limitation</td>
+      <td class="rec">Auto-delete body-scan blobs after a defined window (e.g. 6 or 12 months) or on consent withdrawal.</td>
+    </tr>
+    <tr>
+      <td class="gn">Audit log defined but never written</td>
+      <td class="rs"><span class="pill med">Med</span></td>
+      <td>§10, §11</td>
+      <td class="rec">Instrument all PII-touching mutations to call <code>settings.addAuditEntry</code>.</td>
+    </tr>
+    <tr>
+      <td class="gn">Cross-border data flows without visible DPAs</td>
+      <td class="rs"><span class="pill high">High</span></td>
+      <td>§8(8), §16</td>
+      <td class="rec">Verify executed DPAs with Convex, RunPod, SendGrid, Twilio. Disclose transfers in the privacy notice.</td>
+    </tr>
+    <tr>
+      <td class="gn">Privacy notice / legal docs not surfaced</td>
+      <td class="rs"><span class="pill high">High</span></td>
+      <td>§5 (notice)</td>
+      <td class="rec">Populate <code>legalDocs</code>; build admin upload UI and customer-facing view; version-stamp every consent record.</td>
+    </tr>
+    <tr>
+      <td class="gn">Server-side age check missing on <code>ensureByPhone</code></td>
+      <td class="rs"><span class="pill med">Med</span></td>
+      <td>§9</td>
+      <td class="rec">Add age validation to the Convex mutation, not only the UI.</td>
+    </tr>
+    <tr>
+      <td class="gn">Tailor sharing — no explicit consent step</td>
+      <td class="rs"><span class="pill med">Med</span></td>
+      <td>§6</td>
+      <td class="rec">Add a "share with tailor" consent capture at the referral / order-creation step, or rely on a clearly-disclosed contractual-necessity basis.</td>
+    </tr>
+    <tr>
+      <td class="gn">Campaign recipient stored in plaintext in <code>campaignSends</code></td>
+      <td class="rs"><span class="pill low">Low</span></td>
+      <td>§8(5) (security)</td>
+      <td class="rec">Acceptable for dispatch logs; ensure retention window is short and admin access is audited.</td>
+    </tr>
+    <tr>
+      <td class="gn">No appointed Data Protection Officer / contact</td>
+      <td class="rs"><span class="pill med">Med</span></td>
+      <td>§10(2)(a)</td>
+      <td class="rec">Counsel to advise on whether Wearify qualifies as a Significant Data Fiduciary; appoint a DPO and publish a complaint-channel contact.</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ============ SECTION 15 — PATENT ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">15</div><div class="sec-title">Patent-Relevant Novel Aspects</div></div>
+
+  <p>
+    Five technical areas identified in the codebase warrant patent-counsel review.
+    None is individually a "blockbuster" claim, but together they describe a defensible
+    family covering virtual try-on in retail kiosks plus IoT device pairing in
+    multi-store environments.
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 15.1 &nbsp; AI try-on pipeline — Qwen-Image-Edit + saree LoRA + flat-lay garment selection</div>
+  <p class="explain">
+    A ComfyUI pipeline combining Qwen-Image-Edit 2511 as the diffusion base, a custom
+    <em>Object-Adder</em> LoRA tuned for saree replacement, and a non-obvious
+    garment-image selection rule (<em>imageIds[3] → [2] → [0]</em>) that prefers flat-lay
+    catalog photos over model-wearing shots. The flat-lay selection materially
+    suppresses "model-face leak" in the rendered output. Sourcing:
+    <code>convex/runpod.ts</code> (workflow + LoRA config),
+    <code>convex/tryOn.ts:552-557</code> (garment selection chain).
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 15.2 &nbsp; Kiosk pairing protocol — ephemeral codes + persistent device tokens with per-store rate-limiting</div>
+  <p class="explain">
+    A two-tier identity scheme: a low-entropy, 2-minute-TTL, human-typeable 6-digit
+    code issued by an authorised principal (admin or store owner) is consumed once
+    by a fresh kiosk to mint a 32-byte (256-bit) opaque bearer token. Brute-force
+    enumeration of the code space is prevented by a per-store rolling-window failure
+    counter. The protocol uses no PKI / certificates. Sourcing:
+    <code>convex/kioskPairing.ts</code>, <code>convex/kioskAuth.ts</code>.
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 15.3 &nbsp; Trial-room access-code handoff between tablet and mirror</div>
+  <p class="explain">
+    A 6-digit single-use code with 15-minute TTL is generated on a sales tablet,
+    handed to the customer, and consumed at a kiosk mirror to load the staff-curated
+    saree shortlist into the customer's session. The code mediates a device-to-device
+    session handoff without Bluetooth, NFC, or pre-registration of the two devices
+    to each other. Sourcing: <code>convex/trialRoom.ts</code>, <code>convex/schema.ts:395-419</code>.
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 15.4 &nbsp; Body-scan cache invalidation by file-identity, not timestamp</div>
+  <p class="explain">
+    Completed AI renders are reused across sessions for the same (customer, saree)
+    pair <em>only when</em> the <code>looks.personFileId</code> snapshot still equals
+    the customer's current <code>bodyScanFileId</code>. A re-scan changes the file
+    identity and automatically invalidates every prior render, with no clocks, no
+    TTL configuration, and no admin intervention. This is a subtle but real
+    distributed-systems primitive applied to a retail-personalisation problem.
+    Sourcing: <code>convex/tryOn.ts:1052-1084</code> (<code>getCachedLooksForSarees</code>).
+  </p>
+
+  <div class="subhead"><span class="dot">&#9656;</span> 15.5 &nbsp; Sequential WASM background-removal queue for resource-bounded edge devices</div>
+  <p class="explain">
+    A module-singleton FIFO queue runs <em>one</em> @imgly/background-removal job at
+    a time on the kiosk browser, holding the ~200 MB WASM model warm in memory.
+    A parallel implementation would replicate the model per job, exceeding tablet
+    memory limits; the sequential choice trades wall-clock for bounded RAM and
+    preserves UI responsiveness with explicit queue-position feedback. Sourcing:
+    <code>lib/bgRemovalQueue.ts</code>, with rationale in CONTEXT.md.
+  </p>
+
+  <div class="callout info">
+    <span class="tag">For patent counsel</span>
+    All five are eligible for novelty and non-obviousness analysis. Counsel may
+    further consider claiming the <em>combination</em> — a retail platform whose
+    smart-mirror device is paired via an ephemeral code, hands customer sessions
+    from a separate tablet via a second ephemeral code, runs personalised AI
+    garment-replacement on a GPU with a fabric-specific LoRA, and caches results
+    by file-identity — as a single system claim covering the integrated invention.
+  </div>
+</div>
+
+<!-- ============ SECTION 16 — QUESTIONS ============ -->
+<div class="section">
+  <div class="sec-head"><div class="sec-badge">16</div><div class="sec-title">Questions for Counsel</div></div>
+
+  <ol style="font-size:10.2pt;line-height:1.6;margin-left:20px;">
+    <li><strong>SDF status:</strong> Given biometric-adjacent body-scan data, multi-store
+    customer profiles and AI behavioural personalisation, is Wearify likely to be
+    designated a Significant Data Fiduciary under DPDP §10? If so, what are the
+    immediate obligations (DPO appointment, DPIA, audit, child-data restrictions)?</li>
+
+    <li><strong>Children:</strong> Should the age gate be raised to 18 immediately, or
+    is a verifiable-parental-consent flow for 13–17 customers acceptable? What
+    "verifiable" mechanism does counsel accept (parent OTP, government ID, signed
+    declaration)?</li>
+
+    <li><strong>Consent UX:</strong> Will counsel accept a single "I agree" with a
+    layered privacy notice, or are per-purpose checkboxes required to satisfy the
+    "specific" prong of §6?</li>
+
+    <li><strong>Cross-border transfers:</strong> Are the existing service contracts
+    with Convex, RunPod, SendGrid and Twilio sufficient under §8(8) / §16, or are
+    Standard Contractual Clauses (or India-specific equivalents) required? Should
+    launch wait for the planned Azure-Central-India migration?</li>
+
+    <li><strong>Body-scan retention:</strong> What is an appropriate maximum retention
+    period for a customer's body-scan photograph? Should it auto-delete on each
+    re-scan (keeping only the latest), on consent withdrawal, on account deletion,
+    after a fixed window, or some combination?</li>
+
+    <li><strong>Tailor sharing:</strong> Is sharing customer name, phone and
+    measurements with the tailor partner adequately covered by contractual necessity
+    (the customer is ordering a blouse from that tailor), or is an explicit
+    "share with tailor" consent step required?</li>
+
+    <li><strong>Privacy notice / terms:</strong> Should the privacy notice and terms
+    be drafted by counsel before launch? If so, how should we surface them
+    in-product so they are version-stamped against each consent record?</li>
+
+    <li><strong>Data-breach response:</strong> Counsel to advise on the §8(6) breach
+    notification process and on assembling a tabletop breach-response plan before
+    launch.</li>
+
+    <li><strong>Patent strategy:</strong> Patent counsel to assess novelty and
+    non-obviousness of each item in Section 15 and recommend filing strategy (single
+    consolidated application vs. divisional family; PCT timing; India-only vs.
+    international).</li>
+
+    <li><strong>Trademarks &amp; brand:</strong> Confirm Wearify brand registration
+    status and any conflicts on "Wearify" / saree-try-on category.</li>
+  </ol>
+
+  <div class="callout">
+    <span class="tag">Appendix available on request</span>
+    Source-level evidence for every finding in this brief (file paths, line numbers
+    and excerpts) is on file and can be made available to counsel for diligence.
+    The accompanying System Architecture Review document contains the full technical
+    description of the platform and may serve as the technical exhibit for the
+    patent filing.
+  </div>
+</div>
+
+</body>
+</html>

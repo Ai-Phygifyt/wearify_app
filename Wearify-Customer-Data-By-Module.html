@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wearify — Customer Data Usage by Module</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: "Noto Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: #2c2a28; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* maroon #7B1D1D · gold #C9941A · ivory #FBF7F0 · red #b0473a */
+
+  .page { width: 297mm; height: 210mm; page-break-after: always; overflow: hidden;
+          display: flex; flex-direction: column; }
+  .top { height: 12mm; flex-shrink: 0; display: flex; align-items: center;
+         justify-content: space-between; padding: 0 14mm; border-bottom: 1px solid #E3D9C8; }
+  .top .mk { font-weight: 800; letter-spacing: 3px; font-size: 11pt; color: #7B1D1D; }
+  .top .mk span { color: #C9941A; }
+  .top .pg { font-size: 9pt; letter-spacing: 1px; color: #9a917f; }
+
+  .slide { flex: 1; padding: 13mm 17mm 14mm; display: flex; flex-direction: column; }
+  .kicker { font-size: 11pt; font-weight: 800; letter-spacing: 3px;
+            text-transform: uppercase; color: #C9941A; }
+  .s-title { font-size: 28pt; font-weight: 800; color: #7B1D1D; line-height: 1.1;
+             margin: 5px 0 6px; }
+  .s-sub { font-size: 13pt; color: #6c665d; margin-bottom: 8px; }
+  .s-rule { width: 46mm; height: 3px; background: #C9941A; }
+  .body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+
+  /* TITLE SLIDE */
+  .title-slide { flex: 1; background: #7B1D1D; color: #FDF8F2;
+                 display: flex; flex-direction: column; justify-content: center; padding: 0 30mm; }
+  .title-slide .t-word { font-size: 42pt; font-weight: 800; letter-spacing: 11px; }
+  .title-slide .t-word span { color: #E9B949; }
+  .title-slide .t-sub { font-size: 10pt; letter-spacing: 4px; color: #E7C9A5;
+                        text-transform: uppercase; margin-top: 6px; }
+  .title-slide .t-main { font-size: 30pt; font-weight: 800; margin-top: 24mm; line-height: 1.2; }
+  .title-slide .t-main .g { color: #E9B949; }
+  .title-slide .t-line { font-size: 13pt; color: #EBD9C2; margin-top: 12px; }
+
+  /* MODULE OVERVIEW CARDS */
+  .mods { display: flex; gap: 9px; }
+  .mod { flex: 1; border: 1.5px solid #E3D9C8; border-top: 5px solid #C9941A;
+         border-radius: 8px; background: #FCFAF5; padding: 14px 9px; text-align: center; }
+  .mod .m-route { font-weight: 800; color: #7B1D1D; font-size: 13.5pt; }
+  .mod .m-name { font-size: 10pt; font-weight: 700; margin-top: 4px; color: #4a4640; }
+  .mod .m-data { font-size: 9pt; color: #6c665d; margin-top: 7px; line-height: 1.4;
+                 border-top: 1px solid #E3D9C8; padding-top: 7px; }
+  .mod.hot { border-top-color: #b0473a; background: #FBF1EE; }
+  .mod.hot .m-route { color: #b0473a; }
+
+  /* DATA WE COLLECT — categorized */
+  .cats { display: flex; gap: 11px; flex-wrap: wrap; }
+  .cat { flex: 1 1 30%; border: 1px solid #E3D9C8; border-left: 5px solid #7B1D1D;
+         border-radius: 7px; background: #FCFAF5; padding: 12px 16px; }
+  .cat.bio { border-left-color: #b0473a; background: #FBF1EE; }
+  .cat .c-h { font-weight: 800; color: #7B1D1D; font-size: 12.5pt; }
+  .cat.bio .c-h { color: #b0473a; }
+  .cat .c-h .tag { font-size: 7.5pt; background: #b0473a; color: #fff;
+                   border-radius: 3px; padding: 1px 6px; margin-left: 6px;
+                   letter-spacing: 0.5px; vertical-align: 2px; }
+  .cat .c-items { font-size: 10pt; color: #4a4640; margin-top: 6px; line-height: 1.6; }
+  .cat .c-items span { display: block; }
+
+  /* 3-COLUMN MODULE BREAKDOWN */
+  .triple { display: flex; gap: 11px; flex: 1; }
+  .tc { flex: 1; border: 1px solid #E3D9C8; border-radius: 8px; background: #FCFAF5;
+        padding: 12px 14px; display: flex; flex-direction: column; }
+  .tc .tc-h { font-size: 10pt; font-weight: 800; letter-spacing: 1.5px;
+              text-transform: uppercase; color: #fff; background: #7B1D1D;
+              padding: 4px 10px; border-radius: 4px; margin-bottom: 9px;
+              display: inline-block; align-self: flex-start; }
+  .tc.uses .tc-h { background: #1167B1; }
+  .tc.share .tc-h { background: #C9941A; }
+  .tc ul { list-style: none; padding: 0; margin: 0; }
+  .tc li { font-size: 10.6pt; color: #34302b; padding: 3px 0; line-height: 1.4;
+           display: flex; gap: 6px; }
+  .tc li .b { color: #C9941A; font-weight: 800; flex-shrink: 0; }
+  .tc li.crit { color: #b0473a; font-weight: 700; }
+  .tc li.crit .b { color: #b0473a; }
+
+  .keyfact { margin-top: 10px; background: #FCF4E2; border: 1.5px solid #E2C173;
+             border-radius: 7px; padding: 9px 14px; font-size: 10.5pt; color: #34302b; }
+  .keyfact b { color: #7B1D1D; }
+  .keyfact.crit { background: #F8EBE7; border-color: #DBB3AC; color: #6c2e23; }
+  .keyfact.crit b { color: #b0473a; }
+
+  /* THIRD-PARTY SLIDE */
+  .parties { display: flex; flex-direction: column; gap: 10px; }
+  .party { display: flex; gap: 13px; align-items: stretch; }
+  .party .p-icon { width: 36mm; flex-shrink: 0; background: #7B1D1D; color: #fff;
+                   border-radius: 7px; padding: 11px 12px; display: flex;
+                   flex-direction: column; justify-content: center; }
+  .party .p-icon .p-n { font-weight: 800; font-size: 12pt; }
+  .party .p-icon .p-l { font-size: 8.4pt; color: #E7C9A5; margin-top: 1px;
+                        letter-spacing: 0.5px; }
+  .party .p-icon.crit { background: #b0473a; }
+  .party .p-icon.crit .p-l { color: #f5d4cf; }
+  .party .p-body { flex: 1; border: 1px solid #E3D9C8; background: #FCFAF5;
+                   border-radius: 7px; padding: 10px 14px; }
+  .party .p-body .pb-h { font-size: 9.5pt; font-weight: 800; color: #7B1D1D;
+                         letter-spacing: 0.6px; text-transform: uppercase; }
+  .party .p-body .pb-d { font-size: 10.5pt; color: #34302b; margin-top: 3px;
+                         line-height: 1.4; }
+  .party .p-body .pb-d b { color: #b0473a; }
+
+  /* MATRIX */
+  .mx { width: 100%; border-collapse: collapse; }
+  .mx th { background: #7B1D1D; color: #fff; padding: 7px 8px; font-size: 8.5pt;
+           text-align: center; text-transform: uppercase; letter-spacing: 0.5px; }
+  .mx th.row { background: #C9941A; text-align: left; }
+  .mx td { border: 1px solid #E3D9C8; padding: 6px 9px; text-align: center;
+           font-size: 12pt; }
+  .mx td.lbl { text-align: left; font-weight: 700; color: #7B1D1D; font-size: 10pt; }
+  .mx td.lbl.sens { color: #b0473a; }
+  .mx td.y { color: #2f7d4f; font-weight: 800; }
+  .mx td.s { color: #b0473a; font-weight: 800; }
+  .mx td.n { color: #c9c1ac; }
+  .mx tr:nth-child(even) td { background: #FCFAF5; }
+
+  /* CRITICAL NOTES SLIDE */
+  .crits { display: flex; flex-direction: column; gap: 9px; }
+  .crit-row { display: flex; gap: 14px; align-items: flex-start;
+              border: 1px solid #DBB3AC; background: #F8EBE7; border-radius: 8px;
+              padding: 11px 14px; }
+  .crit-row .cr-n { width: 11mm; height: 11mm; background: #b0473a; color: #fff;
+                    border-radius: 6px; font-weight: 800; font-size: 14pt; flex-shrink: 0;
+                    display: flex; align-items: center; justify-content: center; }
+  .crit-row .cr-b { flex: 1; }
+  .crit-row .cr-h { font-weight: 800; color: #b0473a; font-size: 12pt; }
+  .crit-row .cr-d { font-size: 10pt; color: #4a4640; margin-top: 2px; line-height: 1.42; }
+  .crit-row .cr-d b { color: #7B1D1D; }
+</style>
+</head>
+<body>
+
+<!-- ===== 1 · TITLE ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">01 / 12</div></div>
+  <div class="title-slide">
+    <div>
+      <div class="t-word">WEAR<span>I</span>FY</div>
+      <div class="t-sub">For Legal Review · Pre-Launch</div>
+    </div>
+    <div class="t-main">Where We Use <span class="g">Customer Data</span><br>— Module by Module</div>
+    <div class="t-line">A simple walkthrough of which part of the platform touches which customer data, and where it goes.</div>
+  </div>
+</div>
+
+<!-- ===== 2 · OVERVIEW ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">02 / 12</div></div>
+  <div class="slide">
+    <div class="kicker">Overview</div>
+    <div class="s-title">The Six Modules &mdash; at a Glance</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="s-sub" style="margin-bottom:14px;">Wearify is one platform with six different apps. Each touches different customer data.</div>
+      <div class="mods">
+        <div class="mod"><div class="m-route">Customer</div><div class="m-name">Mobile App (/c)</div><div class="m-data">Their own profile, looks, wishlist</div></div>
+        <div class="mod hot"><div class="m-route">Kiosk</div><div class="m-name">Smart Mirror</div><div class="m-data">Body scan, AI try-on, consent</div></div>
+        <div class="mod"><div class="m-route">Tablet</div><div class="m-name">Sales Staff</div><div class="m-data">Customer lookup, shortlist</div></div>
+        <div class="mod"><div class="m-route">Store</div><div class="m-name">Retailer Dashboard</div><div class="m-data">Customer list, campaigns</div></div>
+        <div class="mod hot"><div class="m-route">Tailor</div><div class="m-name">Tailor Portal</div><div class="m-data">Receives name, phone, measurements</div></div>
+        <div class="mod"><div class="m-route">Admin</div><div class="m-name">Mission Control</div><div class="m-data">System-wide oversight</div></div>
+      </div>
+      <div class="keyfact" style="margin-top:18px;">
+        <b>Two modules need the most legal attention:</b> the <b>Kiosk</b> (because it captures the body-scan photo) and the <b>Tailor Portal</b> (because customer measurements + phone leave the platform to an external partner).
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 3 · DATA WE COLLECT ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">03 / 12</div></div>
+  <div class="slide">
+    <div class="kicker">The Data Itself</div>
+    <div class="s-title">All Customer Data We Collect</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="cats">
+        <div class="cat">
+          <div class="c-h">Identity</div>
+          <div class="c-items"><span>&middot; Name</span><span>&middot; Phone number</span><span>&middot; Email (optional)</span><span>&middot; Date of birth</span><span>&middot; Gender</span><span>&middot; City</span></div>
+        </div>
+        <div class="cat bio">
+          <div class="c-h">Body &amp; biometric <span class="tag">SENSITIVE</span></div>
+          <div class="c-items"><span>&middot; <b>Body-scan photograph</b></span><span>&middot; Profile photo (face)</span><span>&middot; Height</span><span>&middot; Body measurements (bust, waist, etc.)</span></div>
+        </div>
+        <div class="cat">
+          <div class="c-h">Behaviour &amp; preferences</div>
+          <div class="c-items"><span>&middot; Visit history per store</span><span>&middot; Try-on looks (the AI images)</span><span>&middot; Wishlist &amp; wardrobe</span><span>&middot; Loyalty points &amp; tier</span><span>&middot; Preferred fabrics / colours / occasions</span></div>
+        </div>
+        <div class="cat">
+          <div class="c-h">Authentication</div>
+          <div class="c-items"><span>&middot; Hashed password / OTP</span><span>&middot; Session tokens (per device)</span></div>
+        </div>
+        <div class="cat">
+          <div class="c-h">Consent &amp; preferences</div>
+          <div class="c-items"><span>&middot; 4 consent flags (history, messages, AI personal, photos)</span><span>&middot; Date consent was granted</span><span>&middot; Notification preferences</span></div>
+        </div>
+        <div class="cat">
+          <div class="c-h">Commerce</div>
+          <div class="c-items"><span>&middot; Orders (items + totals)</span><span>&middot; Tailor orders (with measurements)</span><span>&middot; Feedback &amp; ratings</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 4 · CUSTOMER PWA ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">04 / 12</div></div>
+  <div class="slide">
+    <div class="kicker">Module 1 of 6</div>
+    <div class="s-title">Customer Mobile App &nbsp;<span style="color:#6c665d;font-weight:400;font-size:18pt;">(/c)</span></div>
+    <div class="s-sub">Used by the end customer &mdash; on their own phone, at home.</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="triple">
+        <div class="tc">
+          <div class="tc-h">Collects</div>
+          <ul>
+            <li><span class="b">&middot;</span>Phone + OTP</li>
+            <li><span class="b">&middot;</span>Name, DOB, gender, city, email</li>
+            <li><span class="b">&middot;</span>Height (cm or ft/in)</li>
+            <li><span class="b">&middot;</span>Profile photo</li>
+            <li><span class="b">&middot;</span>Preferred occasions, fabrics, colours, budget</li>
+          </ul>
+        </div>
+        <div class="tc uses">
+          <div class="tc-h">Sees &amp; Uses</div>
+          <ul>
+            <li><span class="b">&middot;</span>Their own profile</li>
+            <li><span class="b">&middot;</span>Their visit history across stores</li>
+            <li><span class="b">&middot;</span>Their try-on looks (AI images)</li>
+            <li><span class="b">&middot;</span>Their wishlist &amp; wardrobe</li>
+            <li><span class="b">&middot;</span>Their loyalty points &amp; tier</li>
+          </ul>
+        </div>
+        <div class="tc share">
+          <div class="tc-h">Sends Out</div>
+          <ul>
+            <li><span class="b">&middot;</span>Nothing to third parties</li>
+            <li><span class="b">&middot;</span>All data goes only to the Wearify backend</li>
+          </ul>
+        </div>
+      </div>
+      <div class="keyfact"><b>Key fact for lawyer:</b> this is the customer's own account &mdash; but there is currently <b>no "delete my account"</b> button.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 5 · KIOSK ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">05 / 12</div></div>
+  <div class="slide">
+    <div class="kicker" style="color:#b0473a;">Module 2 of 6 &nbsp;·&nbsp; Most data-sensitive</div>
+    <div class="s-title">Kiosk &mdash; the Smart Mirror</div>
+    <div class="s-sub">Used by the customer in-store, in front of the AI mirror.</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="triple">
+        <div class="tc">
+          <div class="tc-h">Collects</div>
+          <ul>
+            <li><span class="b">&middot;</span>Phone + OTP (or tablet code)</li>
+            <li><span class="b">&middot;</span>Name + DOB (if new customer)</li>
+            <li class="crit"><span class="b">&middot;</span>BODY-SCAN PHOTOGRAPH</li>
+            <li><span class="b">&middot;</span>Consent flags (4 of them)</li>
+            <li><span class="b">&middot;</span>Feedback rating &amp; comment</li>
+          </ul>
+        </div>
+        <div class="tc uses">
+          <div class="tc-h">Sees &amp; Uses</div>
+          <ul>
+            <li><span class="b">&middot;</span>Customer's previous looks</li>
+            <li><span class="b">&middot;</span>Customer's wardrobe</li>
+            <li><span class="b">&middot;</span>Store's saree catalog</li>
+            <li><span class="b">&middot;</span>Staff PIN (for sign-in)</li>
+            <li><span class="b">&middot;</span>Trial-room code from tablet</li>
+          </ul>
+        </div>
+        <div class="tc share">
+          <div class="tc-h">Sends Out</div>
+          <ul>
+            <li class="crit"><span class="b">&middot;</span>Body scan + saree photo &rarr; RunPod GPU (US)</li>
+            <li><span class="b">&middot;</span>Order &rarr; store dashboard</li>
+            <li><span class="b">&middot;</span>Looks stored in Convex</li>
+          </ul>
+        </div>
+      </div>
+      <div class="keyfact crit"><b>Most important slide for the lawyer.</b> The Kiosk is where the <b>body-scan photo</b> is captured and sent to a US-based GPU service for the AI try-on. This is the platform's most sensitive data flow.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 6 · TABLET ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">06 / 12</div></div>
+  <div class="slide">
+    <div class="kicker">Module 3 of 6</div>
+    <div class="s-title">Sales Tablet</div>
+    <div class="s-sub">Carried by in-store staff while assisting customers.</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="triple">
+        <div class="tc">
+          <div class="tc-h">Collects</div>
+          <ul>
+            <li><span class="b">&middot;</span>Customer phone (to look up or register)</li>
+            <li><span class="b">&middot;</span>Name, DOB, language (if new)</li>
+            <li><span class="b">&middot;</span>Occasion &amp; budget for the visit</li>
+            <li><span class="b">&middot;</span>Staff PIN (4-digit)</li>
+          </ul>
+        </div>
+        <div class="tc uses">
+          <div class="tc-h">Sees &amp; Uses</div>
+          <ul>
+            <li><span class="b">&middot;</span>Customer name, segment, visit count</li>
+            <li><span class="b">&middot;</span>Customer's previous shortlist</li>
+            <li><span class="b">&middot;</span>Store saree catalog</li>
+            <li><span class="b">&middot;</span>Active staff sessions</li>
+          </ul>
+        </div>
+        <div class="tc share">
+          <div class="tc-h">Sends Out</div>
+          <ul>
+            <li><span class="b">&middot;</span>Trial-room code &rarr; customer (to enter on kiosk)</li>
+            <li><span class="b">&middot;</span>Shortlist &rarr; kiosk session</li>
+            <li><span class="b">&middot;</span>Tailor referral with customer name + phone &rarr; tailor</li>
+          </ul>
+        </div>
+      </div>
+      <div class="keyfact"><b>Key fact for lawyer:</b> staff can <b>look up any customer by phone</b> at the store they belong to. This is the in-store equivalent of a CRM record.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 7 · STORE ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">07 / 12</div></div>
+  <div class="slide">
+    <div class="kicker">Module 4 of 6</div>
+    <div class="s-title">Store Dashboard</div>
+    <div class="s-sub">The store owner's web dashboard.</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="triple">
+        <div class="tc">
+          <div class="tc-h">Collects</div>
+          <ul>
+            <li><span class="b">&middot;</span>Store profile updates only</li>
+            <li><span class="b">&middot;</span>Staff records (name, PIN, role)</li>
+            <li><span class="b">&middot;</span>Saree catalog edits</li>
+            <li><span class="b">&middot;</span>Marketing campaign content</li>
+          </ul>
+        </div>
+        <div class="tc uses">
+          <div class="tc-h">Sees &amp; Uses</div>
+          <ul>
+            <li><span class="b">&middot;</span>List of customers linked to the store</li>
+            <li><span class="b">&middot;</span>Each customer's segment (VIP / Regular / At Risk / New)</li>
+            <li><span class="b">&middot;</span>Customer Lifetime Value</li>
+            <li><span class="b">&middot;</span>Last visit date, visit count</li>
+            <li><span class="b">&middot;</span>Feedback ratings &amp; comments</li>
+          </ul>
+        </div>
+        <div class="tc share">
+          <div class="tc-h">Sends Out</div>
+          <ul>
+            <li class="crit"><span class="b">&middot;</span>Customer email &rarr; SendGrid (US) for campaigns</li>
+            <li class="crit"><span class="b">&middot;</span>Customer phone &rarr; Twilio (US) for SMS / WhatsApp</li>
+          </ul>
+        </div>
+      </div>
+      <div class="keyfact"><b>Key fact for lawyer:</b> the store dashboard is where <b>email and phone numbers leave the platform</b> to be sent through SendGrid (email) and Twilio (SMS / WhatsApp).</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 8 · TAILOR ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">08 / 12</div></div>
+  <div class="slide">
+    <div class="kicker" style="color:#b0473a;">Module 5 of 6 &nbsp;·&nbsp; External partner</div>
+    <div class="s-title">Tailor Portal</div>
+    <div class="s-sub">An independent stitching partner's account.</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="triple">
+        <div class="tc">
+          <div class="tc-h">Collects</div>
+          <ul>
+            <li><span class="b">&middot;</span>Tailor's own profile + KYC (Aadhaar, PAN, address proof)</li>
+            <li><span class="b">&middot;</span>Services &amp; pricing</li>
+            <li><span class="b">&middot;</span>Order updates &amp; quotes</li>
+            <li><span class="b">&middot;</span>Tailor's own consent flags</li>
+          </ul>
+        </div>
+        <div class="tc uses">
+          <div class="tc-h">Receives Customer Data</div>
+          <ul>
+            <li class="crit"><span class="b">&middot;</span>CUSTOMER NAME</li>
+            <li class="crit"><span class="b">&middot;</span>CUSTOMER PHONE</li>
+            <li class="crit"><span class="b">&middot;</span>BODY MEASUREMENTS (bust, waist, etc.)</li>
+            <li><span class="b">&middot;</span>Saree, fabric, occasion, budget</li>
+            <li><span class="b">&middot;</span>Order status &amp; due date</li>
+          </ul>
+        </div>
+        <div class="tc share">
+          <div class="tc-h">Sends Out</div>
+          <ul>
+            <li><span class="b">&middot;</span>Quotes back to customer (via Wearify)</li>
+            <li><span class="b">&middot;</span>Tailor may message customer via WhatsApp (out-of-platform)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="keyfact crit"><b>Important for the lawyer.</b> When a referral becomes a tailor order, the customer's <b>name, phone and body measurements</b> are visible to the tailor &mdash; an external partner. There is currently <b>no explicit "share with tailor" consent step</b>.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 9 · ADMIN ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">09 / 12</div></div>
+  <div class="slide">
+    <div class="kicker">Module 6 of 6</div>
+    <div class="s-title">Admin &mdash; Mission Control</div>
+    <div class="s-sub">Wearify's own operations team.</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="triple">
+        <div class="tc">
+          <div class="tc-h">Collects</div>
+          <ul>
+            <li><span class="b">&middot;</span>Store onboarding details (store owner KYC)</li>
+            <li><span class="b">&middot;</span>Legal documents (privacy notice, terms, DPAs)</li>
+            <li><span class="b">&middot;</span>Retention policies (currently defined, not enforced)</li>
+            <li><span class="b">&middot;</span>Platform feature flags &amp; config</li>
+          </ul>
+        </div>
+        <div class="tc uses">
+          <div class="tc-h">Sees &amp; Uses</div>
+          <ul>
+            <li><span class="b">&middot;</span>System-wide metrics (stores, devices, AI agents)</li>
+            <li><span class="b">&middot;</span>Health, revenue, ticket views</li>
+            <li><span class="b">&middot;</span>Can drill into individual store data</li>
+            <li><span class="b">&middot;</span>Reviews tailor KYC documents</li>
+          </ul>
+        </div>
+        <div class="tc share">
+          <div class="tc-h">Sends Out</div>
+          <ul>
+            <li><span class="b">&middot;</span>Doesn't directly send customer data externally</li>
+            <li><span class="b">&middot;</span>Issues kiosk pairing codes to stores</li>
+          </ul>
+        </div>
+      </div>
+      <div class="keyfact"><b>Key fact for lawyer:</b> Admin has the <b>broadest view</b> across the platform. Every customer record is reachable from here. Today there is <b>no audit log</b> recording what an admin views or does.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 10 · THIRD PARTIES ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">10 / 12</div></div>
+  <div class="slide">
+    <div class="kicker" style="color:#b0473a;">Where Data Leaves the Platform</div>
+    <div class="s-title">Third Parties That Receive Customer Data</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="parties">
+        <div class="party">
+          <div class="p-icon crit"><div class="p-n">RunPod</div><div class="p-l">United States &middot; GPU</div></div>
+          <div class="p-body">
+            <div class="pb-h">From the Kiosk module</div>
+            <div class="pb-d">Receives the <b>customer's body-scan photograph + the saree photo</b> (base64), runs the AI try-on, returns the result. No name, phone or ID is sent &mdash; only images.</div>
+          </div>
+        </div>
+        <div class="party">
+          <div class="p-icon"><div class="p-n">SendGrid</div><div class="p-l">United States &middot; Email</div></div>
+          <div class="p-body">
+            <div class="pb-h">From the Store module</div>
+            <div class="pb-d">Receives <b>customer email + name + the campaign message</b>. Only triggered when a store sends a campaign.</div>
+          </div>
+        </div>
+        <div class="party">
+          <div class="p-icon"><div class="p-n">Twilio</div><div class="p-l">United States &middot; SMS / WhatsApp</div></div>
+          <div class="p-body">
+            <div class="pb-h">From the Store module</div>
+            <div class="pb-d">Receives <b>customer phone number + the message body</b>. Used for OTP, SMS campaigns and WhatsApp campaigns.</div>
+          </div>
+        </div>
+        <div class="party">
+          <div class="p-icon crit"><div class="p-n">Tailor partners</div><div class="p-l">Independent humans</div></div>
+          <div class="p-body">
+            <div class="pb-h">From the Tablet / Tailor modules</div>
+            <div class="pb-d">Receive <b>customer name, phone and body measurements</b> when a tailor order is placed. An external human recipient, not a SaaS.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 11 · MATRIX ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">11 / 12</div></div>
+  <div class="slide">
+    <div class="kicker">Quick Reference</div>
+    <div class="s-title">Which Module Touches Which Data</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <table class="mx">
+        <tr>
+          <th class="row">Customer data</th>
+          <th>Customer<br>PWA</th><th>Kiosk</th><th>Tablet</th><th>Store</th><th>Tailor</th><th>Admin</th>
+        </tr>
+        <tr><td class="lbl">Name &amp; phone</td>
+          <td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="s">&#10003;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl">Email</td>
+          <td class="y">&#10003;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="s">&#10003;</td><td class="n">&mdash;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl">Date of birth / age</td>
+          <td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl sens">Body-scan photo</td>
+          <td class="n">&mdash;</td><td class="s">&#10003;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl">Profile photo (face)</td>
+          <td class="y">&#10003;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl sens">Body measurements</td>
+          <td class="y">&#10003;</td><td class="n">&mdash;</td><td class="y">&#10003;</td><td class="n">&mdash;</td><td class="s">&#10003;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl">AI try-on images (looks)</td>
+          <td class="y">&#10003;</td><td class="y">&#10003;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl">Visit history &amp; behaviour</td>
+          <td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="n">&mdash;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl">Loyalty points</td>
+          <td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="n">&mdash;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl">Consent flags</td>
+          <td class="y">&#10003;</td><td class="y">&#10003;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="y">&#10003;</td></tr>
+        <tr><td class="lbl">Order &amp; purchase data</td>
+          <td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="s">&#10003;</td><td class="y">&#10003;</td></tr>
+      </table>
+      <div class="keyfact" style="margin-top:10px;font-size:9.5pt;">
+        <b style="color:#2f7d4f;">&#10003;</b> = module uses this data.
+        <b style="color:#b0473a;">&#10003;</b> = module captures, shares with external party, or holds the most sensitive form of this data.
+        <b style="color:#c9c1ac;">&mdash;</b> = module does not touch this data.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 12 · CRITICAL NOTES ===== -->
+<div class="page">
+  <div class="top"><div class="mk">WEAR<span>I</span>FY</div><div class="pg">12 / 12</div></div>
+  <div class="slide">
+    <div class="kicker" style="color:#b0473a;">In Closing</div>
+    <div class="s-title">What the Lawyer Should Know First</div>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="crits">
+        <div class="crit-row"><div class="cr-n">1</div><div class="cr-b">
+          <div class="cr-h">The body scan is the most sensitive data we hold</div>
+          <div class="cr-d">Captured at the <b>Kiosk</b>, stored on the customer record, sent to <b>RunPod (US)</b> for the AI try-on. We have no auto-delete or retention policy on it today.</div>
+        </div></div>
+        <div class="crit-row"><div class="cr-n">2</div><div class="cr-b">
+          <div class="cr-h">Tailor partners see customer name, phone and measurements</div>
+          <div class="cr-d">When a customer's order is referred to a tailor, that information becomes visible in the <b>Tailor Portal</b>. No explicit "share with tailor" consent step exists today.</div>
+        </div></div>
+        <div class="crit-row"><div class="cr-n">3</div><div class="cr-b">
+          <div class="cr-h">There is no "delete my account" anywhere</div>
+          <div class="cr-d">A customer cannot self-delete their data from the Customer Mobile App, the Kiosk, or anywhere else. Right to erasure (DPDP §12) is not implemented yet.</div>
+        </div></div>
+        <div class="crit-row"><div class="cr-n">4</div><div class="cr-b">
+          <div class="cr-h">Our age gate is 13+, but DPDP §9 wants 18+ (or verified parental consent)</div>
+          <div class="cr-d">Customers aged 13&ndash;17 are accepted today with no parental-consent step. Counsel to advise on whether to raise the gate to 18 or build a parental-consent flow.</div>
+        </div></div>
+        <div class="crit-row"><div class="cr-n">5</div><div class="cr-b">
+          <div class="cr-h">Customer data goes to US-based services (RunPod, SendGrid, Twilio)</div>
+          <div class="cr-d">Data-processing agreements need to be confirmed. The planned Azure-Central-India migration brings primary data residency back inside India.</div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

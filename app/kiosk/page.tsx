@@ -165,10 +165,12 @@ export default function KioskPage() {
   // (on Allow) and BodyScanScreen can consume it, and so cleanup is
   // owned in one place — stopped on capture, Skip, wipe, or unmount.
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  // Front ("user") or back ("environment") camera. Persists across the
-  // switch so the same direction is requested when the consent flow
-  // re-opens the camera in a future session.
-  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
+  // Which camera the body scan opens with. On the kiosk hardware the camera
+  // that faces the standing customer reports as "environment", so we default
+  // to that (the switch button still flips to "user"). Persists across the
+  // switch so the same direction is requested when the consent flow re-opens
+  // the camera in a future session.
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("environment");
 
   // Language
   const [lang, setLang] = useState("en");
@@ -504,6 +506,19 @@ export default function KioskPage() {
     });
   }, []);
 
+  // Acquire a webcam stream pointed at the requested direction. We pass the
+  // `facingMode` hint and let the browser pick; we deliberately do NOT try to
+  // re-select a camera by deviceId, because on multi-input machines that can
+  // land on a virtual/closed device that produces a blank frame.
+  const acquireCamera = useCallback(
+    async (want: "user" | "environment"): Promise<MediaStream> =>
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: want, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      }),
+    [],
+  );
+
   // Triggered by ConsentScreen's "Allow" button. Asks the browser for
   // webcam access; on success we cache the stream and advance to the
   // body-scan screen, which renders it as a live <video>. On denial or
@@ -515,10 +530,8 @@ export default function KioskPage() {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: cameraFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      // Default to the front ("user") camera for the body scan.
+      const stream = await acquireCamera(cameraFacing);
       setCameraStream(stream);
       navigate("bodyScan");
     } catch (err) {
@@ -530,12 +543,12 @@ export default function KioskPage() {
       showToast(msg, "error");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showToast, cameraFacing]);
+  }, [showToast, cameraFacing, acquireCamera]);
 
   // Swap front/back camera mid-session. Stops the current stream first
-  // so the OS releases the device, then re-acquires with the opposite
-  // facingMode. Falls back to the original direction if the new one
-  // isn't available (e.g. kiosk display with only one camera).
+  // so the OS releases the device, then re-acquires the opposite direction.
+  // Falls back to the original direction if the new one isn't available
+  // (e.g. kiosk display with only one camera).
   const handleSwitchCamera = useCallback(async () => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
     const next: "user" | "environment" = cameraFacing === "user" ? "environment" : "user";
@@ -543,24 +556,18 @@ export default function KioskPage() {
       cameraStream.getTracks().forEach((t) => t.stop());
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: next, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      const stream = await acquireCamera(next);
       setCameraStream(stream);
       setCameraFacing(next);
     } catch {
       // Re-acquire the previous direction so the user isn't left with no preview.
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: cameraFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
+        const stream = await acquireCamera(cameraFacing);
         setCameraStream(stream);
       } catch { /* nothing else to try */ }
       showToast("Other camera is not available on this device.", "warning");
     }
-  }, [cameraFacing, cameraStream, showToast]);
+  }, [cameraFacing, cameraStream, showToast, acquireCamera]);
 
   const handleWipe = useCallback(() => {
     setTrialData(null);
