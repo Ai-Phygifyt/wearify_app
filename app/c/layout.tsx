@@ -61,8 +61,10 @@ function BottomNav() {
   );
 }
 
-const PUBLIC_ROUTES = new Set<string>(["/c/login", "/c/register", "/c/offline"]);
-const SPLASH_MS = 1200;
+const PUBLIC_ROUTES = new Set<string>(["/c/welcome", "/c/login", "/c/register", "/c/offline"]);
+// Two-stage launch sequence: saree-backdrop splash → branded logo screen → app.
+const SPLASH_ONE_MS = 1300;
+const SPLASH_TWO_MS = 1600;
 
 function Splash() {
   return (
@@ -71,58 +73,164 @@ function Splash() {
         position: "fixed",
         inset: 0,
         zIndex: 1000,
-        background: "var(--cx-grad-hero)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-        gap: 14,
+        background: "#FBF7F1",
+        overflow: "hidden",
         animation: "cx-fadeIn 0.25s ease-out",
       }}
     >
+      {/* Full-bleed saree-illustration backdrop */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/customer/first-screen/background.svg"
+        alt=""
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "center",
+        }}
+      />
+
+      {/* Centered frosted Wearify badge */}
       <div
         style={{
-          width: 92,
-          height: 92,
-          borderRadius: 26,
-          background: "rgba(255,255,255,0.08)",
-          border: "1.5px solid rgba(184,134,11,0.65)",
+          position: "absolute",
+          inset: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backdropFilter: "blur(8px)",
-          animation: "cx-scaleIn 0.5s ease-out",
         }}
       >
-        <span
-          className="cx-serif"
-          style={{ fontSize: 52, fontWeight: 700, fontStyle: "italic", color: "var(--cx-gold-l)" }}
+        <div
+          style={{
+            position: "relative",
+            width: "min(53vw, 208px)",
+            animation: "cx-scaleIn 0.55s ease-out both",
+          }}
         >
-          W
-        </span>
+          {/* Real frosted-glass disc — the SVG's own backdrop-filter can't blur
+              the page when loaded via <img>, so we render the blur here. The
+              disc matches the logo's internal circle (≈96% of the SVG width,
+              vertically centered within the 185×180 viewBox). */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "96%",
+              aspectRatio: "1 / 1",
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.5)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              border: "2px solid rgba(255,255,255,0.85)",
+              boxShadow: "0 18px 50px rgba(94,26,24,0.12)",
+            }}
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/customer/first-screen/logo.svg"
+            alt="Wearify — Try-on the moment"
+            style={{
+              position: "relative",
+              width: "100%",
+              height: "auto",
+              display: "block",
+            }}
+          />
+        </div>
       </div>
-      <div
-        className="cx-serif"
-        style={{
-          fontSize: 32,
-          fontWeight: 700,
-          fontStyle: "italic",
-          color: "#FBF7F1",
-          letterSpacing: "0.02em",
-        }}
-      >
-        Wearify
-      </div>
+
+      {/* Copyright */}
       <div
         style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
+          textAlign: "center",
           fontSize: 11,
-          color: "rgba(253,248,240,0.55)",
-          letterSpacing: "0.28em",
-          textTransform: "uppercase",
-          fontWeight: 600,
+          fontWeight: 500,
+          color: "rgba(94, 26, 24, 0.62)",
+          letterSpacing: "0.01em",
+          animation: "cx-fadeIn 0.6s ease-out 0.3s both",
         }}
       >
-        Try on the moment
+        ©copyright wearify techno services pvt.ltd.
+      </div>
+    </div>
+  );
+}
+
+function SplashTwo() {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        overflow: "hidden",
+        background: "#FFFFFF",
+        animation: "cx-fadeIn 0.35s ease-out",
+      }}
+    >
+      {/* Soft coral-pink corner glows — strongest across the top, faint at the
+          bottom corners — over a clean white field. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(150% 95% at 100% 0%, rgba(240,158,146,0.78) 0%, rgba(244,180,170,0.45) 30%, rgba(248,212,205,0.18) 52%, rgba(255,255,255,0) 72%)," +
+            "radial-gradient(150% 95% at 0% 100%, rgba(241,162,150,0.74) 0%, rgba(244,184,174,0.42) 30%, rgba(248,212,205,0.16) 52%, rgba(255,255,255,0) 72%)",
+        }}
+      />
+
+      {/* Centered Wearify wordmark */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/customer/second-screen/logo.svg"
+          alt="Wearify — Try-on the moment"
+          style={{
+            width: "min(54vw, 216px)",
+            height: "auto",
+            display: "block",
+            animation: "cx-scaleIn 0.6s ease-out both",
+          }}
+        />
+      </div>
+
+      {/* Copyright */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
+          textAlign: "center",
+          fontSize: 11,
+          fontWeight: 500,
+          color: "rgba(94, 26, 24, 0.62)",
+          letterSpacing: "0.01em",
+          animation: "cx-fadeIn 0.6s ease-out 0.25s both",
+        }}
+      >
+        ©copyright wearify techno services pvt.ltd.
       </div>
     </div>
   );
@@ -136,7 +244,8 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const [token, setTokenState] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [splashing, setSplashing] = useState(true);
+  // 0 = saree splash, 1 = branded logo screen, 2 = done.
+  const [splashStage, setSplashStage] = useState<0 | 1 | 2>(0);
   const [customerCtx, setCustomerCtx] = useState<CustomerCtx>({
     user: null,
     customerId: null,
@@ -145,8 +254,12 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   });
 
   useEffect(() => {
-    const t = setTimeout(() => setSplashing(false), SPLASH_MS);
-    return () => clearTimeout(t);
+    const t1 = setTimeout(() => setSplashStage(1), SPLASH_ONE_MS);
+    const t2 = setTimeout(() => setSplashStage(2), SPLASH_ONE_MS + SPLASH_TWO_MS);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, []);
 
   useEffect(() => {
@@ -158,7 +271,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     const t = getToken();
     setTokenState(t);
     if (!t && !PUBLIC_ROUTES.has(pathname)) {
-      router.replace("/c/login");
+      router.replace("/c/welcome");
     }
     setReady(true);
   }, [router, pathname]);
@@ -201,7 +314,8 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     });
   }, [session, ready, router, pathname, customerData, token]);
 
-  if (splashing) return <Splash />;
+  if (splashStage === 0) return <Splash />;
+  if (splashStage === 1) return <SplashTwo />;
 
   if (PUBLIC_ROUTES.has(pathname)) {
     return (
