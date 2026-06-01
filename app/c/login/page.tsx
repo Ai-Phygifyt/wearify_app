@@ -11,30 +11,14 @@ import {
   isValidPhone,
 } from "@/lib/phoneAuth";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Flower } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 type Step = "phone" | "otp";
 
-function Orb({ size, top, left, delay, opacity }: { size: number; top: string; left: string; delay: string; opacity: number }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        width: size,
-        height: size,
-        top,
-        left,
-        borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(184, 134, 11, .35) 0%, rgba(184, 134, 11, .08) 55%, transparent 75%)",
-        opacity,
-        animation: "cx-float 4.5s ease-in-out infinite",
-        animationDelay: delay,
-        pointerEvents: "none",
-        zIndex: 1,
-      }}
-    />
-  );
-}
+const MAROON = "#6E262B";
+const PINK_GLOWS =
+  "radial-gradient(150% 95% at 100% 0%, rgba(240,158,146,0.78) 0%, rgba(244,180,170,0.45) 30%, rgba(248,212,205,0.18) 52%, rgba(255,255,255,0) 72%)," +
+  "radial-gradient(150% 95% at 0% 100%, rgba(241,162,150,0.74) 0%, rgba(244,184,174,0.42) 30%, rgba(248,212,205,0.16) 52%, rgba(255,255,255,0) 72%)";
 
 export default function CustomerLoginPage() {
   const router = useRouter();
@@ -147,116 +131,122 @@ export default function CustomerLoginPage() {
     if (pasted.length === 6) submitOtp(next);
   }
 
+  const fieldStyle: React.CSSProperties = {
+    flex: 1,
+    height: 54,
+    border: "1.5px solid rgba(104,38,42,0.14)",
+    borderRadius: 12,
+    background: "#FFFFFF",
+    padding: "0 16px",
+    fontSize: 16.5,
+    fontWeight: 500,
+    letterSpacing: "0.02em",
+    fontFamily: "inherit",
+    color: "#2A2522",
+    outline: "none",
+  };
+
   return (
     <div
       style={{
+        position: "relative",
         minHeight: "100svh",
         width: "100%",
+        overflow: "hidden",
+        background: "#FFFFFF",
+        fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif',
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "flex-start",
-        background: "var(--cx-grad-hero)",
-        position: "relative",
-        overflow: "hidden",
-        fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+        justifyContent: "center",
       }}
     >
-      <div className="cx-paisley cx-noise" style={{ position: "absolute", inset: 0, opacity: 0.5, pointerEvents: "none", zIndex: 0 }} />
-
-      <Orb size={180} top="5%" left="-8%" delay="0s" opacity={0.5} />
-      <Orb size={100} top="18%" left="78%" delay="1.2s" opacity={0.35} />
-      <Orb size={130} top="55%" left="85%" delay="0.6s" opacity={0.3} />
-      <Orb size={80} top="72%" left="-5%" delay="1.8s" opacity={0.25} />
+      {/* Soft coral-pink glows — top-right + bottom-left */}
+      <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", background: PINK_GLOWS }} />
 
       <div
         style={{
           position: "relative",
-          zIndex: 2,
+          zIndex: 1,
           width: "100%",
           maxWidth: 420,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          padding: "0 20px",
-          flex: 1,
+          padding: "24px 22px",
         }}
       >
-        {/* Logo */}
+        {/* Logo + tagline */}
         <div
           className={mounted ? "cx-pageIn" : ""}
           style={{
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            marginTop: "max(7svh, 44px)",
-            marginBottom: 28,
+            marginBottom: 26,
             opacity: mounted ? undefined : 0,
           }}
         >
-          <div
-            style={{
-              width: 78,
-              height: 78,
-              borderRadius: "50%",
-              border: "1.5px solid rgba(184, 134, 11, .6)",
-              background: "rgba(184, 134, 11, .1)",
-              backdropFilter: "blur(8px)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 16,
-              color: "var(--cx-gold-l)",
-            }}
-          >
-            <Flower size={34} strokeWidth={1.6} />
-          </div>
-
-          <h1 className="cx-serif cx-gold-shimmer" style={{ fontSize: 32, fontStyle: "italic", fontWeight: 600, margin: 0, letterSpacing: 1, lineHeight: 1.2 }}>
-            Wearify
-          </h1>
-
-          <p style={{ color: "rgba(253,248,240,.55)", fontSize: 13, marginTop: 6, letterSpacing: ".05em" }}>
-            Your AI-powered saree experience
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/customer/login/logo.svg"
+            alt="Wearify"
+            style={{ width: "min(40vw, 150px)", height: "auto", display: "block" }}
+          />
+          <p style={{ color: "#C0857F", fontSize: 14, marginTop: -4, fontWeight: 500 }}>
+            Your AI - Powered Saree Experience
           </p>
         </div>
 
         {/* Card */}
         <div
-          className={`cx-noise ${mounted ? "cx-slideUp cx-d2" : ""}`}
+          className={mounted ? "cx-slideUp cx-d2" : ""}
           style={{
             width: "100%",
-            background: "rgba(253,248,240,.97)",
-            borderRadius: "var(--cx-r-xl)",
-            padding: "26px 22px 22px",
-            boxShadow: "var(--cx-shadow-lg)",
+            background: "#FFFFFF",
+            borderRadius: 22,
+            padding: "26px 22px 24px",
+            boxShadow: "0 12px 40px rgba(104,38,42,0.10), 0 2px 8px rgba(0,0,0,0.04)",
             position: "relative",
-            overflow: "hidden",
             opacity: mounted ? undefined : 0,
           }}
         >
           {step === "phone" && (
             <div className="cx-fadeIn">
-              <h2 className="cx-serif" style={{ fontSize: 24, fontStyle: "italic", fontWeight: 600, color: "var(--cx-text)", margin: "0 0 4px" }}>
-                Welcome back
+              <h2 style={{ fontSize: 23, fontWeight: 700, color: "#2A2522", margin: "0 0 4px" }}>
+                Welcome Back
               </h2>
-              <p style={{ fontSize: 13, color: "var(--cx-text-muted)", margin: "0 0 22px" }}>
-                Sign in with your mobile number
+              <p style={{ fontSize: 14, color: "#9A8F8A", margin: "0 0 22px" }}>
+                Login with your mobile number
               </p>
 
-              <label className="cx-label">Mobile Number</label>
-              <div style={{ display: "flex", alignItems: "stretch", gap: 8, marginBottom: 16 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "#9A8F8A",
+                  marginBottom: 9,
+                }}
+              >
+                Mobile Number
+              </label>
+              <div style={{ display: "flex", alignItems: "stretch", gap: 10, marginBottom: 20 }}>
                 <div
                   style={{
-                    background: "var(--cx-plum-ghost)",
-                    color: "var(--cx-plum)",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    padding: "0 14px",
-                    borderRadius: "var(--cx-r-md)",
-                    border: "1.5px solid var(--cx-border)",
+                    height: 54,
+                    minWidth: 58,
+                    background: "#FFFFFF",
+                    color: "#2A2522",
+                    fontSize: 16.5,
+                    fontWeight: 700,
+                    borderRadius: 12,
+                    border: "1.5px solid rgba(104,38,42,0.14)",
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
                     flexShrink: 0,
                   }}
                 >
@@ -265,11 +255,10 @@ export default function CustomerLoginPage() {
                 <input
                   type="tel"
                   maxLength={10}
-                  placeholder="98765 43210"
+                  placeholder="+91- 7895XXXX85"
                   value={phoneDigits}
                   onChange={(e) => handlePhoneChange(e.target.value)}
-                  className="cx-input"
-                  style={{ letterSpacing: ".06em", fontWeight: 500 }}
+                  style={fieldStyle}
                 />
               </div>
 
@@ -282,24 +271,41 @@ export default function CustomerLoginPage() {
               <button
                 onClick={handleSendOtp}
                 disabled={!phoneValid}
-                className="cx-btn cx-btn-primary cx-btn-block cx-btn-lg cx-silk"
+                className="cx-press"
+                style={{
+                  width: "100%",
+                  height: 56,
+                  border: "none",
+                  borderRadius: 999,
+                  background: MAROON,
+                  color: "#fff",
+                  fontFamily: "inherit",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: phoneValid ? "pointer" : "not-allowed",
+                  opacity: phoneValid ? 1 : 0.55,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 9,
+                  boxShadow: "0 8px 22px rgba(110,38,43,0.28)",
+                  transition: "opacity .2s",
+                }}
               >
-                Send OTP <ArrowRight size={16} />
+                Send OTP <ArrowRight size={18} strokeWidth={2.4} />
               </button>
 
               <div style={{ textAlign: "center", marginTop: 18 }}>
-                <span style={{ fontSize: 13, color: "var(--cx-text-muted)" }}>New user? </span>
+                <span style={{ fontSize: 13, color: "#9A8F8A" }}>New user? </span>
                 <button
                   onClick={() => router.push(`/c/register${phoneDigits ? `?phone=${phoneDigits}` : ""}`)}
                   style={{
                     background: "none",
                     border: "none",
-                    color: "var(--cx-gold-d)",
+                    color: MAROON,
                     fontSize: 13,
                     fontWeight: 700,
                     cursor: "pointer",
-                    textDecoration: "underline",
-                    textUnderlineOffset: 3,
                     fontFamily: "inherit",
                   }}
                 >
@@ -311,27 +317,28 @@ export default function CustomerLoginPage() {
 
           {step === "otp" && (
             <div className="cx-fadeIn">
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <button
-                  onClick={() => {
-                    setStep("phone");
-                    setError("");
-                    setOtpDigits(["", "", "", "", "", ""]);
-                  }}
-                  className="cx-iconbtn cx-iconbtn-sm"
-                  aria-label="Go back"
-                >
-                  <ArrowLeft size={16} />
-                </button>
-                <h2 className="cx-serif" style={{ fontSize: 22, fontStyle: "italic", fontWeight: 600, color: "var(--cx-text)", margin: 0 }}>
-                  Verify OTP
-                </h2>
-              </div>
-              <p style={{ fontSize: 13, color: "var(--cx-text-muted)", margin: "0 0 20px 36px" }}>
-                Sent to +91 {phoneDigits}
+              <h2 style={{ fontSize: 23, fontWeight: 700, color: "#2A2522", margin: "0 0 4px" }}>
+                Verify OTP
+              </h2>
+              <p style={{ fontSize: 14, color: "#9A8F8A", margin: "0 0 22px" }}>
+                Sent to +91-{phoneDigits.replace(/\s/g, "")}
               </p>
 
-              <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 16 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "#9A8F8A",
+                  marginBottom: 11,
+                }}
+              >
+                Enter OTP
+              </label>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 22 }}>
                 {otpDigits.map((d, i) => (
                   <input
                     key={i}
@@ -344,7 +351,20 @@ export default function CustomerLoginPage() {
                     onKeyDown={(e) => handleOtpKeyDown(i, e)}
                     onPaste={i === 0 ? handleOtpPaste : undefined}
                     disabled={loading}
-                    className={`cx-otp ${d ? "filled" : ""}`}
+                    style={{
+                      width: "100%",
+                      height: 52,
+                      textAlign: "center",
+                      fontSize: 20,
+                      fontWeight: 700,
+                      fontFamily: "inherit",
+                      color: "#2A2522",
+                      border: `1.5px solid ${d ? MAROON : "rgba(104,38,42,0.14)"}`,
+                      borderRadius: 12,
+                      background: "#FFFFFF",
+                      outline: "none",
+                      padding: 0,
+                    }}
                   />
                 ))}
               </div>
@@ -359,22 +379,34 @@ export default function CustomerLoginPage() {
                 <div
                   style={{
                     padding: "14px",
-                    borderRadius: "var(--cx-r)",
-                    background: "var(--cx-gold-ghost)",
-                    border: "1px solid rgba(184, 134, 11, .35)",
+                    borderRadius: 14,
+                    background: "rgba(244,180,170,0.16)",
+                    border: "1px solid rgba(110,38,43,0.18)",
                     marginBottom: 14,
                     textAlign: "center",
                   }}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--cx-text)", marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#2A2522", marginBottom: 4 }}>
                     No account found
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--cx-text-mid)", marginBottom: 12, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 12, color: "#6B5E5A", marginBottom: 12, lineHeight: 1.5 }}>
                     We couldn&apos;t find a Wearify account for +91 {phoneDigits}. Create one in under a minute.
                   </div>
                   <button
                     onClick={() => router.push(`/c/register?phone=${phoneDigits}`)}
-                    className="cx-btn cx-btn-gold cx-btn-block"
+                    className="cx-press"
+                    style={{
+                      width: "100%",
+                      height: 48,
+                      border: "none",
+                      borderRadius: 999,
+                      background: MAROON,
+                      color: "#fff",
+                      fontFamily: "inherit",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
                   >
                     Register as new user
                   </button>
@@ -389,7 +421,7 @@ export default function CustomerLoginPage() {
                       background: "none",
                       border: "none",
                       cursor: "pointer",
-                      color: "var(--cx-plum-l)",
+                      color: MAROON,
                       fontSize: 12,
                       fontWeight: 600,
                       textDecoration: "underline",
@@ -407,7 +439,7 @@ export default function CustomerLoginPage() {
                   <div className="cx-typing" style={{ display: "inline-flex", gap: 3 }}>
                     <span /><span /><span />
                   </div>
-                  <p style={{ fontSize: 12, color: "var(--cx-text-muted)", marginTop: 6 }}>Verifying...</p>
+                  <p style={{ fontSize: 12, color: "#9A8F8A", marginTop: 6 }}>Verifying...</p>
                 </div>
               )}
 
@@ -415,10 +447,28 @@ export default function CustomerLoginPage() {
                 <button
                   onClick={() => submitOtp(otpDigits)}
                   disabled={otpDigits.some((d) => !d)}
-                  className="cx-btn cx-btn-primary cx-btn-block cx-btn-lg"
-                  style={{ marginBottom: 14 }}
+                  className="cx-press"
+                  style={{
+                    width: "100%",
+                    height: 56,
+                    border: "none",
+                    borderRadius: 999,
+                    background: MAROON,
+                    color: "#fff",
+                    fontFamily: "inherit",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: otpDigits.some((d) => !d) ? "not-allowed" : "pointer",
+                    opacity: otpDigits.some((d) => !d) ? 0.55 : 1,
+                    marginBottom: 14,
+                    boxShadow: "0 8px 22px rgba(110,38,43,0.28)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 9,
+                  }}
                 >
-                  Verify OTP
+                  Verify OTP <ArrowRight size={18} strokeWidth={2.4} />
                 </button>
               )}
 
@@ -432,7 +482,7 @@ export default function CustomerLoginPage() {
                   style={{
                     background: "none",
                     border: "none",
-                    color: "var(--cx-plum-l)",
+                    color: MAROON,
                     fontSize: 13,
                     fontWeight: 600,
                     cursor: "pointer",
@@ -446,23 +496,6 @@ export default function CustomerLoginPage() {
               </div>
             </div>
           )}
-        </div>
-
-        <div className="cx-zari" style={{ width: "60%", margin: "26px auto 0", opacity: mounted ? 1 : 0, transition: "opacity .8s .5s" }} />
-
-        <div
-          style={{
-            marginTop: "auto",
-            paddingBottom: "max(env(safe-area-inset-bottom, 16px), 20px)",
-            paddingTop: 24,
-            textAlign: "center",
-            opacity: mounted ? 1 : 0,
-            transition: "opacity .8s .6s",
-          }}
-        >
-          <p style={{ fontSize: 10, fontWeight: 500, color: "rgba(253,248,240,.4)", letterSpacing: ".15em", textTransform: "uppercase", margin: 0 }}>
-            Wearify · Phygify Technoservices Pvt. Ltd.
-          </p>
         </div>
       </div>
     </div>
