@@ -1,15 +1,17 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "./layout";
 import { useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
+import { ArrowRight, ChevronRight, X, Star } from "lucide-react";
 
-// Convex-storage image loader for the Recent Looks tiles. Returns null
-// while the URL is resolving so the parent's gradient/decoration can
-// stand in until the real image lands.
+const MAROON = "#6E262B";
+
+// Convex-storage image loader. Returns null while resolving so the parent's
+// gradient stands in until the real image lands.
 function LookTileImage({ fileId, alt }: { fileId: Id<"_storage">; alt: string }) {
   const url = useQuery(api.files.getUrl, { fileId });
   if (!url) return null;
@@ -23,41 +25,18 @@ function LookTileImage({ fileId, alt }: { fileId: Id<"_storage">; alt: string })
     />
   );
 }
-import {
-  Sparkles,
-  Wallet,
-  ChevronRight,
-  Tag,
-  Store,
-  Heart,
-  Shirt,
-  MapPin,
-  MessageCircle,
-  Flower,
-} from "lucide-react";
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
 const fmt = (n: number) => "₹" + Number(n).toLocaleString("en-IN");
 
 function greet(): string {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning,";
-  if (h < 17) return "Good afternoon,";
-  return "Good evening,";
+  if (h < 12) return "Good Morning";
+  if (h < 17) return "Good Afternoon";
+  return "Good Evening";
 }
 
-const DEFAULT_OFFER_GRADS: string[][] = [
-  ["#8B2E2B", "#B8860B"],
-  ["#8B2E2B", "#D4A017"],
-  ["#5E1A18", "#8B4A52"],
-];
-
-const KIOSK_IMAGES = [
-  "/kiosk/img1.jpg",
-  "/kiosk/img2.webp",
-  "/kiosk/img3.webp",
-  "/kiosk/img4.jpg",
-];
+const KIOSK_IMAGES = ["/kiosk/img1.jpg", "/kiosk/img2.webp", "/kiosk/img3.webp", "/kiosk/img4.jpg"];
 const pickImg = (i: number) => KIOSK_IMAGES[i % KIOSK_IMAGES.length];
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -65,27 +44,17 @@ export default function CustomerHomePage() {
   const router = useRouter();
   const { user, customerId, customer } = useCustomer();
 
-  const stores = useQuery(
-    api.customers.listStoreLinksEnriched,
-    customerId ? { customerId } : "skip"
-  );
-  const looks = useQuery(
-    api.sessionOps.listByCustomer,
-    customerId ? { customerId } : "skip"
-  );
-  const wardrobe = useQuery(
-    api.sessionOps.listWardrobeByCustomer,
-    customerId ? { customerId } : "skip"
-  );
-  const offers = useQuery(
-    api.customers.listOffersForCustomer,
-    customerId ? { customerId } : "skip"
-  );
+  const stores = useQuery(api.customers.listStoreLinksEnriched, customerId ? { customerId } : "skip");
+  const looks = useQuery(api.sessionOps.listByCustomer, customerId ? { customerId } : "skip");
+  const wardrobe = useQuery(api.sessionOps.listWardrobeByCustomer, customerId ? { customerId } : "skip");
+  const offers = useQuery(api.customers.listOffersForCustomer, customerId ? { customerId } : "skip");
+
+  const [offerIdx, setOfferIdx] = useState(0);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const offerScrollRef = useRef<HTMLDivElement | null>(null);
 
   const cust = customer as any;
   const displayName: string = user?.name || cust?.name || "there";
-  const firstName = displayName.split(" ")[0];
-  const credit: number = cust?.storeCredit ?? 0;
   const isLoading = stores === undefined || looks === undefined;
 
   if (!customerId || isLoading) {
@@ -96,369 +65,183 @@ export default function CustomerHomePage() {
     );
   }
 
-  const activeOffers = (offers ?? []).filter(
-    (o: Record<string, unknown>) => o.active !== false
-  );
-  const recentLooks = (looks ?? []).slice(0, 3);
+  const activeOffers = (offers ?? []).filter((o: Record<string, unknown>) => o.active !== false);
+  const offerSlides = activeOffers.length > 0 ? activeOffers : [{ _id: "_default" }];
+  const recentLooks = (looks ?? []).slice(0, 8);
+  const visibleStores = (stores ?? []).filter((s: any) => !dismissed.has(String(s._id)));
+  const wardrobeCount = (wardrobe ?? []).length;
+
+  function onOfferScroll() {
+    const el = offerScrollRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollLeft / el.clientWidth);
+    if (idx !== offerIdx) setOfferIdx(idx);
+  }
 
   return (
-    <div className="cx-pageIn cx-page">
-      {/* HERO */}
-      <div className="cx-hero cx-hero-img cx-noise cx-paisley">
-        <div className="cx-hero-img-zoom" style={{ backgroundImage: `url(${pickImg(2)})` }} />
-        <div className="cx-brand-row cx-scaleIn">
-          <div className="cx-brand-mark">
-            <Flower size={18} strokeWidth={2} />
-          </div>
-          <div>
-            <div className="cx-brand-name cx-gold-shimmer">Wearify</div>
-            <div className="cx-brand-tag">Your Style Journey</div>
-          </div>
+    <div style={{ background: "#FFFFFF", minHeight: "100%", fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif' }}>
+      {/* ── HEADER BAR ─────────────────────────────────────────────── */}
+      <header
+        style={{
+          background: "#ECD9D8",
+          padding: "calc(env(safe-area-inset-top, 0px) + 12px) 18px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/customer/home/logo.svg" alt="Wearify" style={{ width: 46, height: 46, borderRadius: "50%" }} />
+
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/customer/home/middle-logo.svg" alt="Wearify — Your Style Journey" style={{ height: 38, width: "auto" }} />
+
+        <button
+          onClick={() => router.push("/c/me")}
+          aria-label="Notifications"
+          style={{
+            position: "relative",
+            width: 46,
+            height: 46,
+            borderRadius: "50%",
+            background: "#FFFFFF",
+            border: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(104,38,42,0.10)",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/customer/home/notification.svg" alt="" style={{ width: 34, height: 34 }} />
+        </button>
+      </header>
+
+      {/* ── GREETING ───────────────────────────────────────────────── */}
+      <section style={{ padding: "20px 18px 0" }}>
+        <div style={{ fontSize: 16, color: "#9A8F8A", fontWeight: 500 }}>{greet()}</div>
+        <h1 style={{ fontSize: 32, fontWeight: 700, color: "#2A2522", margin: "2px 0 0", lineHeight: 1.15 }}>
+          {displayName}
+        </h1>
+
+        <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+          <Chip onClick={() => router.push("/c/looks")} icon="/customer/home/looks.svg">
+            {looks!.length} look{looks!.length !== 1 ? "s" : ""}
+          </Chip>
+          <Chip onClick={() => router.push("/c/me/stores")} icon="/customer/home/store.svg">
+            {stores!.length} store{stores!.length !== 1 ? "s" : ""}
+          </Chip>
         </div>
+      </section>
 
-        <div className="cx-slideUp cx-d1">
-          <div className="cx-hero-eyebrow" style={{ marginBottom: 2, textTransform: "none", letterSpacing: 0 }}>
-            {greet()}
-          </div>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 30,
-              fontWeight: 700,
-              fontStyle: "italic",
-              color: "var(--cx-on-dark)",
-              lineHeight: 1.15,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            {firstName}
-            <Sparkles size={20} color="var(--cx-gold-l)" fill="var(--cx-gold-l)" />
-          </div>
-        </div>
-
-        <div className="cx-slideUp cx-d2" style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-          <span className="cx-badge cx-badge-glass-gold">
-            <Heart size={11} strokeWidth={2.4} />
-            {looks.length} look{looks.length !== 1 ? "s" : ""}
-          </span>
-          <span className="cx-badge cx-badge-glass-gold">
-            <Store size={11} strokeWidth={2.4} />
-            {stores.length} store{stores.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-
-        {credit > 0 && (
-          <button
-            className="cx-slideUp cx-d3 cx-press"
-            onClick={() => router.push("/c/me/loyalty")}
-            style={{
-              marginTop: 14,
-              background: "var(--cx-grad-gold)",
-              borderRadius: "var(--cx-r-pill)",
-              padding: "9px 16px",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              cursor: "pointer",
-              border: "none",
-              fontFamily: "inherit",
-              width: "100%",
-              boxShadow: "var(--cx-shadow-gold)",
-            }}
-          >
-            <Wallet size={16} color="var(--cx-plum-d)" />
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--cx-plum-d)" }}>
-              {fmt(credit)} store credit available
-            </span>
-            <ChevronRight size={16} color="var(--cx-plum-d)" style={{ marginLeft: "auto" }} />
-          </button>
-        )}
-      </div>
-
-      <div className="cx-zari" />
-
-      {/* OFFERS CAROUSEL */}
-      {activeOffers.length > 0 && (
-        <section className="cx-section cx-slideUp cx-d2">
-          <div className="cx-section-head">
-            <span className="cx-section-title">
-              <Tag size={15} color="var(--cx-gold)" />
-              Offers & Promotions
-            </span>
-          </div>
-
-          <div className="cx-no-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 18px 16px" }}>
-            {activeOffers.map((offer: any, i: number) => {
-              const grad = offer.grad || DEFAULT_OFFER_GRADS[i % DEFAULT_OFFER_GRADS.length];
-              return (
-                <div
-                  key={offer._id ?? i}
-                  className="cx-silk cx-press cx-scaleIn"
-                  style={{
-                    flexShrink: 0,
-                    width: 230,
-                    borderRadius: "var(--cx-r)",
-                    overflow: "hidden",
-                    background: `linear-gradient(135deg, ${grad[0] || "#8B2E2B"}, ${grad[1] || "#B8860B"})`,
-                    position: "relative",
-                    animationDelay: `${0.06 * i}s`,
-                    minHeight: 140,
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ padding: 16, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12 }}>
-                    {offer.badge && (
-                      <span
-                        style={{
-                          background: "rgba(255,255,255,.22)",
-                          borderRadius: "var(--cx-r-pill)",
-                          padding: "3px 10px",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: "#fff",
-                          textTransform: "uppercase",
-                          letterSpacing: ".08em",
-                          alignSelf: "flex-start",
-                        }}
-                      >
-                        {offer.badge}
-                      </span>
-                    )}
-
-                    <div>
-                      <div
-                        className="cx-serif"
-                        style={{
-                          fontSize: 17,
-                          fontWeight: 700,
-                          fontStyle: "italic",
-                          color: "#fff",
-                          lineHeight: 1.25,
-                        }}
-                      >
-                        {offer.headline}
-                      </div>
-                      {offer.subline && (
-                        <div style={{ fontSize: 12, color: "rgba(255,255,255,.78)", marginTop: 4, lineHeight: 1.4 }}>
-                          {offer.subline}
-                        </div>
-                      )}
-                    </div>
-
-                    {offer.cta && (
-                      <span
-                        style={{
-                          background: "rgba(255,255,255,.22)",
-                          borderRadius: "var(--cx-r-pill)",
-                          padding: "5px 14px",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "#fff",
-                          alignSelf: "flex-start",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                      >
-                        {offer.cta} <ChevronRight size={12} />
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* MY STORES */}
-      <section className="cx-section cx-slideUp cx-d3">
-        <div className="cx-section-head">
-          <span className="cx-section-title">My Stores</span>
-          {stores.length > 0 && (
-            <button onClick={() => router.push("/c/me/stores")} className="cx-section-link">
-              View all <ChevronRight size={12} />
-            </button>
-          )}
-        </div>
-
-        {stores.length === 0 ? (
-          <div style={{ margin: "0 18px 16px" }}>
-            <div className="cx-card cx-empty" style={{ padding: "24px 16px" }}>
-              <div className="cx-empty-icon" style={{ width: 52, height: 52, marginBottom: 10 }}>
-                <Store size={22} />
-              </div>
-              <div style={{ fontSize: 13, color: "var(--cx-text-muted)", maxWidth: 240, margin: "0 auto" }}>
-                Visit a Wearify-powered store to see it here
-              </div>
+      {/* ── OFFERS & PROMOTIONS ────────────────────────────────────── */}
+      <section style={{ marginTop: 26 }}>
+        <h2 style={sectionTitle}>Offers &amp; Promotions</h2>
+        <div
+          ref={offerScrollRef}
+          onScroll={onOfferScroll}
+          className="cx-no-scroll"
+          style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", padding: "0 18px", gap: 14 }}
+        >
+          {offerSlides.map((o: any, i: number) => (
+            <div key={o._id ?? i} style={{ flex: "0 0 100%", scrollSnapAlign: "center" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/customer/home/offers-promotion-card.svg"
+                alt={o.headline || "Offers"}
+                style={{ width: "100%", height: "auto", borderRadius: 18, display: "block", boxShadow: "0 8px 24px rgba(104,38,42,0.10)" }}
+              />
             </div>
-          </div>
-        ) : (
-          <div className="cx-no-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 18px 16px" }}>
-            {stores.map((store: Record<string, unknown>, i: number) => (
-              <div
-                key={(store._id as string) || i}
-                className="cx-card cx-press cx-scaleIn cx-hover-lift"
-                onClick={() => router.push("/c/me/stores")}
-                style={{ flexShrink: 0, width: 156, cursor: "pointer", animationDelay: `${0.05 * i}s` }}
-              >
-                <div
-                  className="cx-tile-img"
-                  style={{
-                    height: 82,
-                    backgroundImage: `url(${pickImg(i)})`,
-                    display: "flex",
-                    alignItems: "flex-end",
-                    padding: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      padding: "3px 8px",
-                      borderRadius: "var(--cx-r-pill)",
-                      background: "rgba(28,17,8,.55)",
-                      backdropFilter: "blur(6px)",
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: "var(--cx-on-dark)",
-                    }}
-                  >
-                    <Store size={10} strokeWidth={2.2} />
-                    Store
-                  </span>
-                </div>
-                <div style={{ padding: "10px 12px 12px" }}>
-                  <div className="cx-truncate" style={{ fontSize: 13, fontWeight: 700, color: "var(--cx-text)" }}>
-                    {(store.storeName as string) || (store.storeId as string)}
-                  </div>
-                  {(store.storeCity as string) && (
-                    <div style={{ fontSize: 11, color: "var(--cx-text-muted)", marginTop: 2, display: "flex", alignItems: "center", gap: 3 }}>
-                      <MapPin size={10} />
-                      {store.storeCity as string}
-                    </div>
-                  )}
-                  <div style={{ fontSize: 10, color: "var(--cx-text-ghost)", marginTop: 4 }}>
-                    {(store.visits as number) || 0} visit{((store.visits as number) || 0) !== 1 ? "s" : ""}
-                  </div>
-                </div>
-              </div>
+          ))}
+        </div>
+        {offerSlides.length > 1 && (
+          <div style={{ display: "flex", justifyContent: "center", gap: 7, marginTop: 14 }}>
+            {offerSlides.map((_: any, i: number) => (
+              <span
+                key={i}
+                style={{
+                  height: 7,
+                  width: i === offerIdx ? 22 : 7,
+                  borderRadius: 99,
+                  background: i === offerIdx ? MAROON : "#E2D3D2",
+                  transition: "width .25s ease, background .25s ease",
+                }}
+              />
             ))}
           </div>
         )}
       </section>
 
-      {/* DISCOVER BANNER */}
-      <div className="cx-slideUp cx-d4" style={{ padding: "0 18px 16px" }}>
-        <button
-          className="cx-press cx-silk"
-          onClick={() => router.push("/c/new")}
-          style={{
-            width: "100%",
-            backgroundColor: "#5E1A18",
-            backgroundImage: `linear-gradient(130deg, rgba(94,26,24,.92) 0%, rgba(139,46,43,.72) 45%, rgba(184,134,11,.58) 100%), url(${pickImg(3)})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            borderRadius: "var(--cx-r)",
-            padding: "22px 20px",
-            cursor: "pointer",
-            position: "relative",
-            overflow: "hidden",
-            border: "1px solid rgba(184,134,11,.28)",
-            textAlign: "left",
-            color: "var(--cx-on-dark)",
-            fontFamily: "inherit",
-            display: "block",
-            boxShadow: "var(--cx-shadow-primary)",
-          }}
-        >
-          <Sparkles size={22} color="var(--cx-gold-l)" fill="var(--cx-gold-l)" />
-          <div className="cx-serif" style={{ fontSize: 22, fontWeight: 700, fontStyle: "italic", marginTop: 8, lineHeight: 1.2 }}>
-            Discover New Collections
-          </div>
-          <div style={{ fontSize: 12.5, color: "rgba(253,248,240,.82)", marginTop: 4, maxWidth: 280 }}>
-            Explore curated sarees from your favourite stores
-          </div>
-          <span
-            style={{
-              marginTop: 14,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              background: "rgba(255,255,255,.20)",
-              border: "1px solid rgba(255,255,255,.28)",
-              backdropFilter: "blur(6px)",
-              borderRadius: "var(--cx-r-pill)",
-              padding: "6px 14px",
-              fontSize: 12,
-              fontWeight: 700,
-            }}
-          >
-            Browse now <ChevronRight size={13} />
-          </span>
-        </button>
-      </div>
-
-      {/* QUICK ACTION GRID */}
-      <div className="cx-slideUp cx-d4" style={{ padding: "0 18px 20px" }}>
+      {/* ── MY SPACE ───────────────────────────────────────────────── */}
+      <section style={{ marginTop: 26, padding: "0 18px" }}>
+        <h2 style={{ ...sectionTitle, padding: 0, marginBottom: 14 }}>My Space</h2>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <QuickAction
-            label="My Looks"
-            sub={`${looks.length} saved look${looks.length !== 1 ? "s" : ""}`}
-            grad="linear-gradient(135deg, #8B4A52, #C2848A)"
-            Icon={Heart}
-            onClick={() => router.push("/c/looks")}
-          />
-          <QuickAction
-            label="New Arrivals"
-            sub="Fresh collections"
-            grad="var(--cx-grad-gold)"
-            iconColor="var(--cx-plum-d)"
-            Icon={Sparkles}
-            onClick={() => router.push("/c/new")}
-            delay={1}
-          />
-          <QuickAction
-            label="My Wardrobe"
-            sub={`${(wardrobe ?? []).length} piece${(wardrobe ?? []).length !== 1 ? "s" : ""}`}
-            grad="linear-gradient(135deg, #C2848A, #F0D0D4)"
-            iconColor="#5A1A2E"
-            Icon={Shirt}
-            onClick={() => router.push("/c/wardrobe")}
-            delay={2}
-          />
-          <QuickAction
-            label="Store Locator"
-            sub={`${stores.length} store${stores.length !== 1 ? "s" : ""}`}
-            grad="var(--cx-grad-plum)"
-            Icon={MapPin}
-            onClick={() => router.push("/c/me/stores")}
-            delay={3}
-          />
+          <SpaceCard bg="#FBE4E8" title="My looks" sub={`${looks!.length} saved looks`} onClick={() => router.push("/c/looks")} />
+          <SpaceCard bg="#FBF1D7" title="New Arrivals" sub="Frash Collection" onClick={() => router.push("/c/new")} />
+          <SpaceCard bg="#EAE3F5" title="My Wardrobe" sub={`${wardrobeCount} Piece${wardrobeCount !== 1 ? "s" : ""}`} onClick={() => router.push("/c/wardrobe")} />
+          <SpaceCard bg="#E2F0E4" title="Store Locator" sub={`${stores!.length} store${stores!.length !== 1 ? "s" : ""} nearby`} onClick={() => router.push("/c/me/stores")} />
         </div>
-      </div>
+      </section>
 
-      {/* RECENT LOOKS */}
-      {recentLooks.length > 0 && (
-        <section className="cx-section cx-slideUp cx-d5" style={{ padding: "0 0 20px" }}>
-          <div className="cx-section-head">
-            <span className="cx-section-title">Recent Looks</span>
-            {looks.length > 3 && (
-              <button onClick={() => router.push("/c/looks")} className="cx-section-link">
-                View all <ChevronRight size={12} />
-              </button>
-            )}
+      {/* ── MY STORES ──────────────────────────────────────────────── */}
+      {visibleStores.length > 0 && (
+        <section style={{ marginTop: 28 }}>
+          <SectionHead title="My Stores" onSeeAll={() => router.push("/c/me/stores")} />
+          <div className="cx-no-scroll" style={{ display: "flex", gap: 14, overflowX: "auto", padding: "0 18px 4px" }}>
+            {visibleStores.map((store: any, i: number) => (
+              <div
+                key={String(store._id) || i}
+                style={{ flex: "0 0 230px", background: "#FFFFFF", borderRadius: 18, overflow: "hidden", boxShadow: "0 6px 20px rgba(0,0,0,0.07)" }}
+              >
+                <div
+                  style={{
+                    position: "relative",
+                    height: 150,
+                    backgroundImage: `url(${pickImg(i)})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }}
+                >
+                  <button
+                    onClick={() => setDismissed((s) => new Set(s).add(String(store._id)))}
+                    aria-label="Dismiss"
+                    style={{ position: "absolute", top: 10, right: 10, width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                  >
+                    <X size={15} color="#6B5E5A" strokeWidth={2.4} />
+                  </button>
+                  <span style={{ position: "absolute", bottom: 10, left: 10, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(28,17,8,0.6)", borderRadius: 99, padding: "4px 9px", backdropFilter: "blur(6px)" }}>
+                    <Star size={11} fill="#F0B429" color="#F0B429" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{(store.rating as number) ?? "5.0"}</span>
+                  </span>
+                </div>
+                <div style={{ padding: "12px 14px 14px" }}>
+                  <div className="cx-truncate" style={{ fontSize: 16, fontWeight: 700, color: "#2A2522" }}>
+                    {(store.storeName as string) || (store.storeId as string)}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+                    <span style={{ fontSize: 13, color: "#9A8F8A" }}>{(store.storeCity as string) || "—"}</span>
+                    <button
+                      onClick={() => router.push("/c/me/stores")}
+                      aria-label="Open store"
+                      style={{ width: 38, height: 38, borderRadius: 12, border: `1.5px solid rgba(104,38,42,0.16)`, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                    >
+                      <ArrowRight size={17} color={MAROON} strokeWidth={2.2} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+        </section>
+      )}
 
-          <div className="cx-no-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 18px" }}>
-            {recentLooks.map((look: Record<string, unknown>, i: number) => {
-              // Real image priority: AI try-on render → catalog photo → gradient.
-              // Drops the old hard-coded /kiosk/img*.jpg placeholders and the
-              // gold "LOOK" badge (redundant inside a "Recent Looks" rail).
+      {/* ── RECENT LOOKS ───────────────────────────────────────────── */}
+      {recentLooks.length > 0 && (
+        <section style={{ marginTop: 28 }}>
+          <SectionHead title="Recent Looks" onSeeAll={() => router.push("/c/looks")} />
+          <div className="cx-no-scroll" style={{ display: "flex", gap: 14, overflowX: "auto", padding: "0 18px 4px" }}>
+            {recentLooks.map((look: any) => {
               const imageFileId = (look.imageFileId ?? look.sareeImageId) as Id<"_storage"> | undefined;
               const grad = (look.grad ?? look.sareeGrad) as string[] | undefined;
               const fallbackBg = grad && grad.length
@@ -466,51 +249,21 @@ export default function CustomerHomePage() {
                 : "linear-gradient(135deg, #71221D, #D4A843)";
               return (
                 <div
-                  key={look._id as string}
-                  className="cx-card cx-press cx-scaleIn cx-hover-lift"
-                  onClick={() => router.push(`/c/looks/${look._id as string}`)}
-                  style={{ flexShrink: 0, width: 156, cursor: "pointer", animationDelay: `${0.05 * i}s` }}
+                  key={String(look._id)}
+                  onClick={() => router.push(`/c/looks/${String(look._id)}`)}
+                  style={{ flex: "0 0 200px", cursor: "pointer" }}
                 >
-                  <div
-                    className="cx-silk"
-                    style={{
-                      position: "relative",
-                      height: 180,
-                      overflow: "hidden",
-                      background: fallbackBg,
-                    }}
-                  >
+                  <div style={{ position: "relative", height: 250, borderRadius: 16, overflow: "hidden", background: fallbackBg }}>
                     {imageFileId && <LookTileImage fileId={imageFileId} alt={look.sareeName as string} />}
-                    {(look.storeId as string) && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          bottom: 8,
-                          left: 8,
-                          background: "rgba(28,17,8,.55)",
-                          borderRadius: "var(--cx-r-pill)",
-                          padding: "3px 9px",
-                          fontSize: 9,
-                          fontWeight: 600,
-                          color: "var(--cx-on-dark)",
-                          backdropFilter: "blur(6px)",
-                          zIndex: 2,
-                        }}
-                      >
-                        {look.storeId as string}
-                      </div>
-                    )}
                   </div>
-                  <div style={{ padding: "8px 10px 10px" }}>
-                    <div className="cx-truncate" style={{ fontSize: 13, fontWeight: 700, color: "var(--cx-text)" }}>
-                      {look.sareeName as string}
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "#2A2522", marginTop: 10 }}>
+                    {(look.sareeName as string) || "Saree"}
+                  </div>
+                  {(look.price as number) > 0 && (
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#2A2522", marginTop: 2 }}>
+                      {fmt(look.price as number)}
                     </div>
-                    {(look.price as number) && (
-                      <div className="cx-mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--cx-gold-d)", marginTop: 2 }}>
-                        {fmt(look.price as number)}
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -518,52 +271,35 @@ export default function CustomerHomePage() {
         </section>
       )}
 
-      {/* WHATSAPP CTA */}
-      <div className="cx-slideUp cx-d6" style={{ padding: "0 18px 28px" }}>
+      {/* ── WHATSAPP CTA ───────────────────────────────────────────── */}
+      <div style={{ padding: "26px 18px 14px" }}>
         <button
+          onClick={() => window.open("https://wa.me/?text=Check%20out%20Wearify%20-%20Virtual%20saree%20try-on!", "_blank")}
           className="cx-press"
-          onClick={() =>
-            window.open(
-              "https://wa.me/?text=Check%20out%20Wearify%20-%20Virtual%20saree%20try-on!",
-              "_blank"
-            )
-          }
           style={{
             width: "100%",
-            background: "var(--cx-blush)",
-            borderRadius: "var(--cx-r)",
-            padding: "16px",
+            background: MAROON,
+            borderRadius: 18,
+            padding: "16px 18px",
             display: "flex",
             alignItems: "center",
             gap: 14,
             cursor: "pointer",
-            border: "1px solid var(--cx-border-l)",
+            border: "none",
             fontFamily: "inherit",
             textAlign: "left",
+            boxShadow: "0 10px 26px rgba(110,38,43,0.28)",
           }}
         >
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: "50%",
-              background: "var(--cx-grad-whatsapp)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              color: "#fff",
-            }}
-          >
-            <MessageCircle size={22} fill="#fff" strokeWidth={0} />
-          </div>
+          <span style={{ width: 46, height: 46, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/customer/home/whatsapp.svg" alt="" style={{ width: 28, height: 28 }} />
+          </span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cx-text)" }}>Chat with a store</div>
-            <div style={{ fontSize: 12, color: "var(--cx-text-muted)", marginTop: 2 }}>
-              Get styling advice via WhatsApp
-            </div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Chat with a store</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.82)", marginTop: 2 }}>Got styling advice via WhatsApp</div>
           </div>
-          <ChevronRight size={18} color="var(--cx-text-ghost)" />
+          <ChevronRight size={22} color="#fff" />
         </button>
       </div>
     </div>
@@ -571,46 +307,100 @@ export default function CustomerHomePage() {
 }
 
 /* ── Sub-components ────────────────────────────────────────────────── */
-function QuickAction({
-  label,
-  sub,
-  grad,
-  Icon,
-  onClick,
-  delay = 0,
-  iconColor = "#fff",
-}: {
-  label: string;
-  sub: string;
-  grad: string;
-  Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
-  onClick: () => void;
-  delay?: number;
-  iconColor?: string;
-}) {
+const sectionTitle: React.CSSProperties = {
+  fontSize: 20,
+  fontWeight: 700,
+  color: "#2A2522",
+  margin: 0,
+  padding: "0 18px",
+  marginBottom: 14,
+};
+
+function Chip({ icon, children, onClick }: { icon: string; children: React.ReactNode; onClick: () => void }) {
   return (
     <button
-      className={`cx-card cx-press cx-scaleIn cx-hover-lift cx-d${delay}`}
       onClick={onClick}
-      style={{ cursor: "pointer", border: "none", padding: 0, fontFamily: "inherit", textAlign: "left", width: "100%" }}
+      className="cx-press"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 7,
+        background: "#FFFFFF",
+        border: "1px solid rgba(104,38,42,0.16)",
+        borderRadius: 99,
+        padding: "9px 16px",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        boxShadow: "0 2px 8px rgba(104,38,42,0.06)",
+      }}
     >
-      <div
-        style={{
-          height: 56,
-          background: grad,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: iconColor,
-        }}
-      >
-        <Icon size={24} strokeWidth={1.7} />
-      </div>
-      <div style={{ padding: "10px 12px 12px" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--cx-text)" }}>{label}</div>
-        <div style={{ fontSize: 11, color: "var(--cx-text-muted)", marginTop: 2 }}>{sub}</div>
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={icon} alt="" style={{ width: 14, height: 14 }} />
+      <span style={{ fontSize: 14, fontWeight: 600, color: MAROON }}>{children}</span>
     </button>
   );
 }
 
+function SpaceCard({ bg, title, sub, onClick }: { bg: string; title: string; sub: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="cx-press"
+      style={{
+        position: "relative",
+        background: bg,
+        border: "none",
+        borderRadius: 16,
+        padding: "16px 14px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        textAlign: "left",
+        minHeight: 92,
+        width: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ fontSize: 15.5, fontWeight: 700, color: "#2A2522", paddingRight: 34, lineHeight: 1.2 }}>{title}</div>
+      <div style={{ fontSize: 12, color: "#8C8580", marginTop: 4, paddingRight: 34, lineHeight: 1.3 }}>{sub}</div>
+      <span
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          width: 32,
+          height: 32,
+          borderRadius: 9,
+          background: "#FFFFFF",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/customer/home/arrow.svg" alt="" style={{ width: 13, height: 13 }} />
+      </span>
+    </button>
+  );
+}
+
+function SectionHead({ title, onSeeAll }: { title: string; onSeeAll: () => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", marginBottom: 14 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: "#2A2522", margin: 0 }}>{title}</h2>
+      <button
+        onClick={onSeeAll}
+        className="cx-press"
+        style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+      >
+        <span style={{ fontSize: 15, color: "#9A8F8A", fontWeight: 500 }}>See All</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/customer/home/seeall-arrow.svg" alt="" style={{ width: 30, height: 30 }} />
+      </button>
+    </div>
+  );
+}
