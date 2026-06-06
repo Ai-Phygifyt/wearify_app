@@ -6,7 +6,6 @@ import { api } from "@/convex/_generated/api";
 import { getToken, clearToken, getStoredUser, AuthUser } from "@/lib/phoneAuth";
 import { useRouter, usePathname } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
-import { Home, Sparkles, Heart, Shirt, User } from "lucide-react";
 import InstallPrompt from "@/components/c/InstallPrompt";
 import "./customer-theme.css";
 
@@ -29,11 +28,11 @@ export function useCustomer() {
 }
 
 const NAV_ITEMS = [
-  { key: "home", label: "Home", href: "/c", Icon: Home },
-  { key: "looks", label: "Looks", href: "/c/looks", Icon: Heart },
-  { key: "new", label: "New", href: "/c/new", Icon: Sparkles },
-  { key: "wardrobe", label: "Wardrobe", href: "/c/wardrobe", Icon: Shirt },
-  { key: "me", label: "Me", href: "/c/me", Icon: User },
+  { key: "home", label: "Home", href: "/c", icon: "/customer/navbar/home.svg" },
+  { key: "looks", label: "Looks", href: "/c/looks", icon: "/customer/navbar/looks.svg" },
+  { key: "new", label: "New", href: "/c/new", icon: "/customer/navbar/new.svg" },
+  { key: "wardrobe", label: "Wardrobe", href: "/c/wardrobe", icon: "/customer/navbar/wardrobe.svg" },
+  { key: "me", label: "Me", href: "/c/me", icon: "/customer/navbar/me.svg" },
 ];
 
 function BottomNav() {
@@ -42,7 +41,7 @@ function BottomNav() {
 
   return (
     <nav className="cx-bottomnav">
-      {NAV_ITEMS.map(({ key, label, href, Icon }) => {
+      {NAV_ITEMS.map(({ key, label, href, icon }) => {
         const active = href === "/c" ? pathname === "/c" : pathname.startsWith(href);
         return (
           <button
@@ -51,9 +50,11 @@ function BottomNav() {
             className={`cx-navitem ${active ? "active" : ""}`}
             aria-label={label}
           >
-            <Icon size={22} strokeWidth={active ? 2.2 : 1.7} />
+            <span
+              className="cx-navicon"
+              style={{ WebkitMaskImage: `url(${icon})`, maskImage: `url(${icon})` }}
+            />
             <span>{label}</span>
-            <div className="cx-nav-indicator" />
           </button>
         );
       })}
