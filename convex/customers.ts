@@ -491,10 +491,31 @@ export const removeFromWishlist = mutation({
 export const getWishlist = query({
   args: { customerId: v.id("customers") },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const rows = await ctx.db
       .query("wishlist")
       .withIndex("by_customerId", (q) => q.eq("customerId", args.customerId))
       .take(200);
+    // Enrich with saree (display image, occasion, grad) and store city so the
+    // wishlist grid can render like the looks cards. Additive — original
+    // fields (sareeId, _id, price, etc.) are preserved.
+    return await Promise.all(
+      rows.map(async (row) => {
+        const saree = await ctx.db.get(row.sareeId);
+        const store = await ctx.db
+          .query("stores")
+          .withIndex("by_storeId", (q) => q.eq("storeId", row.storeId))
+          .unique()
+          .catch(() => null);
+        return {
+          ...row,
+          sareeImageId: saree?.imageIds?.[0],
+          sareeOccasion: saree?.occasion,
+          sareeGrad: saree?.grad,
+          storeCity: store?.city || "",
+          storeName: store?.name || row.storeId,
+        };
+      })
+    );
   },
 });
 

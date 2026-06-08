@@ -8,11 +8,12 @@ import { useUploadFile } from "@/lib/useUpload";
 import { GUARDS } from "@/lib/uploadGuards";
 import { useCustomer } from "../../layout";
 import { Id } from "@/convex/_generated/dataModel";
-import { Pencil } from "lucide-react";
+import { ChevronLeft, Check } from "lucide-react";
 
 type Gender = "female" | "male" | "other" | "prefer_not_to_say";
 type HeightUnit = "cm" | "ftin";
 
+const MAROON = "#6E262B";
 const MIN_HEIGHT_CM = 120;
 const MAX_HEIGHT_CM = 220;
 
@@ -37,25 +38,33 @@ function ageFromDob(iso: string): number | null {
   return age;
 }
 function initialsOf(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "U";
+  return name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "U";
 }
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  height: 52,
+  padding: "0 16px",
+  borderRadius: 12,
+  border: "1.5px solid rgba(104,38,42,0.14)",
+  background: "#fff",
+  fontSize: 15.5,
+  fontWeight: 500,
+  color: "#2A2522",
+  outline: "none",
+  fontFamily: "inherit",
+  boxSizing: "border-box",
+};
+
+const labelStyle: React.CSSProperties = { fontSize: 13.5, fontWeight: 700, color: "#2A2522", marginBottom: 8, display: "block" };
 
 export default function EditProfilePage() {
   const router = useRouter();
-  const { customerId } = useCustomer();
+  const { customerId, phone } = useCustomer();
   const updateProfile = useMutation(api.customers.updateProfile);
   const { upload } = useUploadFile();
 
-  const customer = useQuery(
-    api.customers.getById,
-    customerId ? { customerId } : "skip"
-  );
+  const customer = useQuery(api.customers.getById, customerId ? { customerId } : "skip");
 
   const [fullName, setFullName] = useState("");
   const [dob, setDob] = useState("");
@@ -64,10 +73,6 @@ export default function EditProfilePage() {
   const [heightCm, setHeightCmState] = useState<number>(160);
   const [ftVal, setFtVal] = useState<number>(5);
   const [inVal, setInVal] = useState<number>(3);
-  // Mid-typing string mirrors of the height inputs. Numeric state has range
-  // clamps that would snap a half-typed value (e.g. user types "1" en route
-  // to "175" and the input snaps back to MIN_HEIGHT_CM=120). Keeping the
-  // displayed text in raw form while typing fixes that — clamp only on blur.
   const [heightCmInput, setHeightCmInput] = useState<string>("160");
   const [ftInput, setFtInput] = useState<string>("5");
   const [inInput, setInInput] = useState<string>("3");
@@ -83,128 +88,81 @@ export default function EditProfilePage() {
 
   useEffect(() => {
     if (!customer) return;
-    setFullName((customer as Record<string, unknown>).name as string || "");
-    setDob((customer as Record<string, unknown>).dateOfBirth as string || "");
-    setGender(((customer as Record<string, unknown>).gender as Gender) || "");
-    const h = (customer as Record<string, unknown>).heightCm as number | undefined;
+    const c = customer as Record<string, unknown>;
+    setFullName((c.name as string) || "");
+    setDob((c.dateOfBirth as string) || "");
+    setGender((c.gender as Gender) || "");
+    const h = c.heightCm as number | undefined;
     if (typeof h === "number") {
       setHeightCmState(h);
       setHeightCmInput(String(h));
       const ftIn = cmToFtIn(h);
-      setFtVal(ftIn.ft);
-      setInVal(ftIn.inch);
-      setFtInput(String(ftIn.ft));
-      setInInput(String(ftIn.inch));
+      setFtVal(ftIn.ft); setInVal(ftIn.inch);
+      setFtInput(String(ftIn.ft)); setInInput(String(ftIn.inch));
     }
-    const hu = (customer as Record<string, unknown>).heightUnit as string | undefined;
-    if (hu === "ftin") setHeightUnit("ftin");
-    setCity((customer as Record<string, unknown>).city as string || "");
-    setEmail((customer as Record<string, unknown>).email as string || "");
-    const pf = (customer as Record<string, unknown>).photoFileId as Id<"_storage"> | undefined;
-    setPhotoFileId(pf ?? null);
+    if ((c.heightUnit as string) === "ftin") setHeightUnit("ftin");
+    setCity((c.city as string) || "");
+    setEmail((c.email as string) || "");
+    setPhotoFileId((c.photoFileId as Id<"_storage"> | undefined) ?? null);
   }, [customer]);
 
-  const photoUrl = useQuery(
-    api.files.getUrl,
-    photoFileId && !photoPreview ? { fileId: photoFileId } : "skip"
-  );
+  const photoUrl = useQuery(api.files.getUrl, photoFileId && !photoPreview ? { fileId: photoFileId } : "skip");
   const displayPhoto = photoPreview || photoUrl || "";
   const initials = useMemo(() => initialsOf(fullName || "U"), [fullName]);
+  const maskedPhone = phone ? `${phone.slice(0, 8)}XXXX${phone.slice(-2)}` : "";
+  const maxDob = useMemo(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 13); return d.toISOString().split("T")[0]; }, []);
 
-  const maxDob = useMemo(() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 13);
-    return d.toISOString().split("T")[0];
-  }, []);
+  function mark<T>(setter: (v: T) => void) { return (v: T) => { setter(v); setDirty(true); }; }
 
-  function mark<T>(setter: (v: T) => void) {
-    return (v: T) => { setter(v); setDirty(true); };
-  }
-
-  // Live updates while the user types in the cm field — accept any
-  // number so we don't clamp mid-keystroke. Updates the linked ft/in
-  // state for the unit-toggle but doesn't reformat the user's input.
   function onHeightCmChange(raw: string) {
-    setHeightCmInput(raw);
-    setDirty(true);
+    setHeightCmInput(raw); setDirty(true);
     const n = Number(raw);
     if (raw.trim() !== "" && Number.isFinite(n)) {
       setHeightCmState(n);
       const ftIn = cmToFtIn(n);
-      setFtVal(ftIn.ft);
-      setInVal(ftIn.inch);
-      setFtInput(String(ftIn.ft));
-      setInInput(String(ftIn.inch));
+      setFtVal(ftIn.ft); setInVal(ftIn.inch);
+      setFtInput(String(ftIn.ft)); setInInput(String(ftIn.inch));
     }
   }
-  // On blur, snap the value into [MIN, MAX] and rewrite the input
-  // string to the clamped value so the user sees what got committed.
   function onHeightCmBlur() {
     const parsed = Number(heightCmInput);
     const safe = Number.isFinite(parsed) ? Math.round(parsed) : heightCm;
     const clamped = Math.min(MAX_HEIGHT_CM, Math.max(MIN_HEIGHT_CM, safe));
-    setHeightCmState(clamped);
-    setHeightCmInput(String(clamped));
+    setHeightCmState(clamped); setHeightCmInput(String(clamped));
     const ftIn = cmToFtIn(clamped);
-    setFtVal(ftIn.ft);
-    setInVal(ftIn.inch);
-    setFtInput(String(ftIn.ft));
-    setInInput(String(ftIn.inch));
+    setFtVal(ftIn.ft); setInVal(ftIn.inch);
+    setFtInput(String(ftIn.ft)); setInInput(String(ftIn.inch));
   }
   function onFtInChange(rawFt: string, rawIn: string) {
-    setFtInput(rawFt);
-    setInInput(rawIn);
-    setDirty(true);
-    const ft = Number(rawFt);
-    const inch = Number(rawIn);
+    setFtInput(rawFt); setInInput(rawIn); setDirty(true);
+    const ft = Number(rawFt), inch = Number(rawIn);
     if (rawFt.trim() !== "" && Number.isFinite(ft) && rawIn.trim() !== "" && Number.isFinite(inch)) {
-      setFtVal(ft);
-      setInVal(inch);
-      const cm = ftInToCm(ft, inch);
-      setHeightCmState(cm);
-      setHeightCmInput(String(cm));
+      setFtVal(ft); setInVal(inch);
+      const cm = ftInToCm(ft, inch); setHeightCmState(cm); setHeightCmInput(String(cm));
     }
   }
   function onFtInBlur() {
-    const ft = Number(ftInput);
-    const inch = Number(inInput);
-    const safeFt = Number.isFinite(ft) ? Math.round(ft) : ftVal;
-    const safeIn = Number.isFinite(inch) ? Math.round(inch) : inVal;
-    const clampedFt = Math.min(7, Math.max(3, safeFt));
-    const clampedIn = Math.min(11, Math.max(0, safeIn));
-    setFtVal(clampedFt);
-    setInVal(clampedIn);
-    setFtInput(String(clampedFt));
-    setInInput(String(clampedIn));
+    const ft = Number(ftInput), inch = Number(inInput);
+    const clampedFt = Math.min(7, Math.max(3, Number.isFinite(ft) ? Math.round(ft) : ftVal));
+    const clampedIn = Math.min(11, Math.max(0, Number.isFinite(inch) ? Math.round(inch) : inVal));
+    setFtVal(clampedFt); setInVal(clampedIn);
+    setFtInput(String(clampedFt)); setInInput(String(clampedIn));
     const cm = Math.min(MAX_HEIGHT_CM, Math.max(MIN_HEIGHT_CM, ftInToCm(clampedFt, clampedIn)));
-    setHeightCmState(cm);
-    setHeightCmInput(String(cm));
+    setHeightCmState(cm); setHeightCmInput(String(cm));
   }
 
   async function handlePhotoPick(file: File) {
     if (!file) return;
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setError("Photo must be JPEG, PNG, or WebP");
-      return;
-    }
-    if (file.size > 4 * 1024 * 1024) {
-      setError("Photo must be under 4 MB");
-      return;
-    }
-    setError("");
-    setPhotoUploading(true);
-    const localUrl = URL.createObjectURL(file);
-    setPhotoPreview(localUrl);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setError("Photo must be JPEG, PNG, or WebP"); return; }
+    if (file.size > 4 * 1024 * 1024) { setError("Photo must be under 4 MB"); return; }
+    setError(""); setPhotoUploading(true);
+    setPhotoPreview(URL.createObjectURL(file));
     try {
       const id = await upload(file, GUARDS.customerPhoto);
-      setPhotoFileId(id);
-      setDirty(true);
+      setPhotoFileId(id); setDirty(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Photo upload failed.");
-      setPhotoPreview("");
-    } finally {
-      setPhotoUploading(false);
-    }
+      setError(err instanceof Error ? err.message : "Photo upload failed."); setPhotoPreview("");
+    } finally { setPhotoUploading(false); }
   }
 
   async function handleSave() {
@@ -217,255 +175,141 @@ export default function EditProfilePage() {
     if (heightCm < MIN_HEIGHT_CM || heightCm > MAX_HEIGHT_CM) { setError(`Height must be between ${MIN_HEIGHT_CM}-${MAX_HEIGHT_CM} cm`); return; }
     if (!city.trim()) { setError("Enter your city"); return; }
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("Enter a valid email"); return; }
-    setError("");
-    setSaving(true);
+    setError(""); setSaving(true);
     try {
       await updateProfile({
-        customerId,
-        name: fullName.trim(),
-        initials: initials,
-        dateOfBirth: dob,
-        gender: gender as string,
-        heightCm,
-        heightUnit,
-        city: city.trim(),
-        email: email.trim() || undefined,
-        photoFileId: photoFileId ?? undefined,
+        customerId, name: fullName.trim(), initials, dateOfBirth: dob, gender: gender as string,
+        heightCm, heightUnit, city: city.trim(), email: email.trim() || undefined, photoFileId: photoFileId ?? undefined,
       });
-      setDirty(false);
-      setToast("Profile updated");
-      setTimeout(() => setToast(""), 2500);
+      setDirty(false); setToast("Profile updated"); setTimeout(() => setToast(""), 2500);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   if (!customer) {
-    return (
-      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="cx-typing"><span /><span /><span /></div>
-      </div>
-    );
+    return <div className="cx-loading"><div className="cx-typing"><span /><span /><span /></div></div>;
   }
 
+  const heightHelper = heightUnit === "cm" ? `${cmToFtIn(heightCm).ft}ft ${cmToFtIn(heightCm).inch}in` : `${heightCm} cm`;
+
   return (
-    <div style={{ padding: "20px 18px 40px", background: "#FBF7F1", minHeight: "100%" }}>
-      {/* Header with back */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-        <button
-          onClick={() => router.push("/c/me")}
-          style={{ padding: 6, border: "none", background: "transparent", cursor: "pointer" }}
-          aria-label="Back"
-        >
-          <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#8B2E2B" strokeWidth="1.8">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+    <div style={{ minHeight: "100%", background: "#FFFFFF", fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif' }}>
+      {/* APP BAR */}
+      <header style={{ position: "sticky", top: 0, zIndex: 20, background: "#FFFFFF", padding: "calc(env(safe-area-inset-top,0px) + 14px) 16px 14px", display: "flex", alignItems: "center", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+        <button onClick={() => router.push("/c/me")} aria-label="Back" className="cx-press" style={{ background: "none", border: "none", padding: 4, cursor: "pointer", display: "flex", color: "#2A2522" }}>
+          <ChevronLeft size={24} strokeWidth={2.2} />
         </button>
-        <h1 className="cx-serif" style={{ fontSize: 24, fontWeight: 700, fontStyle: "italic", color: "#8B2E2B", margin: 0 }}>
-          Edit Profile
-        </h1>
-      </div>
+        <h1 style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#2A2522", letterSpacing: "0.06em", margin: 0, marginRight: 28 }}>EDIT PROFILE</h1>
+      </header>
 
-      {/* Photo */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-        <label htmlFor="photo-input"
-          style={{
-            position: "relative", width: 100, height: 100, borderRadius: "50%",
-            background: displayPhoto ? "transparent" : "var(--cx-grad-plum)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", overflow: "hidden",
-            border: "3px solid var(--cx-border-gold)",
-            boxShadow: "var(--cx-shadow-md)",
-          }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {displayPhoto ? (
-            <img src={displayPhoto} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          ) : (
-            <span className="cx-serif" style={{ fontSize: 36, fontWeight: 700, color: "#B8860B", fontStyle: "italic" }}>
-              {initials}
+      <div style={{ padding: "22px 18px 36px" }}>
+        {/* Avatar */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
+          <label htmlFor="photo-input" style={{ position: "relative", width: 104, height: 104, cursor: "pointer" }}>
+            <span style={{ display: "block", width: "100%", height: "100%", borderRadius: "50%", background: displayPhoto ? "#ECE3DA" : "#F4ECE3", overflow: "hidden", border: "6px solid #FBF3E8", boxShadow: "0 10px 26px rgba(110,38,43,0.12), 0 0 0 1px #F0E3D4", position: "relative" }}>
+              {displayPhoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={displayPhoto} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, fontWeight: 700, color: MAROON }}>{initials}</span>
+              )}
+              {photoUploading && (
+                <span style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10 }}>Uploading…</span>
+              )}
             </span>
-          )}
-          {photoUploading && (
-            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10 }}>
-              Uploading...
-            </div>
-          )}
-          <div style={{
-            position: "absolute", bottom: 0, right: 0,
-            width: 28, height: 28, borderRadius: "50%",
-            background: "var(--cx-gold)", border: "2px solid var(--cx-bg)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff",
-          }}>
-            <Pencil size={12} />
-          </div>
-          <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoPick(f); }}
-            style={{ display: "none" }} />
-        </label>
-      </div>
-
-      {error && (
-        <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--cx-error-bg)", color: "var(--cx-error)", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
-          {error}
+            <span style={{ position: "absolute", bottom: -2, right: -2, width: 44, height: 44, borderRadius: "50%", background: "#FBF3E8", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px rgba(110,38,43,0.14)" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/customer/profile/camera.svg" alt="Change photo" style={{ width: 24, height: 21 }} />
+            </span>
+            <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoPick(f); }} style={{ display: "none" }} />
+          </label>
         </div>
-      )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Field label="Full Name">
-          <input style={inputStyle} value={fullName} onChange={(e) => mark(setFullName)(e.target.value)} />
-        </Field>
+        {error && (
+          <div className="cx-shake" style={{ padding: "10px 14px", borderRadius: 10, background: "var(--cx-error-bg)", color: "var(--cx-error)", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>{error}</div>
+        )}
 
-        <Field label="Date of Birth">
-          <input type="date" style={inputStyle} value={dob} max={maxDob} onChange={(e) => mark(setDob)(e.target.value)} />
-          {dob && ageFromDob(dob) !== null && (
-            <div style={{ fontSize: 11, color: "var(--cx-text-muted)", marginTop: 4 }}>Age: {ageFromDob(dob)}</div>
-          )}
-        </Field>
-
-        <Field label="Gender">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {([["female","Female"],["male","Male"],["other","Other"],["prefer_not_to_say","Prefer not to say"]] as const).map(([v, l]) => (
-              <button key={v} type="button" onClick={() => mark(setGender)(v)}
-                style={{
-                  padding: "10px 12px", borderRadius: 10,
-                  border: gender === v ? "1.5px solid #B8860B" : "1.5px solid var(--cx-border)",
-                  background: gender === v ? "var(--cx-gold-ghost)" : "white",
-                  color: gender === v ? "var(--cx-gold-d)" : "var(--cx-text)",
-                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                }}>{l}</button>
-            ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div>
+            <label style={labelStyle}>Full Name</label>
+            <input style={inputStyle} value={fullName} onChange={(e) => mark(setFullName)(e.target.value)} />
           </div>
-        </Field>
 
-        <Field label="Height" right={
-          <div style={{ display: "flex", background: "var(--cx-plum-ghost)", borderRadius: 100, padding: 2 }}>
-            {(["cm","ftin"] as const).map((u) => (
-              <button key={u} type="button" onClick={() => { setHeightUnit(u); setDirty(true); }}
-                style={{
-                  padding: "4px 12px", borderRadius: 100, border: "none", fontSize: 11, fontWeight: 700,
-                  cursor: "pointer", fontFamily: "inherit",
-                  background: heightUnit === u ? "#8B2E2B" : "transparent",
-                  color: heightUnit === u ? "white" : "#8B2E2B",
-                }}>{u === "cm" ? "cm" : "ft / in"}</button>
-            ))}
+          <div>
+            <label style={labelStyle}>Phone number</label>
+            <input style={{ ...inputStyle, color: "#9A8F8A", background: "#FAF7F5" }} value={maskedPhone} readOnly />
           </div>
-        }>
-          {heightUnit === "cm" ? (
-            <input
-              type="number"
-              inputMode="numeric"
-              min={MIN_HEIGHT_CM}
-              max={MAX_HEIGHT_CM}
-              value={heightCmInput}
-              onChange={(e) => onHeightCmChange(e.target.value)}
-              onBlur={onHeightCmBlur}
-              style={inputStyle}
-            />
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", border: "1.5px solid var(--cx-border)", borderRadius: 10, background: "white", overflow: "hidden" }}>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={3}
-                  max={7}
-                  value={ftInput}
-                  onChange={(e) => onFtInChange(e.target.value, inInput)}
-                  onBlur={onFtInBlur}
-                  style={{ ...inputStyle, border: "none", flex: 1 }}
-                />
-                <span style={{ paddingRight: 12, fontSize: 12, color: "var(--cx-text-muted)" }}>ft</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", border: "1.5px solid var(--cx-border)", borderRadius: 10, background: "white", overflow: "hidden" }}>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={11}
-                  value={inInput}
-                  onChange={(e) => onFtInChange(ftInput, e.target.value)}
-                  onBlur={onFtInBlur}
-                  style={{ ...inputStyle, border: "none", flex: 1 }}
-                />
-                <span style={{ paddingRight: 12, fontSize: 12, color: "var(--cx-text-muted)" }}>in</span>
+
+          <div>
+            <label style={labelStyle}>Date of Birth</label>
+            <input type="date" style={inputStyle} value={dob} max={maxDob} onChange={(e) => mark(setDob)(e.target.value)} />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Gender</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {([["female", "Female"], ["male", "Male"], ["other", "Other"], ["prefer_not_to_say", "Prefer not to say"]] as const).map(([v, l]) => {
+                const on = gender === v;
+                return (
+                  <button key={v} type="button" onClick={() => mark(setGender)(v)} className="cx-press"
+                    style={{ height: 50, borderRadius: 12, border: on ? "none" : "1.5px solid rgba(104,38,42,0.16)", background: on ? MAROON : "#fff", color: on ? "#fff" : "#2A2522", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    {l}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>Height</label>
+              <div style={{ display: "flex", background: "#F4ECE3", borderRadius: 99, padding: 3 }}>
+                {(["cm", "ftin"] as const).map((u) => (
+                  <button key={u} type="button" onClick={() => { setHeightUnit(u); setDirty(true); }}
+                    style={{ padding: "5px 14px", borderRadius: 99, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: heightUnit === u ? MAROON : "transparent", color: heightUnit === u ? "#fff" : MAROON }}>
+                    {u === "cm" ? "cm" : "ft/in"}
+                  </button>
+                ))}
               </div>
             </div>
-          )}
-          <div style={{ fontSize: 11, color: "var(--cx-text-muted)", marginTop: 4 }}>
-            {heightUnit === "cm"
-              ? `${cmToFtIn(heightCm).ft} ft ${cmToFtIn(heightCm).inch} in`
-              : `${heightCm} cm`}
+            {heightUnit === "cm" ? (
+              <input type="number" inputMode="numeric" min={MIN_HEIGHT_CM} max={MAX_HEIGHT_CM} value={heightCmInput} onChange={(e) => onHeightCmChange(e.target.value)} onBlur={onHeightCmBlur} style={inputStyle} />
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ position: "relative" }}>
+                  <input type="number" inputMode="numeric" min={3} max={7} value={ftInput} onChange={(e) => onFtInChange(e.target.value, inInput)} onBlur={onFtInBlur} style={{ ...inputStyle, paddingRight: 34 }} />
+                  <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#9A8F8A" }}>ft</span>
+                </div>
+                <div style={{ position: "relative" }}>
+                  <input type="number" inputMode="numeric" min={0} max={11} value={inInput} onChange={(e) => onFtInChange(ftInput, e.target.value)} onBlur={onFtInBlur} style={{ ...inputStyle, paddingRight: 34 }} />
+                  <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#9A8F8A" }}>in</span>
+                </div>
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: "#9A8F8A", marginTop: 6 }}>{heightHelper}</div>
           </div>
-        </Field>
 
-        <Field label="City">
-          <input style={inputStyle} value={city} onChange={(e) => mark(setCity)(e.target.value)} />
-        </Field>
+          <div>
+            <label style={labelStyle}>City</label>
+            <input style={inputStyle} value={city} onChange={(e) => mark(setCity)(e.target.value)} />
+          </div>
 
-        <Field label="Email (optional)">
-          <input type="email" style={inputStyle} value={email} onChange={(e) => mark(setEmail)(e.target.value)} />
-        </Field>
+          <div>
+            <label style={labelStyle}>Email (optional)</label>
+            <input type="email" style={inputStyle} value={email} placeholder="Required" onChange={(e) => mark(setEmail)(e.target.value)} />
+          </div>
+        </div>
+
+        <button onClick={handleSave} disabled={saving || !dirty || photoUploading} className="cx-press"
+          style={{ width: "100%", marginTop: 26, height: 56, borderRadius: 14, border: "none", background: MAROON, color: "#fff", fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: saving || !dirty ? "default" : "pointer", opacity: saving ? 0.75 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 8px 22px rgba(110,38,43,0.26)" }}>
+          {saving ? "Saving…" : dirty ? "Save Changes" : <>Saved <Check size={18} strokeWidth={2.6} /></>}
+        </button>
       </div>
-
-      <button onClick={handleSave} disabled={saving || !dirty || photoUploading}
-        style={{
-          width: "100%", marginTop: 24, padding: "14px 20px", borderRadius: 10,
-          fontSize: 15, fontWeight: 700, fontFamily: "inherit",
-          cursor: saving || !dirty ? "default" : "pointer",
-          transition: "background .18s ease, color .18s ease, opacity .18s ease",
-          // Three distinct states so "Saved" reads cleanly instead of as a
-          // washed-out version of the active button:
-          //   - dirty   → plum gradient, white (call-to-action)
-          //   - saving  → plum gradient at 0.7 opacity, white (in-flight)
-          //   - saved   → gold-ghost background, dark gold text (resolved/idle)
-          ...(dirty
-            ? {
-                background: "var(--cx-primary)",
-                color: "white",
-                border: "none",
-                opacity: saving ? 0.7 : 1,
-                boxShadow: "var(--cx-shadow-gold)",
-              }
-            : {
-                background: "var(--cx-gold-soft)",
-                color: "var(--cx-gold-d)",
-                border: "1px solid var(--cx-gold-glow)",
-                opacity: 1,
-                boxShadow: "none",
-              }),
-        }}>
-        {saving ? "Saving..." : dirty ? "Save Changes" : "✓ Saved"}
-      </button>
 
       {toast && (
-        <div style={{
-          position: "fixed", bottom: 96, left: "50%", transform: "translateX(-50%)",
-          padding: "10px 18px", borderRadius: 100, background: "#8B2E2B", color: "white",
-          fontSize: 13, fontWeight: 600, boxShadow: "var(--cx-shadow-md)", zIndex: 50,
-        }}>{toast}</div>
+        <div style={{ position: "fixed", bottom: 96, left: "50%", transform: "translateX(-50%)", padding: "10px 18px", borderRadius: 100, background: MAROON, color: "#fff", fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(0,0,0,0.2)", zIndex: 50 }}>{toast}</div>
       )}
-    </div>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "11px 14px", borderRadius: 10,
-  border: "1.5px solid var(--cx-border)", background: "white",
-  fontSize: 14, color: "var(--cx-text)", outline: "none",
-  fontFamily: "inherit", boxSizing: "border-box",
-};
-
-function Field({ label, right, children }: { label: string; right?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <label style={{ fontSize: 13, fontWeight: 600, color: "var(--cx-text)" }}>{label}</label>
-        {right}
-      </div>
-      {children}
     </div>
   );
 }

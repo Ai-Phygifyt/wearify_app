@@ -5,63 +5,49 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../layout";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Store, Sparkles } from "lucide-react";
+import { Id } from "@/convex/_generated/dataModel";
+import { ChevronLeft, ArrowRight, Sparkles } from "lucide-react";
 
+const MAROON = "#6E262B";
 const fmt = (n: number) => "₹" + Number(n).toLocaleString("en-IN");
 
-const DEFAULT_GRADS: Record<string, [string, string]> = {
-  Wedding: ["#5E1A18", "#8B2E2B"],
-  Festival: ["#0D1F3C", "#2D4A7E"],
-  Party: ["#5E1A18", "#A94540"],
-  Office: ["#1B3D2E", "#2E6B4A"],
-  Daily: ["#2D2A00", "#6B6500"],
-  Gift: ["#3D1800", "#7B3A00"],
-  default: ["#8B2E2B", "#A94540"],
-};
-
-function getGrad(occasion?: string, grad?: string[]): [string, string] {
-  if (grad && grad.length >= 2) return [grad[0], grad[1]];
-  if (occasion && DEFAULT_GRADS[occasion]) return DEFAULT_GRADS[occasion];
-  return DEFAULT_GRADS.default;
-}
-
-const KIOSK_IMAGES = [
-  "/kiosk/img1.jpg",
-  "/kiosk/img2.webp",
-  "/kiosk/img3.webp",
-  "/kiosk/img4.jpg",
-];
+const KIOSK_IMAGES = ["/kiosk/img1.jpg", "/kiosk/img2.webp", "/kiosk/img3.webp", "/kiosk/img4.jpg"];
 const pickImg = (i: number) => KIOSK_IMAGES[i % KIOSK_IMAGES.length];
 
 type SareeItem = {
   _id: string;
   name: string;
   price: number;
-  fabric: string;
-  occasion: string;
+  fabric?: string;
+  occasion?: string;
   tag?: string;
-  grad?: string[];
+  imageIds?: Id<"_storage">[];
   [key: string]: unknown;
 };
 
+// Resolves the saree's first catalog image (model-worn shot — right for browse).
+function SareeImage({ ids, fallback, alt }: { ids?: Id<"_storage">[]; fallback: string; alt: string }) {
+  const first = ids && ids.length ? ids[0] : undefined;
+  const url = useQuery(api.files.getUrl, first ? { fileId: first } : "skip");
+  const src = url || fallback;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={alt} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" />
+  );
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export default function NewArrivalsPage() {
   const router = useRouter();
   const { customerId } = useCustomer();
   const [storeFilter, setStoreFilter] = useState("ALL");
 
-  const storeLinks = useQuery(
-    api.customers.listStoreLinksEnriched,
-    customerId ? { customerId } : "skip"
-  );
-
-  const newArrivals = useQuery(
-    api.customers.listNewArrivalsForCustomer,
-    customerId ? { customerId } : "skip"
-  );
+  const storeLinks = useQuery(api.customers.listStoreLinksEnriched, customerId ? { customerId } : "skip");
+  const newArrivals = useQuery(api.customers.listNewArrivalsForCustomer, customerId ? { customerId } : "skip");
 
   if (!customerId || storeLinks === undefined || newArrivals === undefined) {
     return (
-      <div className="cx-pageIn cx-loading">
+      <div className="cx-loading">
         <div className="cx-typing"><span /><span /><span /></div>
       </div>
     );
@@ -70,153 +56,128 @@ export default function NewArrivalsPage() {
   const storeEntries = Object.values(
     newArrivals as Record<string, { storeId: string; storeName: string; sarees: SareeItem[] }>
   );
-  const filtered = storeFilter === "ALL" ? storeEntries : storeEntries.filter((s) => s.storeId === storeFilter);
-  const totalSarees = storeEntries.reduce((acc, s) => acc + s.sarees.length, 0);
+
+  // City lookup from linked stores (arrivals data doesn't carry city).
+  const cityById: Record<string, string> = {};
+  (storeLinks as any[]).forEach((l) => { cityById[l.storeId] = l.storeCity || ""; });
+
+  // Flatten every new-arrival saree, tagged with its store.
+  const allItems = storeEntries.flatMap((e) =>
+    e.sarees.map((s) => ({ saree: s, storeId: e.storeId, storeName: e.storeName, city: cityById[e.storeId] || "" }))
+  );
+  const items = storeFilter === "ALL" ? allItems : allItems.filter((it) => it.storeId === storeFilter);
+  const totalSarees = allItems.length;
+  const storeCount = storeEntries.length;
 
   return (
-    <div className="cx-pageIn cx-page">
-      {/* Hero */}
-      <div className="cx-hero cx-hero-img cx-noise cx-paisley">
-        <div className="cx-hero-img-zoom" style={{ backgroundImage: `url(${pickImg(0)})` }} />
-        <button onClick={() => router.back()} className="cx-back" style={{ marginBottom: 14 }}>
-          <ArrowLeft size={18} />
+    <div style={{ minHeight: "100%", background: "#FFFFFF", fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif' }}>
+      {/* ── APP BAR ────────────────────────────────────────────────── */}
+      <header
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          background: "#FFFFFF",
+          padding: "calc(env(safe-area-inset-top, 0px) + 14px) 16px 14px",
+          display: "flex",
+          alignItems: "center",
+          borderBottom: "1px solid rgba(0,0,0,0.06)",
+        }}
+      >
+        <button onClick={() => router.back()} aria-label="Back" className="cx-press" style={{ background: "none", border: "none", padding: 4, cursor: "pointer", display: "flex", color: "#2A2522" }}>
+          <ChevronLeft size={24} strokeWidth={2.2} />
         </button>
-        <div className="cx-hero-eyebrow" style={{ color: "var(--cx-gold-l)" }}>Freshly curated</div>
-        <div className="cx-hero-title">New Arrivals</div>
-        <div className="cx-hero-sub">
-          {totalSarees} new sarees across <strong>{storeEntries.length} store{storeEntries.length !== 1 ? "s" : ""}</strong>
+        <h1 style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#2A2522", letterSpacing: "0.06em", margin: 0, marginRight: 28 }}>
+          NEW ARRIVALS
+        </h1>
+      </header>
+
+      {/* ── TITLE ──────────────────────────────────────────────────── */}
+      <div style={{ padding: "18px 18px 0" }}>
+        <h2 style={{ fontSize: 25, fontWeight: 700, color: "#2A2522", margin: 0 }}>Freshly Curated</h2>
+        <div style={{ fontSize: 14, color: "#9A8F8A", marginTop: 6 }}>
+          {totalSarees} New Saree{totalSarees !== 1 ? "s" : ""} Across{" "}
+          <span style={{ color: MAROON, fontWeight: 700 }}>{storeCount} Store{storeCount !== 1 ? "s" : ""}</span>
         </div>
       </div>
-      <div className="cx-zari" />
 
-      {/* Store filter */}
-      {storeEntries.length > 1 && (
-        <div style={{ background: "var(--cx-white)", borderBottom: "1px solid var(--cx-border-l)", padding: "10px 18px 12px" }}>
-          <div className="cx-eyebrow" style={{ marginBottom: 8 }}>Filter by store</div>
-          <div className="cx-chip-row">
-            <button onClick={() => setStoreFilter("ALL")} className={`cx-chip ${storeFilter === "ALL" ? "active" : ""}`}>
-              All Stores ({totalSarees})
-            </button>
-            {storeEntries.map((s) => (
-              <button key={s.storeId} onClick={() => setStoreFilter(s.storeId)} className={`cx-chip ${storeFilter === s.storeId ? "active" : ""}`}>
-                {s.storeName} ({s.sarees.length})
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* ── STORE FILTER CHIPS ─────────────────────────────────────── */}
+      <div className="cx-no-scroll" style={{ display: "flex", gap: 10, overflowX: "auto", padding: "16px 18px 4px" }}>
+        <FilterChip active={storeFilter === "ALL"} onClick={() => setStoreFilter("ALL")}>All</FilterChip>
+        {(storeLinks as any[]).map((s) => (
+          <FilterChip key={s.storeId} active={storeFilter === s.storeId} onClick={() => setStoreFilter(s.storeId)}>
+            {String(s.storeName || s.storeId).split(" ")[0].toUpperCase()}
+          </FilterChip>
+        ))}
+      </div>
 
-      {/* Saree listings */}
-      <div style={{ padding: "16px 14px 24px" }}>
-        {filtered.length === 0 ? (
-          <div className="cx-empty">
-            <div className="cx-empty-icon"><Sparkles size={26} /></div>
-            <div className="cx-empty-title">No new arrivals yet</div>
-            <div className="cx-empty-sub">Check back soon for fresh collections from your stores</div>
+      {/* ── GRID ───────────────────────────────────────────────────── */}
+      <div style={{ padding: "16px 16px 28px" }}>
+        {items.length === 0 ? (
+          <div className="cx-slideUp" style={{ textAlign: "center", padding: "56px 20px" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#FBE4E8", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              <Sparkles size={26} color={MAROON} />
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#2A2522" }}>No new arrivals</div>
+            <div style={{ fontSize: 13, color: "#9A8F8A", marginTop: 6 }}>Check back soon for fresh collections</div>
           </div>
         ) : (
-          filtered.map((store) => (
-            <div key={store.storeId} style={{ marginBottom: 24 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "0 4px" }}>
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "var(--cx-r-md)",
-                    background: "var(--cx-grad-plum)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--cx-on-dark)",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Store size={18} strokeWidth={1.6} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {items.map(({ saree, city }, i) => (
+              <div key={saree._id} style={{ background: "#FFFFFF", borderRadius: 16, overflow: "hidden", border: "1px solid #F0E6E3", boxShadow: "0 4px 16px rgba(0,0,0,0.06)" }}>
+                <div style={{ position: "relative", height: 190, background: "linear-gradient(135deg, #71221D, #D4A843)" }}>
+                  <SareeImage ids={saree.imageIds} fallback={pickImg(i)} alt={saree.name} />
+                  <span style={{ position: "absolute", top: 8, right: 8, padding: "4px 11px", borderRadius: 99, background: MAROON, fontSize: 10.5, fontWeight: 700, color: "#fff", zIndex: 2 }}>
+                    New
+                  </span>
+                  {saree.occasion && (
+                    <span style={{ position: "absolute", bottom: 8, left: 8, padding: "4px 11px", borderRadius: 99, background: "rgba(255,255,255,0.92)", fontSize: 10.5, fontWeight: 600, color: "#2A2522", zIndex: 2 }}>
+                      {saree.occasion}
+                    </span>
+                  )}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="cx-truncate" style={{ fontWeight: 700, fontSize: 14, color: "var(--cx-text)" }}>
-                    {store.storeName}
+                <div style={{ padding: "11px 12px 13px" }}>
+                  <div className="cx-truncate" style={{ fontSize: 14.5, fontWeight: 700, color: "#2A2522" }}>
+                    {saree.name}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--cx-text-muted)" }}>
-                    {store.sarees.length} new item{store.sarees.length !== 1 ? "s" : ""}
+                  {city && <div style={{ fontSize: 12, color: "#9A8F8A", marginTop: 3 }}>• {city}</div>}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: "#2A2522" }}>{fmt(saree.price)}</span>
+                    <span style={{ width: 36, height: 36, borderRadius: 10, border: "1.5px solid rgba(104,38,42,0.16)", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <ArrowRight size={16} color={MAROON} strokeWidth={2.2} />
+                    </span>
                   </div>
                 </div>
               </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-                {store.sarees.map((saree, i) => {
-                  const g = getGrad(saree.occasion, saree.grad);
-                  return (
-                    <div
-                      key={saree._id}
-                      className={`cx-card cx-press cx-scaleIn cx-hover-lift cx-d${Math.min(i + 1, 6)}`}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <div
-                        className="cx-tile-img cx-silk"
-                        style={{
-                          height: 150,
-                          backgroundImage: `linear-gradient(160deg, ${g[0]}55, ${g[1]}88), url(${pickImg(i)})`,
-                        }}
-                      >
-                        {saree.tag && (
-                          <span
-                            style={{
-                              position: "absolute",
-                              top: 6,
-                              right: 6,
-                              padding: "3px 9px",
-                              borderRadius: "var(--cx-r-pill)",
-                              background: "var(--cx-grad-gold)",
-                              fontSize: 9,
-                              fontWeight: 700,
-                              color: "var(--cx-plum-d)",
-                              letterSpacing: ".04em",
-                              zIndex: 2,
-                            }}
-                          >
-                            {saree.tag}
-                          </span>
-                        )}
-                        {saree.occasion && (
-                          <span
-                            style={{
-                              position: "absolute",
-                              bottom: 6,
-                              left: 6,
-                              padding: "3px 9px",
-                              borderRadius: "var(--cx-r-pill)",
-                              background: "rgba(28, 17, 8, .65)",
-                              backdropFilter: "blur(4px)",
-                              fontSize: 9,
-                              fontWeight: 600,
-                              color: "var(--cx-on-dark)",
-                              zIndex: 2,
-                            }}
-                          >
-                            {saree.occasion}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ padding: "8px 10px 10px" }}>
-                        <div className="cx-truncate" style={{ fontWeight: 700, fontSize: 12.5, color: "var(--cx-text)" }}>
-                          {saree.name}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-                          <span className="cx-mono" style={{ fontWeight: 700, fontSize: 13, color: "var(--cx-gold-d)" }}>
-                            {fmt(saree.price)}
-                          </span>
-                          <span style={{ fontSize: 10, color: "var(--cx-text-muted)" }}>{saree.fabric}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="cx-press"
+      style={{
+        flexShrink: 0,
+        padding: "9px 18px",
+        borderRadius: 99,
+        border: active ? "none" : "1px solid rgba(0,0,0,0.10)",
+        background: active ? MAROON : "#F4F2F0",
+        color: active ? "#fff" : "#6B5E5A",
+        fontSize: 13,
+        fontWeight: 700,
+        letterSpacing: "0.02em",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </button>
   );
 }

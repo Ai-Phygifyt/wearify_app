@@ -1,259 +1,173 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, X, Star, MapPin, User, Clock } from "lucide-react";
 
+const MAROON = "#6E262B";
+const KIOSK_IMAGES = ["/kiosk/img1.jpg", "/kiosk/img2.webp", "/kiosk/img3.webp", "/kiosk/img4.jpg"];
+const pickImg = (i: number) => KIOSK_IMAGES[i % KIOSK_IMAGES.length];
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export default function MyStoresPage() {
   const router = useRouter();
   const { customerId } = useCustomer();
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const storeLinks = useQuery(
     api.customers.listStoreLinksEnriched,
     customerId ? { customerId } : "skip"
   );
 
-  if (!customerId) {
-    return (
-      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="cx-typing"><span /><span /><span /></div>
-      </div>
-    );
-  }
+  const visible = (storeLinks ?? []).filter((s: any) => !dismissed.has(String(s._id)));
 
   return (
-    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1" }}>
-      {/* Hero */}
-      <div
-        className="cx-noise cx-paisley"
+    <div style={{ minHeight: "100%", background: "#FFFFFF", fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif' }}>
+      {/* ── APP BAR ────────────────────────────────────────────────── */}
+      <header
         style={{
-          background: "var(--cx-grad-hero)",
-          padding: "28px 18px 24px",
-          position: "relative",
-          overflow: "hidden",
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          background: "#FFFFFF",
+          padding: "calc(env(safe-area-inset-top, 0px) + 14px) 16px 14px",
+          display: "flex",
+          alignItems: "center",
+          borderBottom: "1px solid rgba(0,0,0,0.06)",
         }}
       >
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button
-              onClick={() => router.back()}
-              className="cx-press"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(253,248,240,.12)",
-                border: "1px solid rgba(253,248,240,.18)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
-            >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FBF7F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FBF7F1", fontStyle: "italic", margin: 0 }}>
-                My Stores
-              </h1>
-              <div style={{ fontSize: 12, color: "rgba(253,248,240,.5)", marginTop: 2 }}>
-                {storeLinks ? `${storeLinks.length} Wearify store${storeLinks.length !== 1 ? "s" : ""}` : "Loading..."}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="cx-zari" />
+        <button
+          onClick={() => router.back()}
+          aria-label="Back"
+          className="cx-press"
+          style={{ background: "none", border: "none", padding: 4, cursor: "pointer", display: "flex", color: "#2A2522" }}
+        >
+          <ChevronLeft size={24} strokeWidth={2.2} />
+        </button>
+        <h1 style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#2A2522", letterSpacing: "0.06em", margin: 0, marginRight: 28 }}>
+          MY STORES
+        </h1>
+      </header>
 
-      {/* Content */}
-      <div style={{ padding: "20px 16px 32px" }}>
+      {/* ── TITLE ──────────────────────────────────────────────────── */}
+      <div style={{ padding: "18px 16px 6px" }}>
+        <h2 style={{ fontSize: 21, fontWeight: 700, color: "#2A2522", margin: 0 }}>
+          {storeLinks ? `${visible.length} Wearify Store${visible.length !== 1 ? "s" : ""}` : "Loading…"}
+        </h2>
+      </div>
+
+      {/* ── CONTENT ────────────────────────────────────────────────── */}
+      <div style={{ padding: "10px 16px 28px" }}>
         {storeLinks === undefined ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} style={{ height: 140, borderRadius: 16, background: "linear-gradient(135deg, #F5E6E3, #F0E8DC)", opacity: 0.6 }} className="cx-fadeIn" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {[1, 2].map((i) => (
+              <div key={i} className="cx-fadeIn" style={{ height: 300, borderRadius: 16, background: "linear-gradient(135deg, #F5E6E3, #F0E8DC)", opacity: 0.6 }} />
             ))}
           </div>
-        ) : storeLinks.length === 0 ? (
-          <div className="cx-slideUp" style={{ textAlign: "center", padding: "48px 20px" }}>
-            <div style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
-              background: "#F5E6E3",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 14px",
-            }}>
-              <svg width={28} height={28} viewBox="0 0 24 24" fill="none">
-                <path d="M3 9V21h18V9" stroke="#8B2E2B" strokeWidth="1.6" strokeLinejoin="round" />
-                <path d="M1 7l2-4h18l2 4H1Z" stroke="#8B2E2B" strokeWidth="1.6" strokeLinejoin="round" fill="#B8860B" opacity=".18" />
-              </svg>
+        ) : visible.length === 0 ? (
+          <div className="cx-slideUp" style={{ textAlign: "center", padding: "60px 20px" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#FBE4E8", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              <MapPin size={28} color={MAROON} />
             </div>
-            <div className="cx-serif" style={{ fontSize: 17, fontWeight: 600, color: "#1C1108", fontStyle: "italic" }}>No stores visited yet</div>
-            <div style={{ fontSize: 13, color: "#9C8878", marginTop: 6 }}>Visit a Wearify-powered store to see it here</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#2A2522" }}>No stores yet</div>
+            <div style={{ fontSize: 13, color: "#9A8F8A", marginTop: 6 }}>Visit a Wearify-powered store to see it here</div>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {storeLinks.map((store, idx) => (
-              <div
-                key={store._id}
-                className={`cx-slideUp cx-d${Math.min(idx + 1, 6)}`}
-                style={{
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  background: "#FFFFFF",
-                  border: "1px solid #F0E8DC",
-                  boxShadow: "0 2px 14px rgba(139, 46, 43, .09)",
-                }}
-              >
-                {/* Store gradient header */}
-                <div className="cx-silk" style={{
-                  height: 56,
-                  background: "linear-gradient(145deg, #8B2E2B, #A94540)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
-                  overflow: "hidden",
-                }}>
-                  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" style={{ position: "relative", zIndex: 1 }}>
-                    <path d="M3 9V21h18V9" stroke="rgba(255,255,255,.85)" strokeWidth="1.6" strokeLinejoin="round" />
-                    <path d="M1 7l2-4h18l2 4H1Z" stroke="rgba(255,255,255,.85)" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(184, 134, 11, .25)" />
-                  </svg>
-                </div>
-
-                {/* Store details */}
-                <div style={{ padding: "14px 16px" }}>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: "#1C1108" }}>
-                    {store.storeName || store.storeId}
-                  </div>
-
-                  {(store.storeCity || store.storeState) && (
-                    <div style={{ fontSize: 13, color: "#9C8878", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}>
-                      <svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0Z" stroke="#9C8878" strokeWidth="1.6" />
-                        <circle cx="12" cy="10" r="3" stroke="#9C8878" strokeWidth="1.6" />
-                      </svg>
-                      {[store.storeCity, store.storeState].filter(Boolean).join(", ")}
-                    </div>
-                  )}
-
-                  {/* Visit stats */}
-                  <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                        <path d="M16 21v-2a4 4 0 0 0-8 0v2" stroke="#B8860B" strokeWidth="1.6" strokeLinecap="round" />
-                        <circle cx="12" cy="7" r="4" stroke="#B8860B" strokeWidth="1.6" />
-                      </svg>
-                      <span className="cx-mono" style={{ fontSize: 13, fontWeight: 700, color: "#1C1108" }}>
-                        {store.visits || 0}
-                      </span>
-                      <span style={{ fontSize: 11, color: "#9C8878" }}>visits</span>
-                    </div>
-                    {store.lastVisit && (
-                      <div style={{ fontSize: 11, color: "#9C8878", display: "flex", alignItems: "center", gap: 4 }}>
-                        <svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                          <circle cx="12" cy="12" r="9" stroke="#C4B5A8" strokeWidth="1.6" />
-                          <polyline points="12,7 12,12 15,15" stroke="#C4B5A8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Last: {store.lastVisit}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Address */}
-                  {store.storeAddress && (
-                    <div style={{ fontSize: 12, color: "#9C8878", marginTop: 8, lineHeight: 1.45 }}>
-                      {store.storeAddress}
-                    </div>
-                  )}
-
-                  {/* Hours */}
-                  {(store.storeHours || store.storeClosedOn) && (
-                    <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 11, color: "#9C8878" }}>
-                      {store.storeHours && (
-                        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <svg width={11} height={11} viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="#C4B5A8" strokeWidth="1.6" />
-                            <polyline points="12,6 12,12 16,14" stroke="#C4B5A8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          {store.storeHours}
-                        </span>
-                      )}
-                      {store.storeClosedOn && (
-                        <span>Closed: {store.storeClosedOn}</span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="cx-zari" style={{ margin: "12px 0" }} />
-
-                  {/* Action buttons */}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {store.storePhone && (
-                      <button
-                        onClick={() => window.open(`https://wa.me/${store.storePhone?.replace(/[^0-9]/g, "")}`, "_blank")}
-                        className="cx-press"
-                        style={{
-                          flex: 1,
-                          padding: "9px 12px",
-                          borderRadius: 100,
-                          background: "var(--cx-grad-whatsapp)",
-                          border: "none",
-                          color: "#fff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <svg width={13} height={13} viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347M12.05 0C5.495 0 .16 5.335.157 11.892a11.8 11.8 0 0 0 1.588 5.945L0 24l6.304-1.654a11.9 11.9 0 0 0 5.684 1.448h.005c6.554 0 11.89-5.335 11.892-11.893A11.82 11.82 0 0 0 20.397 3.48 11.82 11.82 0 0 0 12.05 0Z" /></svg>
-                        WhatsApp
-                      </button>
-                    )}
-                    {store.storeAddress && (
-                      <button
-                        onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.storeAddress + " " + (store.storeCity || ""))}`, "_blank")}
-                        className="cx-press"
-                        style={{
-                          flex: 1,
-                          padding: "9px 12px",
-                          borderRadius: 100,
-                          background: "transparent",
-                          border: "1.5px solid #8B2E2B",
-                          color: "#8B2E2B",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0Z" stroke="#8B2E2B" strokeWidth="1.8" />
-                          <circle cx="12" cy="10" r="3" stroke="#8B2E2B" strokeWidth="1.8" />
-                        </svg>
-                        Directions
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {visible.map((store: any, idx: number) => (
+              <StoreCard
+                key={String(store._id)}
+                store={store}
+                img={pickImg(idx)}
+                onDismiss={() => setDismissed((s) => new Set(s).add(String(store._id)))}
+              />
             ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function StoreCard({ store, img, onDismiss }: { store: any; img: string; onDismiss: () => void }) {
+  const city = [store.storeCity, store.storeState].filter(Boolean).join(", ");
+  const phone = (store.storePhone as string | undefined)?.replace(/[^0-9]/g, "");
+
+  return (
+    <div style={{ background: "#FFFFFF", borderRadius: 16, overflow: "hidden", border: "1px solid #F0E6E3", boxShadow: "0 4px 16px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column" }}>
+      {/* Image */}
+      <div style={{ position: "relative", height: 130, backgroundImage: `url(${img})`, backgroundSize: "cover", backgroundPosition: "center" }}>
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+        >
+          <X size={14} color="#6B5E5A" strokeWidth={2.4} />
+        </button>
+        <span style={{ position: "absolute", bottom: 8, left: 8, display: "inline-flex", alignItems: "center", gap: 3, background: "rgba(28,17,8,0.6)", borderRadius: 99, padding: "3px 8px", backdropFilter: "blur(6px)" }}>
+          <Star size={10} fill="#F0B429" color="#F0B429" />
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: "#fff" }}>{(store.rating as number) ?? "5.0"}</span>
+        </span>
+      </div>
+
+      {/* Details */}
+      <div style={{ padding: "12px 12px 14px", display: "flex", flexDirection: "column", gap: 7, flex: 1 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#2A2522", lineHeight: 1.2 }}>
+          {store.storeName || store.storeId}
+        </div>
+
+        {city && (
+          <Row icon={<MapPin size={12} color={MAROON} fill={MAROON} />} text={city} strong />
+        )}
+
+        <Row
+          icon={<User size={11} color="#A99F9A" />}
+          text={`${store.visits || 0} visits`}
+          extraIcon={<Clock size={11} color="#A99F9A" />}
+          extra={store.lastVisit ? `Last: ${store.lastVisit}` : undefined}
+        />
+
+        {store.storeAddress && <Row icon={<MapPin size={11} color="#A99F9A" />} text={store.storeAddress} />}
+        {store.storeHours && <Row icon={<Clock size={11} color="#A99F9A" />} text={store.storeHours} />}
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 6 }}>
+          <button
+            onClick={() => phone && window.open(`https://wa.me/${phone}`, "_blank")}
+            aria-label="WhatsApp"
+            className="cx-press"
+            style={{ width: 40, height: 40, borderRadius: 11, background: "#F2F1EF", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/customer/home/whatsapp.svg" alt="" style={{ width: 22, height: 22 }} />
+          </button>
+          <button
+            onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((store.storeAddress || store.storeName || "") + " " + (store.storeCity || ""))}`, "_blank")}
+            className="cx-press"
+            style={{ flex: 1, height: 40, borderRadius: 11, background: MAROON, border: "none", color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+          >
+            Directions
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ icon, text, strong, extraIcon, extra }: { icon: React.ReactNode; text: string; strong?: boolean; extraIcon?: React.ReactNode; extra?: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: strong ? "#3A2B28" : "#9A8F8A", lineHeight: 1.3 }}>
+      <span style={{ display: "flex", flexShrink: 0 }}>{icon}</span>
+      <span style={{ fontWeight: strong ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{text}</span>
+      {extra && (
+        <>
+          <span style={{ display: "flex", flexShrink: 0, marginLeft: 4 }}>{extraIcon}</span>
+          <span style={{ whiteSpace: "nowrap" }}>{extra}</span>
+        </>
+      )}
     </div>
   );
 }

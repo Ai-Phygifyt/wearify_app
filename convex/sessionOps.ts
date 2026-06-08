@@ -395,6 +395,7 @@ export const listByCustomer = query({
           sareeImageId,
           sareeGrad: saree?.grad,
           sareeEmoji: saree?.emoji,
+          sareeOccasion: saree?.occasion,
           storeIdLabel: l.storeId,
         };
       })
