@@ -3,20 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npm-run-all --parallel dev:frontend dev:backend",
-    "dev:frontend": "NODE_OPTIONS=--max-old-space-size=8192 next dev --turbopack",
-    "dev:backend": "convex dev",
-    "predev": "convex dev --until-success && convex dashboard",
+    "dev": "NODE_OPTIONS=--max-old-space-size=8192 next dev --turbopack",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 next build --webpack",
     "start": "next start",
     "lint": "eslint . --ignore-pattern \"convex/_generated/**\"",
     "type-check": "tsc --noEmit -p .",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\" --ignore-path .gitignore",
-    "seed": "convex run seed:seedAll '{}'",
-    "seed:relational": "convex run seed:seedRelational '{}'",
-    "seed:saree-images": "node scripts/backfill-saree-images.mjs",
-    "seed:catelog21": "node scripts/seed-catelog21.mjs",
-    "cleanup:flatlay-less": "node scripts/cleanup-flatlay-less-sarees.mjs"
+    "format": "prettier --write \"**/*.{ts,tsx,md}\" --ignore-path .gitignore"
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.11.4",
