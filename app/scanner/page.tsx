@@ -138,8 +138,11 @@ export default function ScannerPage() {
           <p className="k-scan-subtitle">Looking good? Save it or take another.</p>
         </div>
 
-        {/* Captured frame reuses the same framed-media treatment as the live scan. */}
-        <div className="k-scan-frame-wrap">
+        {/* Captured frame reuses the live-scan media treatment, but with
+            `is-capturing` so the frosted-glass ::after overlay (translucent
+            gradient + backdrop blur) is disabled — otherwise it masks the
+            captured photo and makes it look blurry. */}
+        <div className="k-scan-frame-wrap is-capturing">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={captureUrl} alt="Captured scan" className="scanner-preview-img" />
         </div>
