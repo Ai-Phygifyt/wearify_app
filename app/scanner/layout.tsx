@@ -1,5 +1,6 @@
 import React from "react";
 import "../kiosk/kiosk-theme.css";
+import "./scanner.css";
 
 // Standalone scanner module — reuses the kiosk body-scan UI/theme but without
 // the kiosk's device-pairing gate, so /scanner works as its own entry point.
