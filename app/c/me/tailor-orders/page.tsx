@@ -28,7 +28,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function TailorOrdersPage() {
   const router = useRouter();
-  const { phone, customerId } = useCustomer();
+  const { phone } = useCustomer();
 
   const orders = useQuery(
     api.tailorOps.listOrdersByCustomer,
@@ -63,58 +63,93 @@ export default function TailorOrdersPage() {
 
   if (!phone) {
     return (
-      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="cx-typing"><span /><span /><span /></div>
       </div>
     );
   }
 
+  const activeCount = orders ? orders.filter((o) => o.status !== "delivered").length : 0;
+
   return (
-    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1" }}>
+    <div
+      className="cx-pageIn"
+      style={{
+        minHeight: "100%",
+        background: "#FFFFFF",
+        fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+      }}
+    >
       {/* Hero */}
       <div
-        className="cx-noise cx-paisley"
         style={{
-          background: "var(--cx-grad-hero)",
-          padding: "28px 18px 24px",
-          position: "relative",
-          overflow: "hidden",
+          background: "linear-gradient(180deg, #7A2E32 0%, #6B2529 100%)",
+          paddingBottom: 22,
         }}
       >
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button
-              onClick={() => router.back()}
-              className="cx-press"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(253,248,240,.12)",
-                border: "1px solid rgba(253,248,240,.18)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
-            >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FBF7F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FBF7F1", fontStyle: "italic", margin: 0 }}>
-                My Tailor Orders
-              </h1>
-              <div style={{ fontSize: 12, color: "rgba(253,248,240,.5)", marginTop: 2 }}>
-                {orders ? `${orders.length} order${orders.length !== 1 ? "s" : ""}` : "Loading..."}
-              </div>
-            </div>
-          </div>
+        {/* App bar row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "calc(env(safe-area-inset-top,0px) + 14px) 16px 13px",
+            borderBottom: "1px solid rgba(255,255,255,0.12)",
+          }}
+        >
+          <button
+            onClick={() => router.back()}
+            aria-label="Back"
+            className="cx-press"
+            style={{
+              background: "none",
+              border: "none",
+              padding: 4,
+              cursor: "pointer",
+              display: "flex",
+              color: "#FFFFFF",
+              flexShrink: 0,
+            }}
+          >
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <h1
+            style={{
+              flex: 1,
+              textAlign: "center",
+              fontSize: 15,
+              fontWeight: 700,
+              color: "#FFFFFF",
+              margin: 0,
+              marginRight: 26,
+            }}
+          >
+            My Tailor Orders
+          </h1>
+        </div>
+
+        {/* Hero content */}
+        <div style={{ padding: "20px 18px 0" }}>
+          <h2 style={{ fontSize: 24, fontWeight: 800, color: "#FFFFFF", margin: 0, letterSpacing: "-0.01em" }}>
+            Track your tailor journey
+          </h2>
+          <span
+            style={{
+              display: "inline-block",
+              marginTop: 14,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "6px 13px",
+              borderRadius: 8,
+              background: "rgba(0,0,0,0.22)",
+              color: "rgba(255,255,255,0.92)",
+            }}
+          >
+            {activeCount} Active Order{activeCount !== 1 ? "s" : ""}
+          </span>
         </div>
       </div>
-      <div className="cx-zari" />
 
       {/* Content */}
       <div style={{ padding: "20px 16px 32px" }}>
@@ -125,26 +160,26 @@ export default function TailorOrdersPage() {
             ))}
           </div>
         ) : orders.length === 0 ? (
-          <div className="cx-slideUp" style={{ textAlign: "center", padding: "48px 20px" }}>
-            <div style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
-              background: "#F5E6E3",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 14px",
-            }}>
-              <svg width={28} height={28} viewBox="0 0 24 24" fill="none">
-                <circle cx="6" cy="6" r="3" stroke="#8B2E2B" strokeWidth="1.6" />
-                <circle cx="6" cy="18" r="3" stroke="#8B2E2B" strokeWidth="1.6" />
-                <line x1="20" y1="4" x2="8.12" y2="15.88" stroke="#B8860B" strokeWidth="1.8" strokeLinecap="round" />
-                <line x1="20" y1="20" x2="8" y2="8" stroke="#8B2E2B" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </div>
-            <div className="cx-serif" style={{ fontSize: 17, fontWeight: 600, color: "#1C1108", fontStyle: "italic" }}>No tailor orders yet</div>
-            <div style={{ fontSize: 13, color: "#9C8878", marginTop: 6 }}>Find a tailor through Wearify to get started</div>
+          <div
+            className="cx-slideUp"
+            style={{
+              marginTop: 20,
+              background: "#FFFFFF",
+              border: "1px solid #F0E6E3",
+              borderRadius: 20,
+              boxShadow: "0 8px 30px rgba(0,0,0,0.07)",
+              padding: "34px 24px 30px",
+              textAlign: "center",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/customer/my-tailor/Ellipse 365.svg"
+              alt=""
+              style={{ width: 120, height: 120, margin: "0 auto 14px", display: "block" }}
+            />
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#2A2522" }}>No tailor order yet</div>
+            <div style={{ fontSize: 13, color: "#9A8F8A", marginTop: 6 }}>Find a tailor through Wearify to get started</div>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

@@ -1,80 +1,119 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
-import { Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Star, User, Clock, MapPin } from "lucide-react";
 
-const QUICK_CHIPS = [
-  "Great Service",
-  "Beautiful Collection",
-  "Quick Try-On",
-  "Friendly Staff",
-  "Clean Store",
-  "Good Lighting",
-];
+const MAROON = "#6E262B";
+const KIOSK_IMAGES = ["/kiosk/img1.jpg", "/kiosk/img2.webp", "/kiosk/img3.webp", "/kiosk/img4.jpg"];
+const pickImg = (i: number) => KIOSK_IMAGES[i % KIOSK_IMAGES.length];
 
 export default function FeedbackPage() {
   const router = useRouter();
   const { customerId, phone } = useCustomer();
 
-  const submitFeedback = useMutation(api.customers.submitFeedback);
-
-  // Target the most-recent visit. Without this the submit has no real
-  // store to attribute to (was hardcoded "general", which no store
-  // surface reads — so the feedback effectively went nowhere).
-  const lastVisit = useQuery(
-    api.customers.getLastVisit,
+  const stores = useQuery(
+    api.customers.listStoreLinksEnriched,
     customerId ? { customerId } : "skip"
   );
+  const submitFeedback = useMutation(api.customers.submitFeedback);
 
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [rating, setRating] = useState(0);
-  const [selectedChips, setSelectedChips] = useState<string[]>([]);
   const [comment, setComment] = useState("");
-  const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  function toggleChip(chip: string) {
-    setSelectedChips((prev) =>
-      prev.includes(chip) ? prev.filter((c) => c !== chip) : [...prev, chip]
-    );
+  function openRate(i: number) {
+    setSelectedIdx(i);
+    setRating(0);
+    setComment("");
   }
 
-  async function handleSubmit() {
-    if (rating === 0 || !customerId || !lastVisit) return;
+  async function handleSubmit(store: any) {
+    if (rating === 0 || !customerId || submitting) return;
     setSubmitting(true);
     try {
       await submitFeedback({
         customerId,
         customerPhone: phone,
-        storeId: lastVisit.storeId,
-        sessionId: lastVisit.sessionId,
+        storeId: store.storeId,
         rating,
-        chips: selectedChips.length > 0 ? selectedChips : undefined,
         comment: comment.trim() || undefined,
         date: new Date().toISOString().split("T")[0],
       });
-      setSubmitted(true);
+      setSelectedIdx(null);
     } catch {
       /* silently handle */
     }
     setSubmitting(false);
   }
 
-  if (!customerId || lastVisit === undefined) {
-    return (
-      <div
-        className="cx-pageIn"
+  /* ── Header (shared) ───────────────────────────────────── */
+  const Header = (
+    <header
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 20,
+        background: "#FFFFFF",
+        padding: "calc(env(safe-area-inset-top,0px) + 14px) 16px 14px",
+        display: "flex",
+        alignItems: "center",
+        borderBottom: "1px solid rgba(0,0,0,0.06)",
+      }}
+    >
+      <button
+        onClick={() => (selectedIdx !== null ? setSelectedIdx(null) : router.back())}
+        aria-label="Back"
+        className="cx-press"
         style={{
-          minHeight: "100%",
-          background: "#FBF7F1",
+          background: "none",
+          border: "none",
+          padding: 4,
+          cursor: "pointer",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          color: "#2A2522",
         }}
       >
+        <ChevronLeft size={24} strokeWidth={2.2} />
+      </button>
+      <h1
+        style={{
+          flex: 1,
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: 700,
+          color: "#2A2522",
+          margin: 0,
+          marginRight: 28,
+        }}
+      >
+        Rate your visit
+      </h1>
+    </header>
+  );
+
+  const page = (children: React.ReactNode) => (
+    <div
+      style={{
+        minHeight: "100%",
+        background: "#FFFFFF",
+        fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+      }}
+    >
+      {Header}
+      {children}
+    </div>
+  );
+
+  /* ── Loading ───────────────────────────────────────────── */
+  if (!customerId || stores === undefined) {
+    return page(
+      <div className="cx-loading" style={{ paddingTop: 80 }}>
         <div className="cx-typing">
           <span />
           <span />
@@ -84,521 +123,292 @@ export default function FeedbackPage() {
     );
   }
 
-  /* ── No visits yet ──────────────────────────────────── */
-  if (lastVisit === null) {
-    return (
-      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1" }}>
-        <div
-          className="cx-noise cx-paisley"
-          style={{
-            background: "var(--cx-grad-hero)",
-            padding: "28px 18px 22px",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <button
-              onClick={() => router.back()}
-              className="cx-press"
-              style={{
-                background: "rgba(253,248,240,.12)",
-                border: "1px solid rgba(253,248,240,.18)",
-                borderRadius: 100,
-                width: 36,
-                height: 36,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                marginBottom: 14,
-              }}
-            >
-              <svg
-                width={18}
-                height={18}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#FBF7F1"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <h1
-              className="cx-serif"
-              style={{
-                fontSize: 26,
-                fontWeight: 700,
-                fontStyle: "italic",
-                color: "#FBF7F1",
-                margin: 0,
-              }}
-            >
-              Feedback
-            </h1>
-          </div>
-        </div>
-        <div className="cx-zari" />
+  const list = stores as any[];
 
+  /* ── Empty state ───────────────────────────────────────── */
+  if (list.length === 0) {
+    return page(
+      <div style={{ padding: "100px 22px 24px", display: "flex", justifyContent: "center" }}>
         <div
           className="cx-scaleIn"
-          style={{ textAlign: "center", padding: "56px 24px" }}
+          style={{
+            width: "100%",
+            maxWidth: 340,
+            background: "#FFFFFF",
+            border: "1px solid #F0E6E3",
+            borderRadius: 22,
+            boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
+            padding: "30px 24px",
+            textAlign: "center",
+          }}
         >
           <div
             style={{
-              width: 72,
-              height: 72,
+              width: 60,
+              height: 60,
               borderRadius: "50%",
-              background: "#F5E6E3",
+              background: "#FCE4E8",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              margin: "0 auto 20px",
+              margin: "0 auto 16px",
             }}
           >
-            <Star size={30} color="#B8860B" strokeWidth={1.6} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/customer/rate-your-visit/no-visit.svg" alt="" style={{ width: 26, height: 26 }} />
           </div>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: "#1C1108",
-              fontStyle: "italic",
-            }}
-          >
-            No visits yet
-          </div>
-          <div
-            style={{
-              fontSize: 14,
-              color: "#9C8878",
-              marginTop: 8,
-              lineHeight: 1.5,
-              maxWidth: 280,
-              margin: "8px auto 0",
-            }}
-          >
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#2A2522" }}>No visits yet</div>
+          <div style={{ fontSize: 13, color: "#9A8F8A", marginTop: 8, lineHeight: 1.5 }}>
             Once you&apos;ve visited a Wearify store, you&apos;ll be able to rate your experience here.
           </div>
-
           <button
             onClick={() => router.push("/c/me")}
             className="cx-press"
             style={{
-              marginTop: 28,
+              marginTop: 22,
               width: "100%",
-              padding: "14px",
-              borderRadius: 100,
-              background: "var(--cx-grad-primary)",
-              border: "none",
-              color: "#FBF7F1",
+              height: 50,
+              borderRadius: 99,
+              border: "1.5px solid #E8E0DD",
+              background: "#fff",
+              color: "#2A2522",
               fontSize: 15,
               fontWeight: 700,
               cursor: "pointer",
+              fontFamily: "inherit",
             }}
           >
-            Back to Profile
+            Back to profile
           </button>
         </div>
       </div>
     );
   }
 
-  /* ── Success state ──────────────────────────────────── */
-  if (submitted) {
-    return (
-      <div
-        className="cx-pageIn"
-        style={{ minHeight: "100%", background: "#FBF7F1" }}
-      >
-        {/* Hero */}
+  /* ── Rate detail ───────────────────────────────────────── */
+  if (selectedIdx !== null && list[selectedIdx]) {
+    const store = list[selectedIdx];
+    const city = [store.storeCity, store.storeState].filter(Boolean).join(", ");
+    return page(
+      <div style={{ padding: "18px 16px 32px" }}>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1C1714", margin: "0 0 16px" }}>
+          Rate {store.storeName}
+        </h2>
+
+        {/* Store info card */}
         <div
-          className="cx-noise cx-paisley"
           style={{
-            background: "var(--cx-grad-hero)",
-            padding: "28px 18px 22px",
-            position: "relative",
-            overflow: "hidden",
+            display: "flex",
+            gap: 14,
+            background: "#FFFFFF",
+            border: "1px solid #F0E6E3",
+            borderRadius: 16,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+            padding: 12,
+            marginBottom: 22,
           }}
         >
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <button
-              onClick={() => router.back()}
-              className="cx-press"
-              style={{
-                background: "rgba(253,248,240,.12)",
-                border: "1px solid rgba(253,248,240,.18)",
-                borderRadius: 100,
-                width: 36,
-                height: 36,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                marginBottom: 14,
-              }}
-            >
-              <svg
-                width={18}
-                height={18}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#FBF7F1"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <h1
-              className="cx-serif"
-              style={{
-                fontSize: 26,
-                fontWeight: 700,
-                fontStyle: "italic",
-                color: "#FBF7F1",
-                margin: 0,
-              }}
-            >
-              Feedback
-            </h1>
-          </div>
-        </div>
-        <div className="cx-zari" />
-
-        {/* Thank you */}
-        <div
-          className="cx-scaleIn"
-          style={{ textAlign: "center", padding: "56px 24px" }}
-        >
           <div
             style={{
-              width: 72,
-              height: 72,
-              borderRadius: "50%",
-              background: "#E8F5E9",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 20px",
+              width: 104,
+              height: 104,
+              borderRadius: 12,
+              flexShrink: 0,
+              backgroundImage: `url(${pickImg(selectedIdx)})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
             }}
-          >
-            <svg
-              width={32}
-              height={32}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#1B5E20"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 24,
-              fontWeight: 700,
-              color: "#1C1108",
-              fontStyle: "italic",
-            }}
-          >
-            Thank you!
-          </div>
-          <div
-            style={{
-              fontSize: 14,
-              color: "#9C8878",
-              marginTop: 8,
-              lineHeight: 1.5,
-            }}
-          >
-            Your feedback helps us improve
-          </div>
-
-          <button
-            onClick={() => router.push("/c/me")}
-            className="cx-press"
-            style={{
-              marginTop: 28,
-              width: "100%",
-              padding: "14px",
-              borderRadius: 100,
-              background: "var(--cx-grad-primary)",
-              border: "none",
-              color: "#FBF7F1",
-              fontSize: 15,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Back to Profile
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  /* ── Main form ──────────────────────────────────────── */
-  return (
-    <div
-      className="cx-pageIn"
-      style={{ minHeight: "100%", background: "#FBF7F1" }}
-    >
-      {/* ── Hero ────────────────────────────────────────── */}
-      <div
-        className="cx-noise cx-paisley"
-        style={{
-          background: "var(--cx-grad-hero)",
-          padding: "28px 18px 22px",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <button
-            onClick={() => router.back()}
-            className="cx-press"
-            style={{
-              background: "rgba(253,248,240,.12)",
-              border: "1px solid rgba(253,248,240,.18)",
-              borderRadius: 100,
-              width: 36,
-              height: 36,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              marginBottom: 14,
-            }}
-          >
-            <svg
-              width={18}
-              height={18}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#FBF7F1"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <h1
-            className="cx-serif"
-            style={{
-              fontSize: 26,
-              fontWeight: 700,
-              fontStyle: "italic",
-              color: "#FBF7F1",
-              margin: 0,
-            }}
-          >
-            Rate Your Visit
-          </h1>
-          <p
-            style={{
-              fontSize: 13,
-              color: "rgba(253,248,240,.7)",
-              margin: "4px 0 0",
-            }}
-          >
-            {lastVisit.storeName
-              ? `How was ${lastVisit.storeName}?`
-              : "How was your last visit?"}
-            {lastVisit.date && (
-              <span
-                className="cx-mono"
-                style={{ color: "rgba(253,248,240,.5)", marginLeft: 6 }}
-              >
-                · {lastVisit.date}
-              </span>
+          />
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5, justifyContent: "center" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#2A2522" }}>{store.storeName}</div>
+            {city && (
+              <DetailRow
+                icon={
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/customer/rate-your-visit/location.svg" alt="" style={{ width: 13, height: 13 }} />
+                }
+                text={city}
+                strong
+              />
             )}
-          </p>
-        </div>
-      </div>
-      <div className="cx-zari" />
-
-      {/* ── Content ─────────────────────────────────────── */}
-      <div style={{ padding: "24px 18px 32px" }}>
-        {/* Star rating */}
-        <div className="cx-slideUp cx-d1" style={{ marginBottom: 28 }}>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#1C1108",
-              fontStyle: "italic",
-              marginBottom: 14,
-              textAlign: "center",
-            }}
-          >
-            How was your experience?
+            <DetailRow icon={<User size={12} color="#A99F9A" />} text={`${store.visits ?? 0} visits`} extra={store.lastVisit ? `Last: ${store.lastVisit}` : undefined} extraIcon={<Clock size={12} color="#A99F9A" />} />
+            {store.storeAddress && <DetailRow icon={<MapPin size={12} color="#A99F9A" />} text={store.storeAddress} />}
+            {store.storeHours && <DetailRow icon={<Clock size={12} color="#A99F9A" />} text={store.storeHours} />}
           </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              justifyContent: "center",
-            }}
-          >
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                onClick={() => setRating(star)}
-                className="cx-press"
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 28,
-                  lineHeight: 1,
-                  color: star <= rating ? "#B8860B" : "#E4D9CC",
-                  transition: "color .15s, transform .15s",
-                  padding: 4,
-                }}
-              >
-                <Star size={32} fill={star <= rating ? "var(--cx-gold)" : "transparent"} strokeWidth={1.6} />
-              </button>
-            ))}
-          </div>
-          {rating > 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                fontSize: 13,
-                color: "#9C8878",
-                marginTop: 8,
-              }}
-            >
-              {rating === 5
-                ? "Excellent!"
-                : rating === 4
-                  ? "Great!"
-                  : rating === 3
-                    ? "Good"
-                    : rating === 2
-                      ? "Fair"
-                      : "Poor"}
-            </div>
-          )}
         </div>
 
-        {/* Quick feedback chips */}
-        <div className="cx-slideUp cx-d2" style={{ marginBottom: 24 }}>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#1C1108",
-              fontStyle: "italic",
-              marginBottom: 10,
-            }}
-          >
-            Quick Feedback
+        {/* Feedback card */}
+        <div
+          style={{
+            border: "1px solid #ECE4E1",
+            borderRadius: 18,
+            padding: "22px 18px",
+          }}
+        >
+          <div style={{ textAlign: "center", fontSize: 22, fontWeight: 800, color: "#243447" }}>
+            Wearify feedback
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {QUICK_CHIPS.map((chip) => {
-              const active = selectedChips.includes(chip);
-              return (
+          <div style={{ textAlign: "center", fontSize: 14, color: "#6B7280", marginTop: 4 }}>
+            Please rate your experience below
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, margin: "18px 0 6px" }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[1, 2, 3, 4, 5].map((s) => (
                 <button
-                  key={chip}
-                  onClick={() => toggleChip(chip)}
+                  key={s}
+                  onClick={() => setRating(s)}
                   className="cx-press"
-                  style={{
-                    padding: "7px 16px",
-                    borderRadius: 100,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    border: active ? "none" : "1px solid #E4D9CC",
-                    background: active
-                      ? "var(--cx-grad-primary)"
-                      : "#F5E6E3",
-                    color: active ? "#FBF7F1" : "#3D2E1E",
-                    transition: "all .2s",
-                  }}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex" }}
                 >
-                  {chip}
+                  <Star
+                    size={30}
+                    color="#F5A623"
+                    fill={s <= rating ? "#F5A623" : "transparent"}
+                    strokeWidth={1.6}
+                  />
                 </button>
-              );
-            })}
+              ))}
+            </div>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "#2A2522" }}>{rating}/5 stars</span>
           </div>
-        </div>
 
-        {/* Comment */}
-        <div className="cx-slideUp cx-d3" style={{ marginBottom: 28 }}>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#1C1108",
-              fontStyle: "italic",
-              marginBottom: 10,
-            }}
-          >
-            Tell us more{" "}
-            <span style={{ fontWeight: 400, color: "#9C8878" }}>
-              (optional)
-            </span>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#2A2522", margin: "18px 0 8px" }}>
+            Additional feedback
           </div>
           <textarea
-            placeholder="Share your detailed feedback..."
+            placeholder="My feedback!!"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={4}
             style={{
               width: "100%",
-              padding: "14px",
-              borderRadius: 16,
-              border: "1px solid #E4D9CC",
+              padding: "12px 14px",
+              borderRadius: 10,
+              border: "1px solid #DDD4D0",
               background: "#FFFFFF",
               fontSize: 14,
-              color: "#1C1108",
+              fontFamily: "inherit",
+              color: "#2A2522",
               outline: "none",
               resize: "none",
-              lineHeight: 1.55,
+              lineHeight: 1.5,
               boxSizing: "border-box",
             }}
           />
-        </div>
 
-        {/* Submit */}
-        <button
-          onClick={handleSubmit}
-          disabled={rating === 0 || submitting}
-          className="cx-press"
-          style={{
-            width: "100%",
-            padding: "14px",
-            borderRadius: 100,
-            background:
-              rating === 0
-                ? "#E4D9CC"
-                : "var(--cx-grad-primary)",
-            border: "none",
-            color: rating === 0 ? "#9C8878" : "#FBF7F1",
-            fontSize: 15,
-            fontWeight: 700,
-            cursor: rating === 0 || submitting ? "default" : "pointer",
-            opacity: submitting ? 0.7 : 1,
-            transition: "opacity .2s, background .2s",
-          }}
-        >
-          {submitting ? "Submitting..." : "Submit Feedback"}
-        </button>
+          <button
+            onClick={() => handleSubmit(store)}
+            disabled={rating === 0 || submitting}
+            className="cx-press"
+            style={{
+              width: "100%",
+              height: 52,
+              marginTop: 16,
+              borderRadius: 10,
+              background: MAROON,
+              border: "none",
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: 700,
+              fontFamily: "inherit",
+              cursor: rating === 0 || submitting ? "default" : "pointer",
+              opacity: rating === 0 || submitting ? 0.6 : 1,
+              transition: "opacity .2s",
+            }}
+          >
+            {submitting ? "Submitting…" : "Submit feedback"}
+          </button>
+        </div>
       </div>
+    );
+  }
+
+  /* ── Visit list ────────────────────────────────────────── */
+  return page(
+    <div style={{ padding: "16px 16px 28px" }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1C1714", margin: "0 0 16px" }}>
+        {list.length} Wearify Store
+      </h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {list.map((store, i) => {
+          const city = [store.storeCity, store.storeState].filter(Boolean).join(", ") || store.storeCity;
+          return (
+            <button
+              key={String(store._id)}
+              onClick={() => openRate(i)}
+              className="cx-press"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                width: "100%",
+                background: "#FFFFFF",
+                border: "1px solid #F0E6E3",
+                borderRadius: 14,
+                boxShadow: "0 3px 12px rgba(0,0,0,0.05)",
+                padding: 12,
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+              }}
+            >
+              <div
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 12,
+                  flexShrink: 0,
+                  backgroundImage: `url(${pickImg(i)})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#2A2522" }}>{store.storeName}</div>
+                {store.lastVisit && (
+                  <div style={{ fontSize: 12, color: "#9A8F8A" }}>{store.lastVisit}</div>
+                )}
+                {city && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12.5, color: MAROON, fontWeight: 600 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/customer/rate-your-visit/location.svg" alt="" style={{ width: 12, height: 12 }} />
+                    {city}
+                  </div>
+                )}
+              </div>
+              <ChevronRight size={20} color="#C4B8B3" strokeWidth={2} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({
+  icon,
+  text,
+  strong,
+  extra,
+  extraIcon,
+}: {
+  icon: React.ReactNode;
+  text: string;
+  strong?: boolean;
+  extra?: string;
+  extraIcon?: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: strong ? MAROON : "#9A8F8A", flexWrap: "wrap" }}>
+      <span style={{ display: "flex", flexShrink: 0 }}>{icon}</span>
+      <span style={{ fontWeight: strong ? 700 : 400 }}>{text}</span>
+      {extra && (
+        <>
+          <span style={{ display: "flex", flexShrink: 0, marginLeft: 6 }}>{extraIcon}</span>
+          <span>{extra}</span>
+        </>
+      )}
     </div>
   );
 }

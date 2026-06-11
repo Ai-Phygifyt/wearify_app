@@ -208,3 +208,93 @@ export function landmarksFitInRect(
   }
   return true;
 }
+
+// =========================================================================
+// analyzeBodyFit — full-body framing check for the body scan.
+//
+// Why this exists (and landmarksFitInRect doesn't suffice): that helper
+// SKIPS any joint with visibility < 0.5 so an occluded hand can't fail the
+// check. Applied to the ankles, that's a bug — when someone stands too
+// close their feet leave the frame, the ankles drop below the visibility
+// threshold, get skipped, and the scan locks on a head-to-hip crop with the
+// legs cut off. The trial-room cutout (and the feet-on-podium placement) is
+// only as good as this scan, so we must guarantee the WHOLE body is in.
+//
+// This analyzer REQUIRES the head + both-ish feet to be present and inside
+// the rect, and returns *why* it fails so the UI can coach the user
+// (step back / come closer / centre) instead of silently grabbing a half
+// body. `fit: true` is the only state that should arm the auto-capture.
+// =========================================================================
+export type FitReason =
+  | "detecting"   // model warming up / no pose yet
+  | "no-person"   // no clear torso — step into the frame
+  | "too-far"     // person small in frame — come closer
+  | "feet-cut"    // ankles missing or below the frame — step back
+  | "head-cut"    // head above the frame — step back
+  | "too-wide"    // body wider than the frame — step back
+  | "off-center"  // torso off to one side — centre up
+  | "ok";
+
+export type FitResult = { fit: boolean; reason: FitReason };
+
+export function analyzeBodyFit(
+  landmarks: PoseLandmark[] | null,
+  rect: { x: number; y: number; w: number; h: number },
+): FitResult {
+  if (!landmarks || landmarks.length === 0) {
+    return { fit: false, reason: "detecting" };
+  }
+
+  const V = 0.5;
+  // Returns the landmark only if it's confidently visible.
+  const seen = (i: number): PoseLandmark | null => {
+    const p = landmarks[i];
+    if (!p) return null;
+    if (p.visibility !== undefined && p.visibility < V) return null;
+    return p;
+  };
+
+  const nose = seen(POSE_LANDMARKS.NOSE);
+  const ls = seen(POSE_LANDMARKS.LEFT_SHOULDER);
+  const rs = seen(POSE_LANDMARKS.RIGHT_SHOULDER);
+  const lh = seen(POSE_LANDMARKS.LEFT_HIP);
+  const rh = seen(POSE_LANDMARKS.RIGHT_HIP);
+  const la = seen(POSE_LANDMARKS.LEFT_ANKLE);
+  const ra = seen(POSE_LANDMARKS.RIGHT_ANKLE);
+
+  const left = rect.x;
+  const right = rect.x + rect.w;
+  const top = rect.y;
+  const bottom = rect.y + rect.h;
+
+  // A torso (3 of 4 shoulder/hip points) is the minimum to call a person
+  // present; otherwise they're not in the frame yet.
+  const torso = [ls, rs, lh, rh].filter(Boolean) as PoseLandmark[];
+  if (torso.length < 3) return { fit: false, reason: "no-person" };
+
+  // Vertical body span — a small span means the person is far / tiny in
+  // frame, so ask them to come closer before any other coaching.
+  const span =
+    Math.max(...[nose, ...torso, la, ra].filter(Boolean).map((p) => (p as PoseLandmark).y)) -
+    Math.min(...[nose, ...torso, la, ra].filter(Boolean).map((p) => (p as PoseLandmark).y));
+  if (span < 0.45) return { fit: false, reason: "too-far" };
+
+  // Feet must be IN the frame — this is the check the old helper fudged.
+  // Missing ankles (out of frame → low visibility) or ankles below the rect
+  // bottom mean the legs are cut off: step back.
+  const ankles = [la, ra].filter(Boolean) as PoseLandmark[];
+  if (ankles.length === 0 || ankles.some((a) => a.y > bottom)) {
+    return { fit: false, reason: "feet-cut" };
+  }
+
+  // Head must be in the frame, below the rect top.
+  if (!nose || nose.y < top) return { fit: false, reason: "head-cut" };
+
+  // Horizontal framing — shoulders/hips inside the rect width.
+  const outLeft = torso.some((p) => p.x < left);
+  const outRight = torso.some((p) => p.x > right);
+  if (outLeft && outRight) return { fit: false, reason: "too-wide" };
+  if (outLeft || outRight) return { fit: false, reason: "off-center" };
+
+  return { fit: true, reason: "ok" };
+}

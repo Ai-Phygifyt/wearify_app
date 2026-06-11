@@ -1,21 +1,25 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, Check } from "lucide-react";
+
+const MAROON = "#6E262B";
 
 const LANGUAGES = [
   { code: "en", native: "English", english: "English" },
-  { code: "hi", native: "\u0939\u093F\u0928\u094D\u0926\u0940", english: "Hindi" },
-  { code: "mr", native: "\u092E\u0930\u093E\u0920\u0940", english: "Marathi" },
-  { code: "kn", native: "\u0C95\u0CA8\u0CCD\u0CA8\u0CA1", english: "Kannada" },
-  { code: "ta", native: "\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD", english: "Tamil" },
-  { code: "te", native: "\u0C24\u0C46\u0C32\u0C41\u0C17\u0C41", english: "Telugu" },
-  { code: "bn", native: "\u09AC\u09BE\u0982\u09B2\u09BE", english: "Bengali" },
-  { code: "gu", native: "\u0A97\u0AC1\u0A9C\u0AB0\u0ABE\u0AA4\u0AC0", english: "Gujarati" },
-  { code: "ml", native: "\u0D2E\u0D32\u0D2F\u0D3E\u0D33\u0D02", english: "Malayalam" },
+  { code: "hi", native: "हिन्दी", english: "Hindi" },
+  { code: "mr", native: "मराठी", english: "Marathi" },
+  { code: "kn", native: "ಕನ್ನಡ", english: "Kannada" },
+  { code: "ta", native: "தமிழ்", english: "Tamil" },
+  { code: "te", native: "తెలుగు", english: "Telugu" },
+  { code: "bn", native: "বাংলা", english: "Bangali" },
+  { code: "gu", native: "ગુજરાતી", english: "Gujarati" },
+  { code: "ml", native: "മലയാളം", english: "Malayam" },
 ];
 
 export default function LanguagePage() {
@@ -26,168 +30,150 @@ export default function LanguagePage() {
     api.customers.getById,
     customerId ? { customerId } : "skip"
   );
-
   const updateProfile = useMutation(api.customers.updateProfile);
 
   const [selected, setSelected] = useState("en");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (customer?.language) {
-      setSelected(customer.language);
-    }
+    if (customer?.language) setSelected(customer.language);
   }, [customer]);
 
   async function handleSelect(code: string) {
     if (!customerId || code === selected) return;
     setSelected(code);
     setSaving(true);
-    await updateProfile({
-      customerId,
-      language: code,
-    });
+    await updateProfile({ customerId, language: code });
     setSaving(false);
   }
 
   if (!customerId || customer === undefined) {
     return (
-      <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="cx-typing"><span /><span /><span /></div>
+      <div className="cx-loading">
+        <div className="cx-typing">
+          <span />
+          <span />
+          <span />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="cx-pageIn" style={{ minHeight: "100%", background: "#FBF7F1" }}>
-      {/* Hero */}
-      <div
-        className="cx-noise cx-paisley"
+    <div
+      style={{
+        minHeight: "100%",
+        background: "#FFFFFF",
+        fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+      }}
+    >
+      {/* ── APP BAR ───────────────────────────────────────── */}
+      <header
         style={{
-          background: "var(--cx-grad-hero)",
-          padding: "28px 18px 24px",
-          position: "relative",
-          overflow: "hidden",
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          background: "#FFFFFF",
+          padding: "calc(env(safe-area-inset-top,0px) + 14px) 16px 14px",
+          display: "flex",
+          alignItems: "center",
+          borderBottom: "1px solid rgba(0,0,0,0.06)",
         }}
       >
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          onClick={() => router.back()}
+          aria-label="Back"
+          className="cx-press"
+          style={{
+            background: "none",
+            border: "none",
+            padding: 4,
+            cursor: "pointer",
+            display: "flex",
+            color: "#2A2522",
+          }}
+        >
+          <ChevronLeft size={24} strokeWidth={2.2} />
+        </button>
+        <h1
+          style={{
+            flex: 1,
+            textAlign: "center",
+            fontSize: 17,
+            fontWeight: 700,
+            color: "#2A2522",
+            margin: 0,
+            marginRight: 28,
+          }}
+        >
+          Language
+        </h1>
+      </header>
+
+      {/* Language list */}
+      <div style={{ padding: "16px 16px 32px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {LANGUAGES.map((lang) => {
+          const isSelected = selected === lang.code;
+          return (
             <button
-              onClick={() => router.back()}
+              key={lang.code}
+              onClick={() => handleSelect(lang.code)}
+              disabled={saving}
               className="cx-press"
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(253,248,240,.12)",
-                border: "1px solid rgba(253,248,240,.18)",
+                width: "100%",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                flexShrink: 0,
+                justifyContent: "space-between",
+                padding: "14px 18px",
+                borderRadius: 12,
+                background: isSelected ? MAROON : "#FFFFFF",
+                border: isSelected ? "none" : "1.5px solid #E8E0DD",
+                cursor: saving ? "default" : "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+                transition: "background .2s",
               }}
             >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#FBF7F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="cx-serif" style={{ fontSize: 22, fontWeight: 700, color: "#FBF7F1", fontStyle: "italic", margin: 0 }}>
-                Language
-              </h1>
-              <div style={{ fontSize: 12, color: "rgba(253,248,240,.5)", marginTop: 2 }}>
-                Choose your preferred language
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="cx-zari" />
-
-      {/* Content */}
-      <div style={{ padding: "20px 16px 32px" }}>
-        {/* Language list */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {LANGUAGES.map((lang, i) => {
-            const isSelected = selected === lang.code;
-            return (
-              <button
-                key={lang.code}
-                onClick={() => handleSelect(lang.code)}
-                className={`cx-press cx-slideUp cx-d${Math.min(i + 1, 6)}`}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "14px 16px",
-                  borderRadius: 14,
-                  background: isSelected ? "#F5E6E3" : "#FFFFFF",
-                  border: isSelected ? "1.5px solid #8B2E2B" : "1px solid #F0E8DC",
-                  cursor: saving ? "not-allowed" : "pointer",
-                  textAlign: "left",
-                  boxShadow: isSelected ? "0 2px 14px rgba(139, 46, 43, .09)" : "none",
-                  transition: "all .2s",
-                }}
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div style={{
+              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <div
+                  style={{
                     fontWeight: 700,
                     fontSize: 16,
-                    color: isSelected ? "#8B2E2B" : "#1C1108",
-                  }}>
-                    {lang.native}
-                  </div>
-                  <div style={{
-                    fontSize: 12,
-                    color: isSelected ? "#A94540" : "#9C8878",
-                    fontWeight: 500,
-                  }}>
-                    {lang.english}
-                  </div>
+                    color: isSelected ? "#FFFFFF" : "#2A2522",
+                  }}
+                >
+                  {lang.native}
                 </div>
-                {isSelected && (
-                  <div style={{
-                    width: 28,
-                    height: 28,
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: isSelected ? "rgba(255,255,255,0.72)" : "#9A8F8A",
+                    fontWeight: 500,
+                  }}
+                >
+                  {lang.english}
+                </div>
+              </div>
+              {isSelected && (
+                <div
+                  style={{
+                    width: 26,
+                    height: 26,
                     borderRadius: "50%",
-                    background: "rgba(184, 134, 11, .15)",
+                    background: "rgba(0,0,0,0.26)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
-                  }}>
-                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                      <polyline points="20 6 9 17 4 12" stroke="#B8860B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="cx-zari" style={{ margin: "24px 0" }} />
-
-        {/* Note */}
-        <div className="cx-slideUp cx-d4" style={{
-          borderRadius: 14,
-          background: "#FAF1DD",
-          border: "1px solid rgba(184, 134, 11, .18)",
-          padding: "14px 16px",
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 10,
-        }}>
-          <svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-            <circle cx="12" cy="12" r="10" stroke="#7A5A08" strokeWidth="1.6" />
-            <line x1="12" y1="16" x2="12" y2="12" stroke="#7A5A08" strokeWidth="1.6" strokeLinecap="round" />
-            <circle cx="12" cy="8" r="1" fill="#7A5A08" />
-          </svg>
-          <div style={{ fontSize: 12, color: "#7A5A08", lineHeight: 1.55 }}>
-            Changes apply to WhatsApp messages and the Wearify interface.
-          </div>
-        </div>
+                  }}
+                >
+                  <Check size={15} color="#FFFFFF" strokeWidth={3} />
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

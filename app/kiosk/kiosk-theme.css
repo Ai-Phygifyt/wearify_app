@@ -2063,24 +2063,6 @@
   filter: drop-shadow(0 8px 22px rgba(104, 38, 42, 0.32));
 }
 
-/* ────────────────────────────────────────────────────────────────────
- * Body-fit silhouette guide
- *
- * Overlay drawn on top of the live camera while pose detection is
- * running. Defines the rectangle the person must stand inside so the
- * captured frame can be cropped to a known fixed area — which is what
- * keeps every model render the same size in the trial room.
- *
- * The CSS values (top/left/right/bottom) MUST match the normalized
- * rect used by BodyScanScreen.tsx (FIT_RECT). Keep them in sync.
- *
- * State:
- *   .is-fit  →  all required landmarks are inside the rect → green
- *   default  →  person not in frame yet → red, "Step inside" hint
- *   .is-locked → fit has held long enough; freeze visuals during the
- *                 short auto-capture countdown so the green doesn't
- *                 flicker if the user shifts a hair before the shot.
- * ──────────────────────────────────────────────────────────────────── */
 .k-scan-guide {
   position: absolute;
   inset: 0;
@@ -2446,382 +2428,13 @@
   color: var(--k-text);
 }
 
-/* ── Trial Room ────────────────────────────────────────────────────── */
-.k-trial-shell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-height: 100vh;
-  max-height: 100vh;
-  overflow: hidden;
-  background: var(--k-bg);
-}
-.k-trial-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 24px 0;
-  position: relative;
-  z-index: 5;
-}
-.k-trial-back,
-.k-trial-home {
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.k-trial-home {
-  background: #fff;
-  border: 1.5px solid rgba(0, 0, 0, 0.08);
-}
-.k-trial-pill {
-  padding: 12px 38px;
-  border-radius: 100px;
-  background: #fff;
-  border: 1.5px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 4px 14px rgba(34, 34, 34, 0.06);
-  font-family: "Montserrat", sans-serif;
-  font-weight: 700;
-  font-size: 18px;
-  color: var(--k-maroon);
-  letter-spacing: -0.005em;
-}
-.k-trial-timer {
-  align-self: center;
-  margin-top: 12px;
-  padding: 8px 28px;
-  border-radius: 100px;
-  background: #fff;
-  border: 1.5px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 4px 14px rgba(34, 34, 34, 0.06);
-  font-family: "Montserrat", sans-serif;
-  font-weight: 700;
-  font-size: 20px;
-  color: var(--k-text);
-  z-index: 5;
-}
-
-.k-trial-stage {
-  position: relative;
-  flex: 1;
-  display: grid;
-  grid-template-columns: 130px 1fr 200px;
-  gap: 12px;
-  padding: 14px 16px 0;
-  min-height: 0;
-}
-
 /* Left panel */
-.k-trial-left {
-  background: rgba(60, 50, 50, 0.55);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-radius: 14px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.k-trial-panel-title {
-  align-self: center;
-  padding: 5px 14px;
-  border-radius: 100px;
-  background: #fff;
-  font-family: "Montserrat", sans-serif;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--k-text);
-  margin-bottom: 10px;
-}
-.k-trial-sel-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-  padding-right: 2px;
-}
-.k-trial-sel-card {
-  position: relative;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color 0.15s ease, transform 0.15s ease;
-}
-.k-trial-sel-card.is-active {
-  border-color: var(--k-maroon);
-  box-shadow: 0 0 0 2px rgba(104, 38, 42, 0.4);
-}
-.k-trial-sel-img {
-  position: relative;
-  width: 100%;
-  padding-top: 100%;
-  overflow: hidden;
-}
-.k-trial-sel-img > img,
-.k-trial-sel-img > div {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.k-trial-sel-share {
-  position: absolute;
-  top: 5px;
-  left: 5px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  z-index: 2;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
-}
-.k-trial-sel-remove {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--k-text);
-  z-index: 2;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
-  padding: 0;
-}
-.k-trial-sel-remove svg {
-  width: 11px;
-  height: 11px;
-}
-.k-trial-sel-cart {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
-  text-align: center;
-  padding: 3px 6px;
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.7);
-  color: #fff;
-  font-family: "Montserrat", sans-serif;
-  font-weight: 600;
-  font-size: 9.5px;
-}
-.k-trial-add-more {
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 8px;
-  background: var(--k-maroon);
-  color: #fff;
-  border: none;
-  font-family: "Montserrat", sans-serif;
-  font-weight: 600;
-  font-size: 12px;
-  cursor: pointer;
-}
 
 /* Center — saree on stand */
-.k-trial-center {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  padding-bottom: 0;
-  overflow: hidden;
-}
-.k-trial-look {
-  position: relative;
-  flex: 1;
-  width: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  overflow: hidden;
-}
-.k-trial-look > * {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: contain !important;
-}
-.k-trial-stand {
-  width: 105%;
-  height: auto;
-  margin-bottom: -20px;
-  pointer-events: none;
-}
 
 /* Right panel — product details */
-.k-trial-right {
-  background: rgba(60, 50, 50, 0.55);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-radius: 14px;
-  padding: 12px;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-.k-trial-product-title {
-  font-family: "Montserrat", sans-serif;
-  font-weight: 700;
-  font-size: 14px;
-  color: #fff;
-}
-.k-trial-product-name {
-  font-family: "Roboto", sans-serif;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.85);
-  margin-top: 4px;
-  line-height: 1.35;
-}
-.k-trial-product-price {
-  font-family: "Montserrat", sans-serif;
-  font-weight: 700;
-  font-size: 15px;
-  color: #fff;
-  margin-top: 8px;
-}
-.k-trial-similar-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 14px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  font-family: "Montserrat", sans-serif;
-  font-weight: 600;
-  font-size: 11px;
-  color: #fff;
-}
-.k-trial-similar-arrow {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  line-height: 1;
-}
-.k-trial-similar-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  margin-top: 8px;
-}
-.k-trial-similar-thumb {
-  position: relative;
-  border-radius: 6px;
-  overflow: hidden;
-  aspect-ratio: 1 / 1;
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.1);
-}
-.k-trial-similar-thumb > img,
-.k-trial-similar-thumb > div {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.k-trial-color-head {
-  font-family: "Montserrat", sans-serif;
-  font-weight: 600;
-  font-size: 11px;
-  color: #fff;
-  margin-top: 14px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-.k-trial-colors {
-  display: flex;
-  gap: 6px;
-  margin-top: 10px;
-}
-.k-trial-color {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
-}
 
 /* Bottom buttons */
-.k-trial-bottom {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 28px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  z-index: 6;
-  pointer-events: none;
-}
-.k-trial-bottom-btn {
-  position: relative;
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: transform 0.15s ease;
-}
-.k-trial-bottom-btn:active {
-  transform: scale(0.97);
-}
-.k-trial-bottom-btn img {
-  display: block;
-  width: 220px;
-  max-width: 55vw;
-  height: auto;
-  filter: drop-shadow(0 6px 16px rgba(34, 34, 34, 0.18));
-}
-.k-trial-bottom-badge {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 100px;
-  background: var(--k-maroon);
-  color: #fff;
-  font-family: "Montserrat", sans-serif;
-  font-weight: 700;
-  font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 
 /* ── Product Detail ────────────────────────────────────────────────── */
 .k-detail-content {
@@ -4472,88 +4085,7 @@
 .k-chip-gold { background: rgba(201,148,26,.1); color: var(--k-gold-d); border-color: rgba(201,148,26,.25); }
 .k-chip-green { background: var(--k-green-bg); color: var(--k-green); border-color: rgba(45,133,68,.25); }
 
-/* ── Trial Room card ───────────────────────────────────────────────── */
-.k-trial-card {
-  position: relative;
-  border-radius: 18px;
-  overflow: hidden;
-  cursor: pointer;
-  background: rgba(255,255,255,.55);
-  backdrop-filter: blur(22px) saturate(1.6);
-  -webkit-backdrop-filter: blur(22px) saturate(1.6);
-  border: 1px solid rgba(255,255,255,.7);
-  box-shadow:
-    0 10px 28px rgba(34,34,34,.08),
-    inset 0 1px 0 rgba(255,255,255,.8);
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-}
-.k-trial-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 36px rgba(34,34,34,.14), inset 0 1px 0 rgba(255,255,255,.8);
-}
-.k-trial-card.is-active {
-  border-color: var(--k-maroon);
-  box-shadow:
-    0 16px 40px rgba(104,38,42,.22),
-    0 0 0 2px rgba(104,38,42,.35),
-    inset 0 1px 0 rgba(255,255,255,.8);
-}
-.k-trial-card-img {
-  position: relative;
-  width: 100%; padding-top: 100%;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, rgba(245,240,234,.7), rgba(255,255,255,.4));
-}
-.k-trial-card-img > div { position: absolute; inset: 0; }
-.k-trial-card-img img { object-fit: contain !important; padding: 6px; }
-.k-trial-card-info {
-  padding: 10px 12px 12px;
-  background: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.65));
-  border-top: 1px solid rgba(255,255,255,.6);
-}
-.k-trial-card-name {
-  font-size: 13px; font-weight: 600; color: var(--k-text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.k-trial-card-price {
-  font-family: "Roboto", monospace; font-size: 13px; font-weight: 700;
-  color: var(--k-maroon); margin-top: 2px;
-}
-
 /* Preview card (right side) */
-.k-trial-preview {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  border-radius: 24px;
-  overflow: hidden;
-  background: rgba(255,255,255,.55);
-  backdrop-filter: blur(26px) saturate(1.6);
-  -webkit-backdrop-filter: blur(26px) saturate(1.6);
-  border: 1px solid rgba(255,255,255,.7);
-  box-shadow:
-    0 24px 60px rgba(104,38,42,.18),
-    0 6px 20px rgba(34,34,34,.08),
-    inset 0 1px 0 rgba(255,255,255,.8);
-}
-.k-trial-preview-img {
-  position: relative; width: 100%;
-  flex: 1; min-height: 0;
-  overflow: hidden;
-  background: linear-gradient(135deg, rgba(245,240,234,.7), rgba(255,255,255,.4));
-}
-.k-trial-preview-img img {
-  width: 100%; height: 100%; object-fit: contain; padding: 14px;
-}
-.k-trial-preview-info {
-  flex-shrink: 0;
-  padding: 22px 26px;
-  background: linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.75));
-  border-top: 1px solid rgba(255,255,255,.6);
-  backdrop-filter: blur(20px) saturate(1.5);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-}
 
 /* =====================================================================
  * Bg-removal loading — gaussian blur waving reveal
@@ -4693,50 +4225,6 @@
   animation: none;
 }
 
-/* The bg-removed PNG itself — sits above the wave stage, scaled to
- * roughly 80% of the panel so the ivory backdrop frames it. The
- * crossfade-in is timed to start ~120 ms after .is-revealed flips so
- * the wave starts fading first; visually the image "emerges" from
- * the blur rather than slamming on top. */
-.k-trial-cutout {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  padding: 4%;
-  z-index: 3;
-  opacity: 0;
-  transform: scale(.96);
-  transition: opacity .7s ease .12s, transform .7s ease .12s;
-}
-.k-trial-cutout.is-shown {
-  opacity: 1;
-  transform: scale(1);
-}
-.k-trial-cutout img {
-  max-width: 80%;
-  max-height: 80%;
-  object-fit: contain;
-  filter: drop-shadow(0 18px 32px rgba(34,34,34,.18))
-          drop-shadow(0 4px 10px rgba(104,38,42,.12));
-}
-
-/* TrialTile — small left-side cards. Same wave language at smaller
- * scale; the cutout sits centered with no padding because the card
- * is already 1:1.2 cropped. */
-.k-trial-tile-cutout {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  z-index: 3;
-  opacity: 0;
-  transition: opacity .5s ease;
-  background: linear-gradient(135deg, #FDF6EE 0%, #F5EADC 100%);
-}
-.k-trial-tile-cutout.is-shown { opacity: 1; }
-.k-trial-tile-cutout img {
-  width: 100%; height: 100%;
-  object-fit: contain;
-  padding: 6%;
-}
-
 /* Responsive tweaks */
 @media (max-width: 820px) {
   .k-topbar { padding: 12px 14px; }
@@ -4750,28 +4238,42 @@
   .k-codebox { width: 38px; height: 46px; font-size: 20px; }
 }
 
+/* Loading wave while the bg-removed cutout is being generated.
+ * Absolute-positioned so it ignores its parent container's model-bottom
+ * displacement and sits centered in the visible stage instead. */
+
 /* =====================================================================
- * Trial Room v2 — redesigned to match reference layout.
+ * Trial Room — studio redesign (no podium)
  *
- * Determinism note: BodyScanScreen crops every capture to FIT_RECT, so
- * the bg-removed cutout always has the same aspect ratio and the model
- * occupies the same fraction of the image. Rendering at a fixed height
- * therefore yields the same visible model size every session. The two
- * variables below are the only places to tune model size + podium-disc
- * alignment.
+ * Determinism: the bg-removed cutout always has the same aspect ratio
+ * (BodyScanScreen crops every capture to a fixed rect). We pin the
+ * figure to a FIXED HEIGHT and let width follow the aspect, then center
+ * it horizontally and anchor it to a fixed baseline — so the model is
+ * the same size and in the same place every single session. A soft
+ * spotlight + elliptical ground shadow ground the figure without a
+ * literal pedestal.
  * ===================================================================== */
 
-.k-trial-v2-shell {
-  --tr-podium-h: 72vh;
-  --tr-floor-lift: 18vh;
-  --tr-podium-bottom: -2vh;
-  --tr-model-h: 100vh;
-  --tr-model-bottom: calc(var(--tr-floor-lift) - 63vh);
-  --tr-model-scale: 1.85;
-  --tr-model-shift-x: 3vh;
-  --tr-glass-bg: rgba(60, 42, 32, 0.55);
-  --tr-glass-border: rgba(255, 255, 255, 0.12);
-  --tr-rail-top: 132px;
+.tr-shell {
+  /* ── Cutout framing ──────────────────────────────────────────────
+   * The AI try-on render is a 1280x720 LANDSCAPE canvas with the cut-out
+   * person occupying only a sub-rect of it. To keep the figure a CONSTANT
+   * on-screen size and position no matter how each render is framed, the
+   * component measures the person's real bounds per image (see
+   * useCutoutBounds) and the .tr-crop window scales them to exactly
+   * --tr-fig-h tall, centred, feet on a fixed baseline. These two are the
+   * only knobs you should need. */
+  --tr-fig-h: 58vh;          /* on-screen height of the person — locked  */
+
+  /* Decorative podium the model stands on (public/poduim.png). The disc's
+   * top face sits ~--tr-podium-surface above the podium's bottom; we pin
+   * the model's feet there so the figure always stands ON the disc. */
+  --tr-podium-w: 46vh;       /* displayed podium width */
+  --tr-podium-bottom: 4vh;   /* podium bottom above the stage floor */
+  /* disc top-face sits ~0.306 × podium width above the podium bottom; keep
+     these two in step so the feet stay planted on the disc when resizing. */
+  --tr-podium-surface: calc(var(--tr-podium-w) * 0.306);
+  --tr-fig-baseline: calc(var(--tr-podium-bottom) + var(--tr-podium-surface));
 
   position: relative;
   width: 100%;
@@ -4779,469 +4281,394 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #FBF6EC;
+  background: var(--k-bg);
 }
 
-.k-trial-v2-stage {
+/* Immersive stage — fills everything below the KioskHeader */
+.tr-stage {
   position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-.k-trial-v2-bg {
+/* Studio backdrop: warm cream wash + a soft golden spotlight behind
+   where the figure stands. */
+.tr-backdrop {
   position: absolute;
   inset: 0;
-  background-image: url('/trialroom_bg.jpg');
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
-  z-index: 0;
+  background:
+    radial-gradient(50% 44% at 50% 28%, rgba(232,196,106,.20), transparent 70%),
+    linear-gradient(180deg, #FBF3E6 0%, #F4E7D3 54%, #EAD7BF 100%);
+}
+/* Floor band — subtle grounding gradient at the bottom of the stage. */
+.tr-floor {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 26%;
+  background: linear-gradient(180deg, transparent, rgba(104,38,42,.06));
+  pointer-events: none;
 }
 
-.k-trial-v2-podium {
+/* Decorative podium the model stands on. */
+.tr-podium {
   position: absolute;
   left: 50%;
   bottom: var(--tr-podium-bottom);
   transform: translateX(-50%);
-  width: 100%;
-  height: var(--tr-podium-h);
-  z-index: 1;
+  width: var(--tr-podium-w);
+  z-index: 2;
   pointer-events: none;
   user-select: none;
 }
-.k-trial-v2-podium img {
+.tr-podium img {
   display: block;
-  width: auto;
-  height: 100%;
-  max-width: 100%;
-  margin: 0 auto;
-  object-fit: contain;
-  object-position: bottom center;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 22px 34px rgba(58,38,28,.26));
 }
 
-/* Model cutout — fixed height + bottom offset = identical visible size
- * and identical foot-on-disc position across all sessions. Adjust
- * --tr-model-h and --tr-model-bottom on .k-trial-v2-shell to tune. */
-.k-trial-v2-cutout {
+/* Soft contact shadow where the feet meet the disc top face. */
+.tr-ground-shadow {
   position: absolute;
   left: 50%;
-  bottom: var(--tr-model-bottom);
-  transform: translateX(calc(-50% + var(--tr-model-shift-x)));
-  width: 100%;
-  height: var(--tr-model-h);
+  bottom: calc(var(--tr-fig-baseline) - 1vh);
+  transform: translateX(-50%);
+  width: calc(var(--tr-fig-h) * 0.26);
+  height: 3vh;
+  border-radius: 50%;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(58,38,28,.26), transparent 72%);
+  filter: blur(3px);
   z-index: 2;
+  pointer-events: none;
+}
+
+/* ── Figure positioning wrapper — a fixed --tr-fig-h-tall lane, centred,
+ * with its bottom pinned to --tr-fig-baseline. The .tr-crop child does the
+ * per-image normalisation so whatever lands inside is always the same
+ * height + position. ── */
+.tr-figure {
+  position: absolute;
+  left: 50%;
+  bottom: var(--tr-fig-baseline);
+  transform: translateX(-50%);
+  height: var(--tr-fig-h);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  pointer-events: none;
-}
-.k-trial-v2-cutout img {
-  display: block;
-  height: 100%;
-  width: auto;
-  flex-shrink: 0;
-  object-fit: contain;
-  transform: scale(var(--tr-model-scale));
-  transform-origin: bottom center;
-  filter: drop-shadow(0 18px 28px rgba(34, 17, 8, 0.22));
-}
-
-.k-trial-v2-subhead {
-  position: absolute;
-  top: 18px;
-  left: 0;
-  right: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 22px;
-  pointer-events: none;
-}
-.k-trial-v2-subhead > * { pointer-events: auto; }
-
-.k-trial-v2-pill {
-  background: #fff;
-  border-radius: 100px;
-  padding: 12px 72px;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 20px;
-  font-weight: 400;
-  color: var(--k-maroon, #68262A);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-}
-
-.k-trial-v2-iconbtn {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--k-maroon, #68262A);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-.k-trial-v2-iconbtn:active { transform: scale(0.94); }
-
-.k-trial-v2-timer-row {
-  position: absolute;
-  top: 74px;
-  left: 0;
-  right: 0;
-  z-index: 5;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-.k-trial-v2-timer-row > * { pointer-events: auto; }
-
-.k-trial-v2-timer {
-  background: #fff;
-  border-radius: 100px;
-  padding: 8px 38px;
-  font-family: 'Roboto Mono', monospace;
-  font-size: 20px;
-  font-weight: 400;
-  color: #222;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  min-width: 110px;
-  text-align: center;
-}
-
-/* Left rail — Selected Sarees */
-.k-trial-v2-left {
-  position: absolute;
-  top: var(--tr-rail-top);
-  left: 38px;
-  width: 168px;
-  max-height: calc(100% - 200px);
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  background: var(--tr-glass-bg);
-  backdrop-filter: blur(18px) saturate(1.3);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  border: 1px solid var(--tr-glass-border);
-  border-radius: 14px;
-  padding: 10px 10px 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
-}
-
-.k-trial-v2-left-header {
-  background: #fff;
-  border-radius: 6px;
-  padding: 7px 12px;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 12px;
-  font-weight: 700;
-  color: #222;
-  text-align: center;
-  margin-bottom: 10px;
-  align-self: stretch;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-}
-
-.k-trial-v2-left-stack {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-right: 2px;
-  scrollbar-width: thin;
-}
-.k-trial-v2-left-stack::-webkit-scrollbar { width: 3px; }
-.k-trial-v2-left-stack::-webkit-scrollbar-track { background: transparent; }
-.k-trial-v2-left-stack::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.22);
-  border-radius: 2px;
-}
-
-.k-trial-v2-add-more {
-  margin-top: 10px;
-  padding: 10px 16px;
-  border-radius: 6px;
-  border: none;
-  background: var(--k-maroon, #68262A);
-  color: #fff;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: filter .15s ease, transform .15s ease;
-}
-.k-trial-v2-add-more:hover { filter: brightness(1.08); }
-.k-trial-v2-add-more:active { transform: scale(0.97); }
-
-/* Trial card — saree thumb + WA + X + Add to Cart */
-.k-trial-card-v2 {
-  position: relative;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  overflow: hidden;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: border-color .18s ease, transform .18s ease;
-}
-.k-trial-card-v2.is-active {
-  border-color: var(--k-gold, #C9941A);
-  transform: scale(1.02);
-}
-.k-trial-card-v2-img {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
-}
-.k-trial-card-v2-corner-btn {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  border: none;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
   z-index: 3;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+/* ── Crop window — sized to the measured person box and scales the image
+ * so the person is exactly --tr-fig-h tall, horizontally centred, feet at
+ * the bottom. --p-* are set inline per image (defaults below are the
+ * fallback if measurement hasn't completed / is blocked). ── */
+.tr-crop {
+  --p-hfrac: 0.70;   /* person height ÷ canvas height */
+  --p-aspect: 0.358; /* person width ÷ person height  */
+  --p-cx: 0.5;       /* person centre x ÷ canvas width  */
+  --p-cy: 0.5;       /* person centre y ÷ canvas height */
+  position: relative;
+  height: 100%;
+  width: calc(var(--tr-fig-h) * var(--p-aspect));
+  overflow: hidden;
+}
+.tr-crop img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: calc(var(--tr-fig-h) / var(--p-hfrac));
+  width: auto;
+  max-width: none;
+  /* centre the person (not the padded canvas) in the crop window */
+  transform: translate(
+    calc(-50% - (var(--p-cx) - 0.5) * 100%),
+    calc(-50% - (var(--p-cy) - 0.5) * 100%)
+  );
+  filter: drop-shadow(0 14px 22px rgba(58,38,28,.22));
+}
+/* While the cutout is generating, the wave loader stands in for the figure. */
+.tr-wave {
+  position: relative;
+  height: 100%;
+  width: calc(var(--tr-fig-h) * 0.40);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--k-shadow-md);
+}
+
+/* ── Top bar — back / title+timer / retake, floating over the stage ── */
+.tr-topbar {
+  position: absolute;
+  top: 18px; left: 0; right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 7;
+  pointer-events: none;
+}
+.tr-topbar > * { pointer-events: auto; }
+.tr-glass-btn {
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.82);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.7);
+  box-shadow: var(--k-shadow-xs);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--k-maroon);
   transition: transform .15s ease;
 }
-.k-trial-card-v2-corner-btn:active { transform: scale(0.9); }
-.k-trial-card-v2-corner-btn.is-wa { top: 4px; left: 4px; color: #25D366; }
-.k-trial-card-v2-corner-btn.is-x  { top: 4px; right: 4px; color: var(--k-red, #B00020); }
-
-.k-trial-card-v2-cta {
-  width: 100%;
-  padding: 6px 6px;
-  border: none;
-  background: rgba(0, 0, 0, 0.45);
-  color: #fff;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  cursor: pointer;
+.tr-glass-btn:active { transform: scale(.94); }
+.tr-title-cluster {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  gap: 8px;
+}
+.tr-title-pill {
+  padding: 9px 22px;
+  border-radius: var(--k-r-pill);
+  background: rgba(104,38,42,.94);
+  color: #fff;
+  font-size: 14px; font-weight: 700;
+  letter-spacing: .05em;
+  box-shadow: var(--k-shadow);
+}
+.tr-timer {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 16px;
+  border-radius: var(--k-r-pill);
+  background: rgba(255,255,255,.88);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.7);
+  font-size: 15px; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--k-text);
+  box-shadow: var(--k-shadow-xs);
+}
+.tr-timer.is-low { color: var(--k-red); }
+.tr-timer-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--k-green);
+}
+.tr-timer.is-low .tr-timer-dot { background: var(--k-red); }
+
+/* ── Floating rails (dark glass) ── */
+.tr-rail {
+  position: absolute;
+  top: 96px;
+  bottom: 104px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(46, 32, 28, 0.42);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  backdrop-filter: blur(22px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--k-r-lg);
+  box-shadow: 0 18px 44px rgba(34, 18, 10, 0.28);
+  z-index: 5;
+  overflow: visible;
+}
+.tr-rail-left  { left: 22px;  width: 200px; }
+.tr-rail-right { right: 22px; width: 228px; }
+/* "Selected Sarees" tab — a light pill sitting on the top edge */
+.tr-rail-head {
+  position: absolute;
+  top: -14px; left: 16px;
+  padding: 7px 16px;
+  border-radius: var(--k-r-pill);
+  background: #fff;
+  color: var(--k-maroon);
+  font-size: 11px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .06em;
+  box-shadow: var(--k-shadow);
+  white-space: nowrap;
+}
+.tr-rail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tr-rail-body.is-detail { gap: 0; }
+.tr-rail-body::-webkit-scrollbar { width: 3px; }
+.tr-rail-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); border-radius: 3px; }
+
+/* Add-more button at the foot of the left rail */
+.tr-add-more {
+  flex-shrink: 0;
+  margin: 4px 14px 14px;
+  padding: 11px;
+  border-radius: var(--k-r-btn);
+  background: var(--k-maroon);
+  border: none;
+  color: #fff;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+.tr-add-more:hover { background: var(--k-maroon-l); }
+.tr-add-more:active { transform: scale(.98); }
+
+/* ── Selected-saree card (left rail) ── */
+.tr-card {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  border: 1.5px solid transparent;
+  box-shadow: var(--k-shadow-xs);
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.tr-card.is-active {
+  border-color: var(--k-gold);
+  box-shadow: 0 6px 18px rgba(201,148,26,.30);
+  transform: translateY(-1px);
+}
+.tr-card-img {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: var(--k-bg-warm);
+}
+.tr-card-img > div { position: absolute; inset: 0; }
+.tr-corner {
+  position: absolute;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 2px 6px rgba(0,0,0,.18);
+  border: none;
+  cursor: pointer;
+  transition: transform .15s ease;
+}
+.tr-corner:active { transform: scale(.9); }
+.tr-corner.is-wa { top: 6px; left: 6px;  color: #25D366; }
+.tr-corner.is-x  { top: 6px; right: 6px; color: var(--k-red); }
+.tr-card-cta {
+  width: 100%;
+  border: none;
+  padding: 9px;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: .02em;
+  color: #fff;
+  background: var(--k-maroon);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
   transition: background .15s ease;
 }
-.k-trial-card-v2-cta:hover { background: rgba(0, 0, 0, 0.6); }
-.k-trial-card-v2-cta.in-cart {
-  background: var(--k-green, #2D8544);
-  color: #fff;
-}
+.tr-card-cta:hover { background: var(--k-maroon-l); }
+.tr-card-cta.in-cart { background: var(--k-green); }
 
-/* Right rail — saree detail */
-.k-trial-v2-right {
-  position: absolute;
-  top: var(--tr-rail-top);
-  right: 38px;
-  width: 180px;
-  max-height: calc(100% - 280px);
-  z-index: 4;
-  background: var(--tr-glass-bg);
-  backdrop-filter: blur(18px) saturate(1.3);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  border: 1px solid var(--tr-glass-border);
-  border-radius: 14px;
-  padding: 12px 12px 12px;
-  color: #fff;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
-}
-
-.k-trial-v2-right-name {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-}
-.k-trial-v2-right-desc {
-  margin-top: 4px;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.78);
-  line-height: 1.4;
-}
-.k-trial-v2-right-price {
-  margin-top: 8px;
-  font-family: 'Roboto Mono', monospace;
-  font-size: 15px;
-  font-weight: 700;
+/* ── Saree detail (right rail, on dark glass) ── */
+.tr-detail-name {
+  font-size: 16px; font-weight: 700; line-height: 1.3;
   color: #fff;
 }
-.k-trial-v2-right-divider {
+.tr-detail-desc {
+  margin-top: 5px;
+  font-size: 12px; line-height: 1.5;
+  color: rgba(255,255,255,.72);
+}
+.tr-detail-price {
+  margin-top: 10px;
+  font-size: 20px; font-weight: 800;
+  color: var(--k-gold-l);
+}
+.tr-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.18);
-  margin: 10px 0;
+  background: rgba(255,255,255,.16);
+  margin: 14px 0;
 }
-.k-trial-v2-right-section-h {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 8px;
-  letter-spacing: 0.02em;
+.tr-section-h {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 11px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: rgba(255,255,255,.78);
 }
-.k-trial-v2-right-section-h .arrow {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  color: var(--k-maroon, #68262A);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.tr-section-h .tr-section-arrow {
+  display: flex; color: rgba(255,255,255,.5);
 }
-.k-trial-v2-similar {
+.tr-similar {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-}
-.k-trial-v2-similar-thumb {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: 5px;
-  overflow: hidden;
-  cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  transition: transform .15s ease, border-color .15s ease;
-}
-.k-trial-v2-similar-thumb:active {
-  transform: scale(0.95);
-  border-color: var(--k-gold, #C9941A);
-}
-.k-trial-v2-colors {
-  display: flex;
   gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 4px;
 }
-.k-trial-v2-color-dot {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.92);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  cursor: pointer;
-}
-
-/* Bottom dock — two stacked white pill CTAs sitting above the podium */
-.k-trial-v2-dock {
-  position: absolute;
-  bottom: 14vh;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: center;
-}
-
-.k-trial-v2-dock-btn {
+.tr-similar-thumb {
   position: relative;
-  border: none;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform .12s ease, filter .12s ease;
-}
-.k-trial-v2-dock-btn::before {
-  content: "";
-  position: absolute;
-  top: 18%;
-  bottom: 18%;
-  left: 3%;
-  right: 3%;
-  border-radius: 100px;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(28px) saturate(1.8);
-  -webkit-backdrop-filter: blur(28px) saturate(1.8);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow:
-    0 14px 30px rgba(34, 17, 8, 0.18),
-    0 4px 10px rgba(34, 17, 8, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  pointer-events: none;
-}
-.k-trial-v2-dock-btn:active { transform: scale(0.97); }
-.k-trial-v2-dock-btn:hover { filter: brightness(1.04); }
-.k-trial-v2-dock-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.k-trial-v2-dock-btn img {
-  position: relative;
-  display: block;
-  height: 92px;
-  width: auto;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.k-trial-v2-dock-badge,
-.k-trial-v2-dock-arrow {
-  position: absolute;
-  top: 50%;
-  right: 18px;
-  transform: translateY(-50%);
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--k-maroon, #68262A);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  box-shadow:
-    0 5px 12px rgba(34, 17, 8, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  pointer-events: none;
-}
-
-/* Loading wave while the bg-removed cutout is being generated.
- * Absolute-positioned so it ignores its parent container's model-bottom
- * displacement and sits centered in the visible stage instead. */
-.k-trial-v2-cutout-wave {
-  position: absolute;
-  left: 50%;
-  top: -25vh;
-  transform: translateX(-50%);
-  width: 50vh;
-  height: 62vh;
-  border-radius: 20px;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
   overflow: hidden;
-  pointer-events: none;
+  background: var(--k-bg-warm);
+  cursor: pointer;
+  transition: transform .15s ease;
+}
+.tr-similar-thumb:active { transform: scale(.95); }
+.tr-swatches {
+  display: flex; flex-wrap: wrap; gap: 9px;
+}
+.tr-swatch {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--k-border-l), 0 2px 4px rgba(0,0,0,.12);
 }
 
-@media (max-width: 1100px) {
-  .k-trial-v2-left  { width: 156px; left: 30px; }
-  .k-trial-v2-right { width: 168px; right: 30px; }
-  .k-trial-v2-dock-btn img { height: 80px; }
-  .k-trial-v2-dock-badge,
-  .k-trial-v2-dock-arrow { width: 40px; height: 40px; right: 14px; font-size: 14px; }
+/* ── Bottom dock — two white action pills, centered above the podium ── */
+.tr-dock {
+  position: absolute;
+  left: 50%; bottom: 22px;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 12px;
+  align-items: center;
+  z-index: 6;
+}
+.tr-dock-btn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-width: 230px;
+  padding: 15px 26px;
+  border-radius: var(--k-r-pill);
+  border: none;
+  cursor: pointer;
+  font-size: 15px; font-weight: 700;
+  color: var(--k-maroon);
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(34,18,10,.22);
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.tr-dock-btn:active { transform: translateY(1px) scale(.99); }
+.tr-dock-btn:disabled { opacity: .55; cursor: default; }
+.tr-dock-btn:hover:not(:disabled) { background: #FFFDF8; }
+/* Trailing chip on the right edge of each pill (count badge / arrow). */
+.tr-dock-chip {
+  position: absolute;
+  right: 7px; top: 50%;
+  transform: translateY(-50%);
+  min-width: 28px; height: 28px;
+  padding: 0 7px;
+  border-radius: var(--k-r-pill);
+  background: var(--k-maroon);
+  color: #fff;
+  font-size: 13px; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 
+/* Narrower screens — keep rails from crowding the figure. */
+@media (max-width: 1000px) {
+  .tr-rail-left  { width: 168px; left: 16px; }
+  .tr-rail-right { width: 190px; right: 16px; }
+  .tr-shell { --tr-fig-h: 52vh; --tr-podium-w: 44vh; }
+}
 
 /* hello */

@@ -41,7 +41,9 @@ export default function MePage() {
     const token = getToken();
     if (token) { try { await logout({ token }); } catch { /* */ } }
     clearToken();
-    router.replace("/c/login");
+    // Full navigation (not router.replace) so the customer layout remounts
+    // and the splash / loading screen plays again before the welcome page.
+    window.location.replace("/c/welcome");
   }
 
   if (!user) {
@@ -182,12 +184,16 @@ export default function MePage() {
       {/* Sign-out modal */}
       {showSignOut && (
         <div onClick={() => setShowSignOut(false)} style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(28,17,8,.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "cx-fadeIn .18s ease" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#fff", borderRadius: 18, padding: "22px 22px 18px", textAlign: "center" }}>
-            <div style={{ fontSize: 19, fontWeight: 700, color: "#2A2522", marginBottom: 6 }}>Log out?</div>
-            <p style={{ fontSize: 13, color: "#6B5E5A", lineHeight: 1.5, marginBottom: 18 }}>You can sign back in anytime with your mobile number.</p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowSignOut(false)} className="cx-press" style={{ flex: 1, padding: "12px 10px", borderRadius: 12, border: "1.5px solid #E7DCD9", background: "#fff", color: "#2A2522", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-              <button onClick={() => { setShowSignOut(false); handleLogout(); }} className="cx-press" style={{ flex: 1, padding: "12px 10px", borderRadius: 12, border: "none", background: MAROON, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Log Out</button>
+          <div onClick={(e) => e.stopPropagation()} className="cx-scaleIn" style={{ width: "100%", maxWidth: 340, background: "#fff", borderRadius: 22, padding: "28px 22px 22px", textAlign: "center", boxShadow: "0 24px 80px rgba(10,22,40,.30)" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#FCE4E8", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/customer/logout.svg" alt="" style={{ width: 28, height: 28 }} />
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#2A2522", marginBottom: 6 }}>Logout</div>
+            <p style={{ fontSize: 13.5, color: "#9A8F8A", lineHeight: 1.55, margin: "0 0 22px" }}>You can login back in anytime with your mobile number</p>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowSignOut(false)} className="cx-press" style={{ flex: 1, height: 50, borderRadius: 12, border: "1.5px solid #E4D9CC", background: "#fff", color: "#2A2522", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+              <button onClick={() => { setShowSignOut(false); handleLogout(); }} className="cx-press" style={{ flex: 1, height: 50, borderRadius: 12, border: "none", background: MAROON, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Yes, Logout</button>
             </div>
           </div>
         </div>

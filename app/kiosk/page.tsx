@@ -511,11 +511,35 @@ export default function KioskPage() {
   // re-select a camera by deviceId, because on multi-input machines that can
   // land on a virtual/closed device that produces a blank frame.
   const acquireCamera = useCallback(
-    async (want: "user" | "environment"): Promise<MediaStream> =>
-      navigator.mediaDevices.getUserMedia({
-        video: { facingMode: want, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      }),
+    async (want: "user" | "environment"): Promise<MediaStream> => {
+      // The body scan is a standing (portrait) subject, so we want the most
+      // VERTICAL field-of-view the camera can give — that's what decides how
+      // much of the body fits when the person stands close/medium distance.
+      // A 16:9 frame (the old request) is produced on a typical 4:3 sensor by
+      // cropping the top & bottom, throwing away exactly the head/feet room we
+      // need. So we ask for a TALL frame: portrait first, then 4:3, then
+      // anything. `ideal` keeps every tier best-effort — a camera that can't
+      // do portrait quietly falls back instead of throwing.
+      const tiers: MediaTrackConstraints[] = [
+        // Portrait — maximum vertical FOV (covers a full body up close).
+        { facingMode: want, width: { ideal: 1080 }, height: { ideal: 1440 }, aspectRatio: { ideal: 3 / 4 } },
+        // 4:3 — still ~33% more vertical FOV than 16:9, very widely supported.
+        { facingMode: want, width: { ideal: 1280 }, height: { ideal: 960 }, aspectRatio: { ideal: 4 / 3 } },
+        // Last resort — whatever the device offers for this facing mode.
+        { facingMode: want },
+      ];
+      let lastErr: unknown;
+      for (const video of tiers) {
+        try {
+          return await navigator.mediaDevices.getUserMedia({ video, audio: false });
+        } catch (e) {
+          // OverconstrainedError (or similar) on a tier → drop to the next,
+          // looser tier rather than failing the whole scan.
+          lastErr = e;
+        }
+      }
+      throw lastErr instanceof Error ? lastErr : new Error("Camera unavailable");
+    },
     [],
   );
 
@@ -3256,12 +3280,98 @@ function TrialPreviewImage({ saree, lookId }: {
 }
 
 // =========================================================================
-// TrialHeroCutout — the centerpiece of the v2 trial room.
+// useCutoutBounds — measure the person's bounding box inside a bg-removed
+// cutout, as fractions of the canvas, so the figure can be normalised to a
+// CONSTANT on-screen size + position regardless of how the AI framed each
+// render. Draws the (downscaled) image to an offscreen canvas and scans the
+// alpha channel for the tight bounds of the opaque pixels. Returns null
+// until measured (CSS falls back to sensible defaults). Needs CORS on the
+// image host — Convex storage sends it.
+// =========================================================================
+type CutoutBounds = { hfrac: number; aspect: number; cx: number; cy: number };
+
+function useCutoutBounds(url: string | undefined): CutoutBounds | null {
+  const [bounds, setBounds] = useState<CutoutBounds | null>(null);
+  useEffect(() => {
+    setBounds(null);
+    if (!url) return;
+    let cancelled = false;
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (cancelled) return;
+      try {
+        // Downscale before scanning — bbox fractions are resolution
+        // independent, so ~480px on the long edge is fast and accurate.
+        const s = Math.min(1, 480 / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * s));
+        const h = Math.max(1, Math.round(img.naturalHeight * s));
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+        const ALPHA = 24; // ignore near-transparent edge feathering
+        let minX = w, minY = h, maxX = -1, maxY = -1;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            if (data[(y * w + x) * 4 + 3] > ALPHA) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+        if (cancelled || maxX < minX || maxY < minY) return;
+        const bw = maxX - minX + 1;
+        const bh = maxY - minY + 1;
+        setBounds({
+          hfrac: bh / h,
+          aspect: bw / bh,
+          cx: (minX + maxX + 1) / 2 / w,
+          cy: (minY + maxY + 1) / 2 / h,
+        });
+      } catch {
+        // Tainted canvas / decode failure — keep CSS defaults.
+      }
+    };
+    img.src = url;
+    return () => { cancelled = true; };
+  }, [url]);
+  return bounds;
+}
+
+// CutoutImage — renders an opaque-on-transparent image inside the .tr-crop
+// window, fed the measured person bounds so it lands at a constant height,
+// centred, feet at the baseline. Until bounds resolve, the CSS defaults keep
+// it close; the swap is a single reflow, not a visible jump for the user.
+function CutoutImage({ url, alt }: { url: string; alt: string }) {
+  const b = useCutoutBounds(url);
+  const style = b
+    ? ({
+        "--p-hfrac": b.hfrac,
+        "--p-aspect": b.aspect,
+        "--p-cx": b.cx,
+        "--p-cy": b.cy,
+      } as React.CSSProperties)
+    : undefined;
+  return (
+    <div className="tr-crop" style={style}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt={alt} crossOrigin="anonymous" />
+    </div>
+  );
+}
+
+// =========================================================================
+// TrialHeroCutout — the centerpiece of the trial room.
 //
-// Renders the bg-removed AI cutout of the active saree, anchored to the
-// podium. Falls back to a wave (with the catalog photo or AI-with-bg as
-// the under-image) while the look is still queued/processing/has-no-cutout.
-// On bg-removal failure, falls through to the raw AI render.
+// Renders the bg-removed AI cutout of the active saree, normalised to a
+// fixed size + position by CutoutImage. Falls back to a wave while the look
+// is still queued/processing/has-no-cutout. On bg-removal failure, falls
+// through to the raw AI render.
 // =========================================================================
 
 function TrialHeroCutout({ saree, lookId }: {
@@ -3274,11 +3384,9 @@ function TrialHeroCutout({ saree, lookId }: {
   const cutoutUrl = useConvexUrl(look?.imageNoBgFileId);
   const bgStatus = useBgRemovalStatus(lookId ?? null);
 
-  // Cutout ready — the goal: customer "standing on the pedestal" with
-  // the kiosk's themed background showing through transparent edges.
+  // Cutout ready — normalise to a constant on-screen size + position.
   if (status === "completed" && cutoutUrl) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={cutoutUrl} alt={saree.name} />;
+    return <CutoutImage url={cutoutUrl} alt={saree.name} />;
   }
 
   // Bg-removal explicitly failed — fall back to raw AI render so the
@@ -3286,17 +3394,14 @@ function TrialHeroCutout({ saree, lookId }: {
   // (Previously fell here on "still processing" too — that surfaced
   // the kitchen-backdrop scene briefly. Now gated on bgStatus.failed.)
   if (status === "completed" && bgStatus.state === "failed" && resultUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={resultUrl} alt={saree.name} style={{ borderRadius: 24 }} />
-    );
+    return <CutoutImage url={resultUrl} alt={saree.name} />;
   }
 
   // Otherwise still in flight (RunPod processing OR bg-removal queue).
   // Wave animation hides the in-progress state; under-image is the AI
   // render once we have it, else the catalog fallback.
   return (
-    <div className="k-trial-v2-cutout-wave">
+    <div className="tr-wave">
       <div className="k-wave-stage" data-phase={status === "completed" ? "polishing" : "generating"}>
         {resultUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -3375,10 +3480,10 @@ function TrialCardV2({ saree, lookId, deviceToken, active, inCart, onSelect, onS
 
   return (
     <div
-      className={`k-trial-card-v2${active ? " is-active" : ""}`}
+      className={`tr-card${active ? " is-active" : ""}`}
       onClick={onSelect}
     >
-      <div className="k-trial-card-v2-img">
+      <div className="tr-card-img">
         {/* Trial-rail thumbnail prefers slot 0 (model wearing the saree)
             so the card visually matches what the customer is trying on,
             with slots 3/2 only as fallback for older sarees that lack
@@ -3393,7 +3498,7 @@ function TrialCardV2({ saree, lookId, deviceToken, active, inCart, onSelect, onS
           gradientAngle={135}
         />
         <button
-          className="k-trial-card-v2-corner-btn is-wa"
+          className="tr-corner is-wa"
           onClick={(e) => { e.stopPropagation(); onShare(); }}
           aria-label="Share on WhatsApp"
         >
@@ -3403,7 +3508,7 @@ function TrialCardV2({ saree, lookId, deviceToken, active, inCart, onSelect, onS
           </svg>
         </button>
         <button
-          className="k-trial-card-v2-corner-btn is-x"
+          className="tr-corner is-x"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
           aria-label="Remove from trial"
         >
@@ -3411,7 +3516,7 @@ function TrialCardV2({ saree, lookId, deviceToken, active, inCart, onSelect, onS
         </button>
       </div>
       <button
-        className={`k-trial-card-v2-cta${inCart ? " in-cart" : ""}`}
+        className={`tr-card-cta${inCart ? " in-cart" : ""}`}
         onClick={(e) => { e.stopPropagation(); onAddToCart(); }}
       >
         {inCart ? <><Check size={12} strokeWidth={3} /> In Cart</> : "Add to Cart"}
@@ -3448,30 +3553,30 @@ function SareeDetailPanel({ saree, onSelectSimilar }: {
   });
 
   return (
-    <div className="k-trial-v2-right">
-      <div className="k-trial-v2-right-name">{saree.name}</div>
+    <div>
+      <div className="tr-detail-name">{saree.name}</div>
       {saree.description && (
-        <div className="k-trial-v2-right-desc">{saree.description.slice(0, 80)}{saree.description.length > 80 ? "…" : ""}</div>
+        <div className="tr-detail-desc">{saree.description.slice(0, 80)}{saree.description.length > 80 ? "…" : ""}</div>
       )}
-      <div className="k-trial-v2-right-price">₹{fmtPrice(saree.price)}</div>
-      <div className="k-trial-v2-right-divider" />
+      <div className="tr-detail-price">₹{fmtPrice(saree.price)}</div>
+      <div className="tr-divider" />
 
-      <div className="k-trial-v2-right-section-h">
+      <div className="tr-section-h">
         <span>Similar Categories</span>
-        <span className="arrow"><ChevronRight size={14} /></span>
+        <span className="tr-section-arrow"><ChevronRight size={14} /></span>
       </div>
-      <div className="k-trial-v2-similar">
+      <div className="tr-similar">
         {similar === undefined ? (
           <>
-            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
-            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
-            <div className="k-trial-v2-similar-thumb" style={{ background: "rgba(255,255,255,.12)" }} />
+            <div className="tr-similar-thumb" />
+            <div className="tr-similar-thumb" />
+            <div className="tr-similar-thumb" />
           </>
         ) : (
           similar.map((s) => (
             <div
               key={s._id}
-              className="k-trial-v2-similar-thumb"
+              className="tr-similar-thumb"
               onClick={() => onSelectSimilar(s)}
               role="button"
               aria-label={`View ${s.name}`}
@@ -3490,15 +3595,15 @@ function SareeDetailPanel({ saree, onSelectSimilar }: {
 
       {swatches.length > 0 && (
         <>
-          <div className="k-trial-v2-right-divider" />
-          <div className="k-trial-v2-right-section-h">
+          <div className="tr-divider" />
+          <div className="tr-section-h">
             <span>Select Color</span>
           </div>
-          <div className="k-trial-v2-colors">
+          <div className="tr-swatches">
             {swatches.map((color, i) => (
               <div
                 key={i}
-                className="k-trial-v2-color-dot"
+                className="tr-swatch"
                 style={{ background: color }}
                 aria-label={saree.colors?.[i]}
               />
@@ -3617,14 +3722,10 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
     </div>
   );
 
-  const similar = items.filter((s) => s._id !== current?._id).slice(0, 3);
-  const colors = ["#a3c8ad", "#cb9d7a", "#c44141", "#f0d96b", "#3878b6"];
+  const lowTime = timer <= 30;
 
   return (
-    <div className="k-trial-v2-shell">
-      {/* Page-level header (logo + name + 4 action icons) — kept as the
-          existing KioskHeader. Sits at top in normal flow; the
-          immersive stage below fills the remaining viewport. */}
+    <div className="tr-shell">
       <KioskHeader
         trialCount={items.length}
         wardrobeCount={wardrobeItems.length}
@@ -3636,129 +3737,120 @@ function TrialRoomScreen({ items, wardrobeItems, cartItemIds, customerName, phon
         storeLogoFileId={storeLogoFileId}
       />
 
-      {/* Immersive stage — everything from here lives below the header */}
-      <div className="k-trial-v2-stage">
-      {/* Full-bleed background image */}
-      <div className="k-trial-v2-bg" />
+      {/* Immersive studio stage — everything below the header */}
+      <div className="tr-stage">
+        {/* Backdrop: warm wash + spotlight, then a grounding floor band */}
+        <div className="tr-backdrop" />
+        <div className="tr-floor" />
 
-      {/* Decorative podium asset anchored at the floor */}
-      <div className="k-trial-v2-podium">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/poduim.png" alt="" aria-hidden />
-      </div>
-
-      {/* Customer cutout — bg-removed AI render of the active saree */}
-      {current && (
-        <div className="k-trial-v2-cutout">
-          <TrialHeroCutout saree={current} lookId={sareeLookIds[current._id]} />
-        </div>
-      )}
-
-      {/* Subhead row — back-arrow / Trial Room pill / retake camera. The
-          timer pill sits in its own row below, centered, per the reference
-          design. Splitting these into two rows keeps the pill perfectly
-          centered (3 equal-weight children) and gives the timer breathing
-          room from the row's icon buttons. */}
-      <div className="k-trial-v2-subhead">
-        <button
-          onClick={onGoHome}
-          aria-label="Back"
-          className="k-trial-v2-iconbtn"
-        >
+        {/* Decorative podium the model stands on */}
+        <div className="tr-podium">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kiosk/backward.svg" alt="" aria-hidden width={44} />
-        </button>
-        <div className="k-trial-v2-pill">Trial Room</div>
-        <button
-          onClick={() => setRetakeOpen(true)}
-          aria-label="Retake body scan"
-          className="k-trial-v2-iconbtn"
-          title="Retake body scan"
-        >
-          <Camera size={20} />
-        </button>
-      </div>
-      <div className="k-trial-v2-timer-row">
-        <div className="k-trial-v2-timer" style={{ color: timer <= 30 ? "var(--k-red)" : undefined }}>
-          {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
+          <img src="/poduim.png" alt="" aria-hidden />
+        </div>
+
+        {/* Soft contact shadow where the feet meet the disc */}
+        <div className="tr-ground-shadow" />
+
+        {/* Customer cutout — normalised so the figure is the same size and
+            position (feet on the disc) for every saree, every session */}
+        {current && (
+          <div className="tr-figure">
+            <TrialHeroCutout saree={current} lookId={sareeLookIds[current._id]} />
+          </div>
+        )}
+
+        {/* Floating top bar — back / title + timer / retake */}
+        <div className="tr-topbar">
+          <button onClick={onGoHome} aria-label="Back" className="tr-glass-btn">
+            <ChevronLeft size={22} strokeWidth={2.4} />
+          </button>
+          <div className="tr-title-cluster">
+            <div className="tr-title-pill">Trial Room</div>
+            <div className={`tr-timer${lowTime ? " is-low" : ""}`}>
+              <span className="tr-timer-dot" />
+              {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
+            </div>
+          </div>
+          <button
+            onClick={() => setRetakeOpen(true)}
+            aria-label="Retake body scan"
+            title="Retake body scan"
+            className="tr-glass-btn"
+          >
+            <Camera size={20} strokeWidth={2.2} />
+          </button>
+        </div>
+
+        {/* Left rail — Selected Sarees */}
+        <div className="tr-rail tr-rail-left">
+          <div className="tr-rail-head">Selected Sarees</div>
+          <div className="tr-rail-body">
+            {items.map((saree, idx) => (
+              <TrialCardV2
+                key={saree._id}
+                saree={saree}
+                lookId={sareeLookIds[saree._id]}
+                deviceToken={deviceToken}
+                active={idx === safeSelIdx}
+                inCart={cartItemIds.has(saree._id)}
+                onSelect={() => setSelIdx(idx)}
+                onShare={() => handleShareSaree(saree)}
+                onRemove={() => onRemoveItem(saree._id)}
+                onAddToCart={() => onAddToCart(saree)}
+              />
+            ))}
+          </div>
+          <button className="tr-add-more" onClick={onGoHome}>
+            + Add More
+          </button>
+        </div>
+
+        {/* Right rail — saree detail */}
+        {current && (
+          <div className="tr-rail tr-rail-right">
+            <div className="tr-rail-body is-detail">
+              <SareeDetailPanel
+                saree={current}
+                onSelectSimilar={(s) => {
+                  // Tapping a similar-categories thumb: if the saree is
+                  // already in the trial rail, switch the active preview to
+                  // it. If not, jump to its product detail page to add it.
+                  const idx = items.findIndex((i) => i._id === s._id);
+                  if (idx >= 0) {
+                    setSelIdx(idx);
+                  } else {
+                    navigate("productDetail", s as SareeItem);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Bottom dock — stacked white pills (Add / Go to Wardrobe) */}
+        <div className="tr-dock">
+          <button
+            className="tr-dock-btn"
+            onClick={addActiveToWardrobe}
+            disabled={!current}
+            aria-label="Add to Wardrobe"
+          >
+            Add to Wardrobe
+            <span className="tr-dock-chip" aria-hidden>1</span>
+          </button>
+          <button
+            className="tr-dock-btn"
+            onClick={onGoToWardrobe}
+            aria-label="Go to Wardrobe"
+          >
+            Go to Wardrobe
+            <span className="tr-dock-chip" aria-hidden>
+              <ArrowRight size={16} strokeWidth={2.8} />
+            </span>
+          </button>
         </div>
       </div>
-
-      {/* Left rail — Selected Sarees */}
-      <div className="k-trial-v2-left">
-        <div className="k-trial-v2-left-header">Selected Sarees</div>
-        <div className="k-trial-v2-left-stack">
-          {items.map((saree, idx) => (
-            <TrialCardV2
-              key={saree._id}
-              saree={saree}
-              lookId={sareeLookIds[saree._id]}
-              deviceToken={deviceToken}
-              active={idx === safeSelIdx}
-              inCart={cartItemIds.has(saree._id)}
-              onSelect={() => setSelIdx(idx)}
-              onShare={() => handleShareSaree(saree)}
-              onRemove={() => onRemoveItem(saree._id)}
-              onAddToCart={() => onAddToCart(saree)}
-            />
-          ))}
-        </div>
-        <button className="k-trial-v2-add-more" onClick={onGoHome}>
-          Add More
-        </button>
-      </div>
-
-      {/* Right rail — saree detail */}
-      {current && (
-        <SareeDetailPanel
-          saree={current}
-          onSelectSimilar={(s) => {
-            // Tapping a similar-categories thumb: if the saree is already
-            // in the trial rail, switch the active preview to it. If not,
-            // jump to its product detail page so the customer can add it.
-            const idx = items.findIndex((i) => i._id === s._id);
-            if (idx >= 0) {
-              setSelIdx(idx);
-            } else {
-              navigate("productDetail", s as SareeItem);
-            }
-          }}
-        />
-      )}
-
-      {/* Bottom dock — two stacked CTA pills centered above the podium.
-          Both pills are rendered from designer-provided SVG assets so the
-          backdrop-blur glass, badge, and arrow chip match the reference
-          exactly. The button itself is just a transparent wrapper. */}
-      <div className="k-trial-v2-dock">
-        <button
-          className="k-trial-v2-dock-btn k-press"
-          onClick={addActiveToWardrobe}
-          disabled={!current}
-          aria-label="Add to Wardrobe"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kiosk/trail-room/add-to-wardrobe.svg" alt="" aria-hidden />
-          {/* Count chip — overlaid on the right edge of the pill. Lives
-              outside the SVG so the number stays live (currently always
-              1 because only the active saree is added; bind to a real
-              counter if multi-add is reintroduced). */}
-          <span className="k-trial-v2-dock-badge" aria-hidden>1</span>
-        </button>
-        <button
-          className="k-trial-v2-dock-btn k-press"
-          onClick={onGoToWardrobe}
-          aria-label="Go to Wardrobe"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kiosk/trail-room/go-to-wardrobe.svg" alt="" aria-hidden />
-          {/* Arrow chip — overlaid on the right edge of the pill. */}
-          <span className="k-trial-v2-dock-arrow" aria-hidden>
-            <ArrowRight size={20} strokeWidth={2.5} />
-          </span>
-        </button>
-      </div>
-      </div>{/* /.k-trial-v2-stage */}
 
       {/* Time's up dialog */}
       {showEnd && (

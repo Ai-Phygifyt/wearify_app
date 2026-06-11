@@ -5,49 +5,50 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, Calendar, Check } from "lucide-react";
+
+const MAROON = "#6E262B";
 
 const OCCASIONS = ["Wedding", "Festival", "Party", "Office", "Daily", "Gift"];
-const FABRICS = [
-  "Pure Silk",
-  "Georgette",
-  "Cotton",
-  "Linen",
-  "Chanderi",
-  "Banarasi",
-  "Kanjivaram",
-  "Tussar",
-];
+const FABRICS = ["Pure Silk", "Georgette", "Cotton", "Linen", "Chanderi", "Banarasi", "Kanjivaram", "Tussar"];
 const COLORS = [
   { name: "Crimson", swatch: "#DC143C" },
   { name: "Purple", swatch: "#7B3FA0" },
-  { name: "Gold", swatch: "#B8860B" },
+  { name: "Gold", swatch: "#E0A800" },
   { name: "Green", swatch: "#2D8544" },
-  { name: "Blue", swatch: "#2C5F7C" },
-  { name: "Pink", swatch: "#E88DAF" },
-  { name: "White", swatch: "#F5F0E8" },
+  { name: "Blue", swatch: "#1F5FE0" },
+  { name: "Pink", swatch: "#F4B9CD" },
   { name: "Black", swatch: "#1A1A1A" },
+  { name: "White", swatch: "#FFFFFF" },
 ];
-const BUDGET_OPTIONS = [
-  "Under \u20B95,000",
-  "\u20B95,000\u2013\u20B915,000",
-  "\u20B915,000\u2013\u20B930,000",
-  "\u20B930,000\u2013\u20B950,000",
-  "Above \u20B950,000",
-];
+const BUDGET_OPTIONS = ["Under ₹5,000", "₹5,000–₹15,000", "₹15,000–₹30,000", "₹30,000–₹50,000", "Above ₹50,000"];
 
+const fieldStyle: React.CSSProperties = {
+  width: "100%",
+  height: 52,
+  padding: "0 16px",
+  borderRadius: 12,
+  border: "1.5px solid rgba(104,38,42,0.14)",
+  background: "#fff",
+  fontSize: 15,
+  fontFamily: "inherit",
+  color: "#2A2522",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+/* eslint-disable react-hooks/set-state-in-effect */
 export default function PreferencesPage() {
   const router = useRouter();
   const { customerId } = useCustomer();
 
-  const customer = useQuery(
-    api.customers.getById,
-    customerId ? { customerId } : "skip"
-  );
+  const customer = useQuery(api.customers.getById, customerId ? { customerId } : "skip");
   const updatePreferences = useMutation(api.customers.updatePreferences);
 
   const [occasions, setOccasions] = useState<string[]>([]);
   const [fabrics, setFabrics] = useState<string[]>([]);
   const [colors, setColors] = useState<string[]>([]);
+  const [location, setLocation] = useState("");
   const [budget, setBudget] = useState("");
   const [upcomingOccasion, setUpcomingOccasion] = useState("");
   const [upcomingDate, setUpcomingDate] = useState("");
@@ -55,24 +56,19 @@ export default function PreferencesPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (customer) {
-      setOccasions((customer as Record<string, unknown>).preferredOccasions as string[] || []);
-      setFabrics((customer as Record<string, unknown>).preferredFabrics as string[] || []);
-      setColors((customer as Record<string, unknown>).preferredColors as string[] || []);
-      setBudget((customer as Record<string, unknown>).budgetRange as string || "");
-      setUpcomingOccasion((customer as Record<string, unknown>).upcomingOccasion as string || "");
-      setUpcomingDate((customer as Record<string, unknown>).upcomingOccasionDate as string || "");
-    }
+    if (!customer) return;
+    const c = customer as Record<string, unknown>;
+    setOccasions((c.preferredOccasions as string[]) || []);
+    setFabrics((c.preferredFabrics as string[]) || []);
+    setColors((c.preferredColors as string[]) || []);
+    setLocation((c.city as string) || "");
+    setBudget((c.budgetRange as string) || "");
+    setUpcomingOccasion((c.upcomingOccasion as string) || "");
+    setUpcomingDate((c.upcomingOccasionDate as string) || "");
   }, [customer]);
 
-  function toggleItem(
-    list: string[],
-    item: string,
-    setter: (v: string[]) => void
-  ) {
-    setter(
-      list.includes(item) ? list.filter((i) => i !== item) : [...list, item]
-    );
+  function toggleItem(list: string[], item: string, setter: (v: string[]) => void) {
+    setter(list.includes(item) ? list.filter((i) => i !== item) : [...list, item]);
     setSaved(false);
   }
 
@@ -87,6 +83,7 @@ export default function PreferencesPage() {
       budgetRange: budget || undefined,
       upcomingOccasion: upcomingOccasion || undefined,
       upcomingOccasionDate: upcomingDate || undefined,
+      city: location.trim() || undefined,
     });
     setSaving(false);
     setSaved(true);
@@ -94,349 +91,98 @@ export default function PreferencesPage() {
   }
 
   if (!customerId || customer === undefined) {
-    return (
-      <div
-        className="cx-pageIn"
-        style={{
-          minHeight: "100%",
-          background: "#FBF7F1",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div className="cx-typing">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-    );
+    return <div className="cx-loading"><div className="cx-typing"><span /><span /><span /></div></div>;
   }
 
-  const chipStyle = (active: boolean): React.CSSProperties => ({
-    padding: "7px 16px",
-    borderRadius: 100,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    border: active ? "none" : "1px solid #E4D9CC",
-    background: active
-      ? "var(--cx-grad-primary)"
-      : "#F5E6E3",
-    color: active ? "#FBF7F1" : "#3D2E1E",
-    transition: "all .2s",
-  });
-
   return (
-    <div
-      className="cx-pageIn"
-      style={{ minHeight: "100%", background: "#FBF7F1" }}
-    >
-      {/* ── Hero ────────────────────────────────────────── */}
-      <div
-        className="cx-noise cx-paisley"
-        style={{
-          background: "var(--cx-grad-hero)",
-          padding: "28px 18px 22px",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <button
-            onClick={() => router.back()}
-            className="cx-press"
-            style={{
-              background: "rgba(253,248,240,.12)",
-              border: "1px solid rgba(253,248,240,.18)",
-              borderRadius: 100,
-              width: 36,
-              height: 36,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              marginBottom: 14,
-            }}
-          >
-            <svg
-              width={18}
-              height={18}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#FBF7F1"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <h1
-            className="cx-serif"
-            style={{
-              fontSize: 26,
-              fontWeight: 700,
-              fontStyle: "italic",
-              color: "#FBF7F1",
-              margin: 0,
-            }}
-          >
-            My Preferences
-          </h1>
-          <p
-            style={{
-              fontSize: 13,
-              color: "rgba(253,248,240,.55)",
-              margin: "4px 0 0",
-            }}
-          >
-            Curate your saree journey
-          </p>
-        </div>
-      </div>
-      <div className="cx-zari" />
+    <div style={{ minHeight: "100%", background: "#FFFFFF", fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif' }}>
+      {/* APP BAR */}
+      <header style={{ position: "sticky", top: 0, zIndex: 20, background: "#FFFFFF", padding: "calc(env(safe-area-inset-top,0px) + 14px) 16px 14px", display: "flex", alignItems: "center", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+        <button onClick={() => router.back()} aria-label="Back" className="cx-press" style={{ background: "none", border: "none", padding: 4, cursor: "pointer", display: "flex", color: "#2A2522" }}>
+          <ChevronLeft size={24} strokeWidth={2.2} />
+        </button>
+        <h1 style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#2A2522", letterSpacing: "0.06em", margin: 0, marginRight: 28 }}>MY PREFERENCE</h1>
+      </header>
 
-      {/* ── Content ─────────────────────────────────────── */}
-      <div style={{ padding: "20px 18px 32px" }}>
+      <div style={{ padding: "20px 18px 36px" }}>
         {/* Occasions */}
-        <div className="cx-slideUp cx-d1" style={{ marginBottom: 24 }}>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#1C1108",
-              fontStyle: "italic",
-              marginBottom: 10,
-            }}
-          >
-            Occasions
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <Section title="Occasions">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {OCCASIONS.map((occ) => (
-              <button
-                key={occ}
-                onClick={() => toggleItem(occasions, occ, setOccasions)}
-                className="cx-press"
-                style={chipStyle(occasions.includes(occ))}
-              >
-                {occ}
-              </button>
+              <Pill key={occ} active={occasions.includes(occ)} onClick={() => toggleItem(occasions, occ, setOccasions)}>{occ}</Pill>
             ))}
           </div>
-        </div>
+        </Section>
 
         {/* Fabrics */}
-        <div className="cx-slideUp cx-d2" style={{ marginBottom: 24 }}>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#1C1108",
-              fontStyle: "italic",
-              marginBottom: 10,
-            }}
-          >
-            Fabrics
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <Section title="Fabrics">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {FABRICS.map((fab) => (
-              <button
-                key={fab}
-                onClick={() => toggleItem(fabrics, fab, setFabrics)}
-                className="cx-press"
-                style={chipStyle(fabrics.includes(fab))}
-              >
-                {fab}
-              </button>
+              <Pill key={fab} active={fabrics.includes(fab)} onClick={() => toggleItem(fabrics, fab, setFabrics)}>{fab}</Pill>
             ))}
           </div>
-        </div>
+        </Section>
 
         {/* Colors */}
-        <div className="cx-slideUp cx-d3" style={{ marginBottom: 24 }}>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#1C1108",
-              fontStyle: "italic",
-              marginBottom: 10,
-            }}
-          >
-            Colours
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <Section title="Colors">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {COLORS.map((c) => (
-              <button
-                key={c.name}
-                onClick={() => toggleItem(colors, c.name, setColors)}
-                className="cx-press"
-                style={{
-                  ...chipStyle(colors.includes(c.name)),
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: "50%",
-                    background: c.swatch,
-                    border: "1.5px solid rgba(139, 46, 43, .15)",
-                    flexShrink: 0,
-                  }}
-                />
+              <Pill key={c.name} active={colors.includes(c.name)} onClick={() => toggleItem(colors, c.name, setColors)}>
+                <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.swatch, border: c.name === "White" ? "1px solid #D8C9BC" : "1px solid rgba(0,0,0,0.1)", flexShrink: 0, display: "inline-block" }} />
                 {c.name}
-              </button>
+              </Pill>
             ))}
           </div>
-        </div>
+        </Section>
+
+        {/* Location */}
+        <Section title="Location">
+          <input style={fieldStyle} placeholder="eg:- Mumbai" value={location} onChange={(e) => { setLocation(e.target.value); setSaved(false); }} />
+        </Section>
 
         {/* Budget */}
-        <div className="cx-slideUp cx-d4" style={{ marginBottom: 24 }}>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#1C1108",
-              fontStyle: "italic",
-              marginBottom: 10,
-            }}
-          >
-            Budget Range
-          </div>
-          <select
-            value={budget}
-            onChange={(e) => {
-              setBudget(e.target.value);
-              setSaved(false);
-            }}
-            style={{
-              width: "100%",
-              padding: "12px 14px",
-              borderRadius: 16,
-              border: "1px solid #E4D9CC",
-              background: "#FFFFFF",
-              fontSize: 14,
-              color: budget ? "#1C1108" : "#9C8878",
-              outline: "none",
-              WebkitAppearance: "none",
-              appearance: "none" as React.CSSProperties["appearance"],
-            }}
-          >
+        <Section title="Budget Range">
+          <select value={budget} onChange={(e) => { setBudget(e.target.value); setSaved(false); }} style={{ ...fieldStyle, color: budget ? "#2A2522" : "#9A8F8A", WebkitAppearance: "none", appearance: "none" as React.CSSProperties["appearance"] }}>
             <option value="">Select budget</option>
-            {BUDGET_OPTIONS.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
+            {BUDGET_OPTIONS.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
-        </div>
+        </Section>
 
         {/* Upcoming Occasion */}
-        <div className="cx-slideUp cx-d5" style={{ marginBottom: 28 }}>
-          <div
-            className="cx-serif"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#1C1108",
-              fontStyle: "italic",
-              marginBottom: 10,
-            }}
-          >
-            Upcoming Occasion
-          </div>
+        <Section title="Upcoming Occasion" last>
           <div style={{ display: "flex", gap: 10 }}>
-            <input
-              type="text"
-              placeholder="e.g., Daughter's wedding"
-              value={upcomingOccasion}
-              onChange={(e) => {
-                setUpcomingOccasion(e.target.value);
-                setSaved(false);
-              }}
-              style={{
-                flex: 1,
-                padding: "12px 14px",
-                borderRadius: 16,
-                border: "1px solid #E4D9CC",
-                background: "#FFFFFF",
-                fontSize: 14,
-                color: "#1C1108",
-                outline: "none",
-              }}
-            />
-            <input
-              type="date"
-              value={upcomingDate}
-              onChange={(e) => {
-                setUpcomingDate(e.target.value);
-                setSaved(false);
-              }}
-              style={{
-                padding: "12px 14px",
-                borderRadius: 16,
-                border: "1px solid #E4D9CC",
-                background: "#FFFFFF",
-                fontSize: 14,
-                color: "#1C1108",
-                outline: "none",
-              }}
-            />
+            <input style={{ ...fieldStyle, flex: 1, minWidth: 0 }} placeholder="eg.Daughter wedding" value={upcomingOccasion} onChange={(e) => { setUpcomingOccasion(e.target.value); setSaved(false); }} />
+            <div style={{ position: "relative", flex: "0 0 140px" }}>
+              <input type="date" style={{ ...fieldStyle, paddingRight: 38 }} value={upcomingDate} onChange={(e) => { setUpcomingDate(e.target.value); setSaved(false); }} />
+              <Calendar size={17} color={MAROON} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+            </div>
           </div>
-        </div>
+        </Section>
 
         {/* Save */}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="cx-press"
-          style={{
-            width: "100%",
-            padding: "14px",
-            borderRadius: 100,
-            background: "var(--cx-grad-primary)",
-            border: "none",
-            color: "#FBF7F1",
-            fontSize: 15,
-            fontWeight: 700,
-            cursor: saving ? "default" : "pointer",
-            opacity: saving ? 0.7 : 1,
-            transition: "opacity .2s",
-          }}
-        >
-          {saving ? "Saving..." : saved ? "Saved \u2713" : "Save Preferences"}
+        <button onClick={handleSave} disabled={saving} className="cx-press"
+          style={{ width: "100%", marginTop: 26, height: 56, borderRadius: 14, background: MAROON, border: "none", color: "#fff", fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: saving ? "default" : "pointer", opacity: saving ? 0.75 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 8px 22px rgba(110,38,43,0.26)" }}>
+          {saving ? "Saving…" : saved ? <>Saved Preferences <Check size={18} strokeWidth={2.6} /></> : "Save Preferences"}
         </button>
-
-        {/* Toast */}
-        {saved && (
-          <div
-            className="cx-scaleIn"
-            style={{
-              marginTop: 14,
-              padding: "10px 16px",
-              borderRadius: 12,
-              background: "#E8F5E9",
-              border: "1px solid rgba(27,94,32,.15)",
-              textAlign: "center",
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#1B5E20",
-            }}
-          >
-            Preferences saved successfully
-          </div>
-        )}
       </div>
     </div>
+  );
+}
+
+function Section({ title, children, last }: { title: string; children: React.ReactNode; last?: boolean }) {
+  return (
+    <div style={{ marginBottom: last ? 0 : 24 }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#2A2522", marginBottom: 12 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} className="cx-press"
+      style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 99, border: active ? "none" : "1px solid rgba(104,38,42,0.18)", background: active ? MAROON : "#fff", color: active ? "#fff" : "#2A2522", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+      {children}
+    </button>
   );
 }
