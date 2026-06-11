@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Download, RotateCcw } from "lucide-react";
 import { ConsentScreen } from "../kiosk/screens/ConsentScreen";
 import { BodyScanScreen } from "../kiosk/screens/BodyScanScreen";
 
@@ -119,42 +120,44 @@ export default function ScannerPage() {
   }
 
   if (phase === "preview" && captureUrl) {
+    const initial = (storeName || "S").trim().charAt(0).toUpperCase() || "S";
     return (
-      <div
-        className="k-shell k-scan-shell"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 22,
-          padding: 24,
-          minHeight: "100dvh",
-        }}
-      >
-        <h1 className="k-scan-title">Your Scan</h1>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={captureUrl}
-          alt="Captured scan"
-          style={{
-            maxWidth: "100%",
-            maxHeight: "68dvh",
-            objectFit: "contain",
-            borderRadius: 18,
-            boxShadow: "0 14px 40px -16px rgba(0,0,0,0.45)",
-          }}
-        />
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
-          <button onClick={handleReset} className="k-btn-secondary">
+      <div className="k-shell k-scan-shell">
+        {/* Top bar — same as the scan screen for visual continuity. */}
+        <div className="k-scan-topbar">
+          <div className="k-scan-topbar-left">
+            <div className="k-scan-topbar-logo">
+              <span>{initial}</span>
+            </div>
+            <div className="k-scan-topbar-title">{storeName}</div>
+          </div>
+        </div>
+
+        <div className="k-scan-heading">
+          <h1 className="k-scan-title">Your Scan</h1>
+          <p className="k-scan-subtitle">Looking good? Save it or take another.</p>
+        </div>
+
+        {/* Captured frame reuses the same framed-media treatment as the live scan. */}
+        <div className="k-scan-frame-wrap">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={captureUrl} alt="Captured scan" className="scanner-preview-img" />
+        </div>
+
+        <div className="scanner-preview-actions">
+          <button
+            onClick={handleReset}
+            className="k-scan-choice-btn k-scan-choice-btn-secondary"
+          >
+            <RotateCcw size={20} strokeWidth={2.25} />
             Retake
           </button>
           <a
             href={captureUrl}
             download={`body-scan-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.jpg`}
-            className="k-btn-primary"
-            style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+            className="k-scan-choice-btn k-scan-choice-btn-primary"
           >
+            <Download size={20} strokeWidth={2.25} />
             Download
           </a>
         </div>

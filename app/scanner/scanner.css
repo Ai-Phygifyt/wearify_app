@@ -1,0 +1,34 @@
+/* ── /scanner — preview screen ───────────────────────────────────────────
+   Mirrors the kiosk body-scan layout (topbar → heading → framed media →
+   action row) and reuses the kiosk's .k-scan-choice-btn styling so the
+   standalone module matches the main code. */
+
+.scanner-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.scanner-preview-actions {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0 24px 28px;
+  flex-shrink: 0;
+}
+
+.scanner-preview-actions .k-scan-choice-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.scanner-preview-actions .k-scan-choice-btn svg {
+  flex-shrink: 0;
+}
