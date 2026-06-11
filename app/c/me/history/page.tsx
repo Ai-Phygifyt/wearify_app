@@ -6,374 +6,81 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCustomer } from "../../layout";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, MapPin, Clock, User } from "lucide-react";
+
+const MAROON = "#6E262B";
+const KIOSK_IMAGES = ["/kiosk/img1.jpg", "/kiosk/img2.webp", "/kiosk/img3.webp", "/kiosk/img4.jpg"];
+const pickImg = (i: number) => KIOSK_IMAGES[i % KIOSK_IMAGES.length];
 
 export default function VisitHistoryPage() {
   const router = useRouter();
   const { customerId } = useCustomer();
 
-  const visits = useQuery(
-    api.customers.listVisitHistory,
-    customerId ? { customerId } : "skip"
-  );
+  const visits = useQuery(api.customers.listVisitHistory, customerId ? { customerId } : "skip");
+  const storeLinks = useQuery(api.customers.listStoreLinksEnriched, customerId ? { customerId } : "skip");
 
-  const storeLinks = useQuery(
-    api.customers.listStoreLinksEnriched,
-    customerId ? { customerId } : "skip"
-  );
-
-  if (!customerId) {
-    return (
-      <div
-        className="cx-pageIn"
-        style={{
-          minHeight: "100%",
-          background: "#FBF7F1",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div className="cx-typing">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-    );
-  }
-
+  const ready = customerId && visits !== undefined && storeLinks !== undefined;
   const visitCount = visits?.length ?? 0;
   const storeCount = storeLinks?.length ?? 0;
 
-  // Aggregate visits per store so the customer can see how often they
-  // walked into each one — e.g. "MAUVE Sarees · 3 visits".
-  const perStore: { storeId: string; storeName: string; count: number }[] = (() => {
-    if (!visits || visits.length === 0) return [];
-    const map = new Map<string, { storeName: string; count: number }>();
-    for (const v of visits as any[]) {
-      const id = v.storeId as string;
-      const name = (v.storeName as string) || id;
-      const entry = map.get(id);
-      if (entry) entry.count += 1;
-      else map.set(id, { storeName: name, count: 1 });
-    }
-    return Array.from(map.entries())
-      .map(([storeId, { storeName, count }]) => ({ storeId, storeName, count }))
-      .sort((a, b) => b.count - a.count);
-  })();
-
   return (
-    <div
-      className="cx-pageIn"
-      style={{ minHeight: "100%", background: "#FBF7F1" }}
-    >
-      {/* ── Hero ────────────────────────────────────────── */}
-      <div
-        className="cx-noise cx-paisley"
-        style={{
-          background: "var(--cx-grad-hero)",
-          padding: "28px 18px 22px",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <button
-            onClick={() => router.back()}
-            className="cx-press"
-            style={{
-              background: "rgba(253,248,240,.12)",
-              border: "1px solid rgba(253,248,240,.18)",
-              borderRadius: 100,
-              width: 36,
-              height: 36,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              marginBottom: 14,
-            }}
-          >
-            <svg
-              width={18}
-              height={18}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#FBF7F1"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <h1
-            className="cx-serif"
-            style={{
-              fontSize: 26,
-              fontWeight: 700,
-              fontStyle: "italic",
-              color: "#FBF7F1",
-              margin: 0,
-            }}
-          >
-            Visit History
-          </h1>
-          <p
-            style={{
-              fontSize: 13,
-              color: "rgba(253,248,240,.55)",
-              margin: "4px 0 0",
-            }}
-          >
-            {visitCount} visit{visitCount !== 1 ? "s" : ""} across {storeCount}{" "}
-            store{storeCount !== 1 ? "s" : ""}
-          </p>
+    <div style={{ minHeight: "100%", background: "#FFFFFF", fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif', display: "flex", flexDirection: "column" }}>
+      {/* APP BAR */}
+      <header style={{ position: "sticky", top: 0, zIndex: 20, background: "#FFFFFF", padding: "calc(env(safe-area-inset-top,0px) + 14px) 16px 14px", display: "flex", alignItems: "center", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+        <button onClick={() => router.push("/c/me")} aria-label="Back" className="cx-press" style={{ background: "none", border: "none", padding: 4, cursor: "pointer", display: "flex", color: "#2A2522" }}>
+          <ChevronLeft size={24} strokeWidth={2.2} />
+        </button>
+        <h1 style={{ flex: 1, textAlign: "center", fontSize: 16, fontWeight: 700, color: "#2A2522", margin: 0, marginRight: 28 }}>Visit History</h1>
+      </header>
+
+      {!ready ? (
+        <div className="cx-loading" style={{ flex: 1 }}><div className="cx-typing"><span /><span /><span /></div></div>
+      ) : visitCount === 0 ? (
+        /* ── EMPTY STATE ──────────────────────────────────────────── */
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ width: "100%", maxWidth: 320, background: "#FFFFFF", border: "1px solid #F0E6E3", borderRadius: 20, boxShadow: "0 8px 30px rgba(0,0,0,0.07)", padding: "30px 22px", textAlign: "center" }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#FBE4E8", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/customer/visit-histroy/no-visit.svg" alt="" style={{ width: 24, height: 22 }} />
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#2A2522" }}>No visits yet</div>
+            <div style={{ fontSize: 13, color: "#9A8F8A", marginTop: 6 }}>
+              {visitCount} visit across {storeCount} store{storeCount !== 1 ? "s" : ""}
+            </div>
+            <button onClick={() => router.push("/c/me")} className="cx-press" style={{ marginTop: 22, width: "100%", height: 50, borderRadius: 99, border: "1.5px solid rgba(104,38,42,0.18)", background: "#fff", color: "#2A2522", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Back to profile
+            </button>
+          </div>
         </div>
-      </div>
-      <div className="cx-zari" />
-
-      {/* ── Content ─────────────────────────────────────── */}
-      <div style={{ padding: "20px 18px 32px" }}>
-        {/* Per-store visit breakdown */}
-        {perStore.length > 0 && (
-          <div
-            className="cx-slideUp"
-            style={{
-              marginBottom: 16,
-              background: "#FFFFFF",
-              border: "1px solid #F0E8DC",
-              borderRadius: 16,
-              padding: "14px 16px",
-              boxShadow: "0 2px 14px rgba(139, 46, 43, .06)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#9C8878",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                marginBottom: 10,
-              }}
-            >
-              By Store
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {perStore.map((s) => (
-                <div
-                  key={s.storeId}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1C1108", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {s.storeName}
-                  </span>
-                  <span
-                    className="cx-mono"
-                    style={{
-                      padding: "3px 10px",
-                      borderRadius: 100,
-                      background: "#F5E6E3",
-                      color: "#8B2E2B",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {s.count} visit{s.count !== 1 ? "s" : ""}
-                  </span>
+      ) : (
+        /* ── POPULATED ────────────────────────────────────────────── */
+        <div style={{ padding: "16px 16px 28px", display: "flex", flexDirection: "column", gap: 14 }}>
+          {(storeLinks as any[]).map((store, i) => {
+            const city = [store.storeCity, store.storeState].filter(Boolean).join(", ");
+            return (
+              <div key={String(store._id)} style={{ display: "flex", gap: 14, background: "#FFFFFF", border: "1px solid #F0E6E3", borderRadius: 16, boxShadow: "0 4px 16px rgba(0,0,0,0.06)", padding: 12 }}>
+                <div style={{ width: 92, height: 92, borderRadius: 12, flexShrink: 0, backgroundImage: `url(${pickImg(i)})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#2A2522" }}>{store.storeName || store.storeId}</div>
+                  {city && <Row icon={<MapPin size={12} color={MAROON} fill={MAROON} />} text={city} strong />}
+                  {store.lastVisit && <Row icon={<Clock size={12} color="#A99F9A" />} text={`Last: ${store.lastVisit}`} />}
+                  {store.storeAddress && <Row icon={<User size={12} color="#A99F9A" />} text={store.storeAddress} />}
+                  {store.storeHours && <Row icon={<Clock size={12} color="#A99F9A" />} text={store.storeHours} />}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {visits === undefined ? (
-          /* Skeleton */
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                style={{
-                  height: 80,
-                  borderRadius: 16,
-                  background: "linear-gradient(90deg, #F0E8DC 0%, #F5E6E3 50%, #F0E8DC 100%)",
-                  animation: "cx-shimmerBg 1.5s ease infinite",
-                  backgroundSize: "200% auto",
-                }}
-              />
-            ))}
-          </div>
-        ) : visits.length === 0 ? (
-          /* Empty state */
-          <div
-            className="cx-slideUp"
-            style={{ textAlign: "center", padding: "48px 0" }}
-          >
-            <div
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: "50%",
-                background: "#F5E6E3",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 16px",
-              }}
-            >
-              <svg
-                width={28}
-                height={28}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#C4B5A8"
-                strokeWidth="1.6"
-              >
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-            </div>
-            <div
-              className="cx-serif"
-              style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: "#3D2E1E",
-                fontStyle: "italic",
-              }}
-            >
-              No visits yet
-            </div>
-            <div style={{ fontSize: 13, color: "#9C8878", marginTop: 4 }}>
-              Your visit history will appear here
-            </div>
-          </div>
-        ) : (
-          /* Visit cards */
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {visits.map((visit: any, idx: number) => (
-              <div
-                key={visit._id as string}
-                className="cx-slideUp cx-press"
-                style={{
-                  animationDelay: `${0.05 * Math.min(idx, 6)}s`,
-                  background: "#FFFFFF",
-                  borderRadius: 16,
-                  border: "1px solid #F0E8DC",
-                  padding: "14px 16px",
-                  boxShadow: "0 2px 14px rgba(139, 46, 43, .09)",
-                }}
-              >
-                {/* Top row: date + purchase badge */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 14,
-                        color: "#1C1108",
-                      }}
-                    >
-                      {visit.date as string}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#9C8878",
-                        marginTop: 2,
-                      }}
-                    >
-                      {(visit.storeName as string) ||
-                        (visit.storeId as string)}
-                    </div>
-                  </div>
-                  {visit.purchased ? (
-                    <span
-                      style={{
-                        padding: "3px 10px",
-                        borderRadius: 100,
-                        background: "#E8F5E9",
-                        color: "#1B5E20",
-                        fontSize: 11,
-                        fontWeight: 700,
-                      }}
-                    >
-                      Purchased
-                    </span>
-                  ) : (
-                    <span
-                      style={{
-                        padding: "3px 10px",
-                        borderRadius: 100,
-                        background: "#F5E6E3",
-                        color: "#9C8878",
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                    >
-                      Browsing only
-                    </span>
-                  )}
-                </div>
-
-                {/* Details row */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 14,
-                    marginTop: 10,
-                    fontSize: 12,
-                    color: "#3D2E1E",
-                  }}
-                >
-                  {visit.sareesTried !== undefined && (
-                    <span>
-                      {visit.sareesTried as number} saree
-                      {(visit.sareesTried as number) !== 1 ? "s" : ""} tried
-                    </span>
-                  )}
-                  {visit.staffName && (
-                    <span style={{ color: "#9C8878" }}>
-                      Staff: {visit.staffName as string}
-                    </span>
-                  )}
-                </div>
-
-                {/* Points earned */}
-                {visit.pointsEarned !== undefined &&
-                  (visit.pointsEarned as number) > 0 && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "#B8860B",
-                      }}
-                    >
-                      +{visit.pointsEarned as number} points earned
-                    </div>
-                  )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Row({ icon, text, strong }: { icon: React.ReactNode; text: string; strong?: boolean }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: strong ? "#3A2B28" : "#9A8F8A" }}>
+      <span style={{ display: "flex", flexShrink: 0 }}>{icon}</span>
+      <span style={{ fontWeight: strong ? 700 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{text}</span>
     </div>
   );
 }

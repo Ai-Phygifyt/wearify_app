@@ -6,8 +6,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
-  POSE_LANDMARKS,
-  landmarksFitInRect,
+  analyzeBodyFit,
+  type FitReason,
   useBodyPose,
 } from "@/lib/useBodyPose";
 
@@ -39,19 +39,20 @@ import {
 // =========================================================================
 const FIT_RECT = { x: 0.25, y: 0.05, w: 0.50, h: 0.90 };
 
-// Landmarks that must all lie inside FIT_RECT for the scan to "lock in".
-// Head + shoulders + hips + ankles cover full-body framing; knees are
-// implicit. Hands/face detail is intentionally ignored — a person with
-// hands at their side or by their face should still register as in-frame.
-const FIT_LANDMARKS = [
-  POSE_LANDMARKS.NOSE,
-  POSE_LANDMARKS.LEFT_SHOULDER,
-  POSE_LANDMARKS.RIGHT_SHOULDER,
-  POSE_LANDMARKS.LEFT_HIP,
-  POSE_LANDMARKS.RIGHT_HIP,
-  POSE_LANDMARKS.LEFT_ANKLE,
-  POSE_LANDMARKS.RIGHT_ANKLE,
-] as const;
+// Coaching shown beneath the guide for each framing problem. analyzeBodyFit
+// requires the head AND feet to be in frame, so these messages walk a
+// too-close user back into a full-body shot instead of the scan silently
+// grabbing a legs-cut-off frame.
+const FIT_HINTS: Record<FitReason, string> = {
+  detecting: "Detecting…",
+  "no-person": "Step into the frame",
+  "too-far": "Step a little closer",
+  "feet-cut": "Step back so your feet are in the frame",
+  "head-cut": "Step back so your head is in the frame",
+  "too-wide": "Step back to fit your whole body",
+  "off-center": "Move to the centre of the frame",
+  ok: "Almost there…",
+};
 
 // How long the user has to stay inside the rect before the auto-fire
 // kicks in, then a brief visible countdown so the user can hold still.
@@ -96,11 +97,14 @@ export function BodyScanScreen({
     { enabled: poseEnabled },
   );
 
-  // "fit" = current frame's landmarks satisfy FIT_RECT for all required points.
-  const isFit = useMemo(
-    () => landmarksFitInRect(landmarks, FIT_RECT, FIT_LANDMARKS),
+  // Full-body framing check — requires head AND feet in the rect (not just
+  // whatever happens to be visible), and reports *why* it fails so we can
+  // coach the user. fit === true is the only state that arms auto-capture.
+  const fitResult = useMemo(
+    () => analyzeBodyFit(landmarks, FIT_RECT),
     [landmarks],
   );
+  const isFit = fitResult.fit;
 
   // Locked state + auto-capture countdown collapsed into a single
   // transition so the hold-timer effect never has to call setState
@@ -203,9 +207,7 @@ export function BodyScanScreen({
       ? "Loading body detection…"
       : locked
         ? "Hold still…"
-        : isFit
-          ? "Almost there…"
-          : "Step inside the frame";
+        : FIT_HINTS[fitResult.reason];
 
   return (
     <div className="k-shell k-scan-shell">

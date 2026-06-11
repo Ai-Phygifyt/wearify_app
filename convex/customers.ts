@@ -266,6 +266,7 @@ export const updatePreferences = mutation({
     budgetRange: v.optional(v.string()),
     upcomingOccasion: v.optional(v.string()),
     upcomingOccasionDate: v.optional(v.string()),
+    city: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { customerId, ...fields } = args;
